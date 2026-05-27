@@ -20,6 +20,7 @@ import '../../services/cots_yolo_detector.dart';
 import '../../services/gps_exif_parser.dart';
 import '../../services/scan_record_service.dart';
 import '../../services/zone_assignment_service.dart';
+import '../../services/cots_logger.dart';
 import 'cots_map_page.dart';
 import 'profile_page.dart';
 import 'records_page.dart';
@@ -784,7 +785,11 @@ class _ScanDetectionPageState extends State<ScanDetectionPage> {
     }
 
     final bytes = await picked.readAsBytes();
+    final double fileSizeMb = bytes.length / (1024 * 1024);
+    CotsLogger.info('Selected file: "${picked.path.split(RegExp(r'[\\/]')).last}" (${fileSizeMb.toStringAsFixed(2)} MB)');
+    
     if (bytes.length > _maxImageBytes) {
+      CotsLogger.warn('Selected file size exceeds 20 MB limit.');
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('Image must be 20 MB or smaller.')),
@@ -812,12 +817,17 @@ class _ScanDetectionPageState extends State<ScanDetectionPage> {
 
   Future<void> _loadMetadata(Uint8List bytes) async {
     try {
+      final stopwatch = Stopwatch()..start();
       final codec = await ui.instantiateImageCodec(bytes);
       final frame = await codec.getNextFrame();
       _widthPx = frame.image.width;
       _heightPx = frame.image.height;
       frame.image.dispose();
-    } catch (_) {}
+      stopwatch.stop();
+      CotsLogger.success('Acquired quick image dimensions: $_widthPx x $_heightPx px in ${stopwatch.elapsedMilliseconds} ms');
+    } catch (e) {
+      CotsLogger.warn('Failed to parse quick metadata: $e');
+    }
 
     try {
       final exif = await readExifFromBytes(bytes);

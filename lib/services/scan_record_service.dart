@@ -3,6 +3,8 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import '../models/activity_type.dart';
 import '../models/cots_detection_result.dart';
 import 'cots_size_estimator.dart';
+import 'package:latlong2/latlong.dart';
+import 'gps_geohash.dart';
 import 'zone_assignment_service.dart';
 
 /// Persists citizen science GoPro scan submissions to Firestore.
@@ -44,6 +46,9 @@ abstract final class ScanRecordService {
       'citizen_contribution': true,
       'notes': notes,
       'zone': zone,
+      'geohash': latitude != null && longitude != null
+          ? GpsGeohash.encode(latitude, longitude)
+          : null,
       'gps': {'latitude': latitude, 'longitude': longitude},
       'date_taken':
           dateTaken != null ? Timestamp.fromDate(dateTaken) : null,
@@ -72,6 +77,42 @@ abstract final class ScanRecordService {
       data['estimated_sizes_cm'] = sizeEstimate.perCotsCm;
     }
 
-    await FirebaseFirestore.instance.collection('scan_records').add(data);
+    final firestore = FirebaseFirestore.instance;
+    final batch = firestore.batch();
+
+    final recordRef = firestore.collection('scan_records').doc();
+    batch.set(recordRef, data);
+
+    final statsRef = firestore.collection('metadata').doc('stats');
+    batch.set(statsRef, {
+      'total_cots_detected': FieldValue.increment(detection.count),
+      'total_scans': FieldValue.increment(1),
+    }, SetOptions(merge: true));
+
+    await batch.commit();
+  }
+
+  static Stream<DocumentSnapshot<Map<String, dynamic>>> statsStream() {
+    return FirebaseFirestore.instance.collection('metadata').doc('stats').snapshots();
+  }
+
+  static Stream<QuerySnapshot<Map<String, dynamic>>> queryByGeohash({
+    required double minLat,
+    required double minLng,
+    required double maxLat,
+    required double maxLng,
+  }) {
+    final ranges = GpsGeohash.queryRanges(
+      LatLng(minLat, minLng),
+      LatLng(maxLat, maxLng),
+      precision: 5,
+    );
+    final range = ranges.first;
+    return FirebaseFirestore.instance
+        .collection('scan_records')
+        .orderBy('geohash')
+        .startAt([range.$1])
+        .endAt([range.$2])
+        .snapshots();
   }
 }

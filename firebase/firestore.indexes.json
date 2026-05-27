@@ -1,0 +1,33 @@
+{
+  "indexes": [
+    {
+      "collectionGroup": "scan_records",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "geohash",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "submitted_at",
+          "order": "DESCENDING"
+        }
+      ]
+    },
+    {
+      "collectionGroup": "scan_records",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "zone",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "submitted_at",
+          "order": "DESCENDING"
+        }
+      ]
+    }
+  ],
+  "fieldOverrides": []
+}

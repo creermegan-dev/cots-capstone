@@ -3,11 +3,14 @@ import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
+import 'package:intl/intl.dart';
 import '../../core/cots_colors.dart';
 import '../../providers/auth_provider.dart';
 import 'cots_map_page.dart';
 import 'profile_page.dart';
 import 'records_page.dart';
+import '../../services/scan_record_service.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'user_bottom_nav.dart';
 
 /// Semicircle risk gauge: green (low) → amber (moderate) → red (high).
@@ -310,57 +313,85 @@ class DashboardScreen extends StatelessWidget {
             children: [
               _OutbreakStatusCard(),
               const SizedBox(height: 18),
-              LayoutBuilder(
-                builder: (context, constraints) {
-                  final maxW = constraints.maxWidth;
-                  const spacing = 12.0;
-                  final half = (maxW - spacing) / 2;
-                  return Column(
-                    children: [
-                      Row(
+              StreamBuilder<DocumentSnapshot<Map<String, dynamic>>>(
+                stream: ScanRecordService.statsStream(),
+                builder: (context, snapshot) {
+                  // Fallbacks to default constants if database document is empty
+                  var totalCots = '1,248';
+                  var activeZones = '12';
+                  var clearedZones = '5';
+                  var avgDensity = '3.6';
+
+                  if (snapshot.hasData && snapshot.data!.exists) {
+                    final data = snapshot.data!.data();
+                    if (data != null) {
+                      if (data['total_cots_detected'] != null) {
+                        totalCots = NumberFormat('#,##0').format(data['total_cots_detected']);
+                      }
+                      if (data['total_scans'] != null) {
+                        activeZones = data['total_scans'].toString();
+                      }
+                      final totalScans = data['total_scans'] as num? ?? 1;
+                      final cotsVal = data['total_cots_detected'] as num? ?? 0;
+                      if (totalScans > 0) {
+                        avgDensity = (cotsVal / totalScans).toStringAsFixed(1);
+                      }
+                    }
+                  }
+
+                  return LayoutBuilder(
+                    builder: (context, constraints) {
+                      final maxW = constraints.maxWidth;
+                      const spacing = 12.0;
+                      final half = (maxW - spacing) / 2;
+                      return Column(
                         children: [
-                          SizedBox(
-                            width: half,
-                            child: const StatCard(
-                              title: 'TOTAL COTS DETECTED',
-                              value: '1,248',
-                              subLabel: 'Starfish',
-                            ),
+                          Row(
+                            children: [
+                              SizedBox(
+                                width: half,
+                                child: StatCard(
+                                  title: 'TOTAL COTS DETECTED',
+                                  value: totalCots,
+                                  subLabel: 'Starfish',
+                                ),
+                              ),
+                              const SizedBox(width: spacing),
+                              SizedBox(
+                                width: half,
+                                child: StatCard(
+                                  title: 'TOTAL SCANS (LIVE)',
+                                  value: activeZones,
+                                  subLabel: 'Submissions',
+                                ),
+                              ),
+                            ],
                           ),
-                          const SizedBox(width: spacing),
-                          SizedBox(
-                            width: half,
-                            child: const StatCard(
-                              title: 'ACTIVE ZONES',
-                              value: '12',
-                              subLabel: 'Zones',
-                            ),
+                          const SizedBox(height: spacing),
+                          Row(
+                            children: [
+                              SizedBox(
+                                width: half,
+                                child: StatCard(
+                                  title: 'CLEARED ZONES',
+                                  value: clearedZones,
+                                  subLabel: 'Zones',
+                                ),
+                              ),
+                              const SizedBox(width: spacing),
+                              SizedBox(
+                                width: half,
+                                child: StatCard(
+                                  title: 'DENSITY (AVG.)',
+                                  value: avgDensity,
+                                  subLabel: 'COTS / scan',
+                                ),
+                              ),
+                            ],
                           ),
                         ],
-                      ),
-                      const SizedBox(height: spacing),
-                      Row(
-                        children: [
-                          SizedBox(
-                            width: half,
-                            child: const StatCard(
-                              title: 'CLEARED ZONES',
-                              value: '5',
-                              subLabel: 'Zones',
-                            ),
-                          ),
-                          const SizedBox(width: spacing),
-                          SizedBox(
-                            width: half,
-                            child: const StatCard(
-                              title: 'DENSITY (AVG.)',
-                              value: '3.6',
-                              subLabel: 'COTS / ha',
-                            ),
-                          ),
-                        ],
-                      ),
-                    ],
+                      );
+                    },
                   );
                 },
               ),
