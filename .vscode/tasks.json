@@ -1,0 +1,35 @@
+{
+  "version": "2.0.0",
+  "tasks": [
+    {
+      "label": "Flutter: Chrome (LocalAppData build cache)",
+      "type": "shell",
+      "command": "flutter run -d chrome",
+      "group": "build",
+      "presentation": {
+        "reveal": "always",
+        "panel": "shared"
+      },
+      "options": {
+        "cwd": "${workspaceFolder}",
+        "env": {
+          "FLUTTER_BUILD_DIR": "${env:LOCALAPPDATA}\\FlutterBuildCache\\COTSMonitor"
+        }
+      },
+      "problemMatcher": []
+    },
+    {
+      "label": "Flutter: Deep clean (fix OneDrive locks)",
+      "type": "shell",
+      "command": "powershell -ExecutionPolicy Bypass -File scripts/windows_deep_clean_flutter.ps1 -KillDart",
+      "group": "none",
+      "presentation": {
+        "reveal": "always"
+      },
+      "options": {
+        "cwd": "${workspaceFolder}"
+      },
+      "problemMatcher": []
+    }
+  ]
+}

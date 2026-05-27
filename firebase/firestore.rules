@@ -1,0 +1,27 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // User profiles — document ID must equal Firebase Auth UID.
+    match /users/{userId} {
+      allow read: if request.auth != null && request.auth.uid == userId;
+
+      // Signup always creates a field account (`user`). The single app admin is assigned
+      // in Firebase Console (set `accountRole` to `admin` on one `users/{uid}` doc).
+      allow create: if request.auth != null
+        && request.auth.uid == userId
+        && request.resource.data.uid == request.auth.uid
+        && request.resource.data.accountRole == 'user';
+
+      // Updates: same user only; client cannot change accountRole (admin promotions via Console / Cloud Functions).
+      allow update: if request.auth != null
+        && request.auth.uid == userId
+        && request.resource.data.accountRole == resource.data.accountRole;
+
+      allow delete: if request.auth != null && request.auth.uid == userId;
+    }
+
+    // Everything else is denied by default until you add explicit rules.
+  }
+}

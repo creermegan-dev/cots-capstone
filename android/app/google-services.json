@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "278284094347",
+    "project_id": "cots-capstone-project",
+    "storage_bucket": "cots-capstone-project.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:278284094347:android:97f4a2eb220cad8488fd8e",
+        "android_client_info": {
+          "package_name": "com.example.cots_monitor"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyCVYl-RBvyNH4I4S7yH4JYUp8io_RgQZVU"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
