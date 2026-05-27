@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../../core/cots_colors.dart';
-import 'scan_detection_page_v2.dart';
+import 'scan_detection_page.dart';
 
 /// Which tab is highlighted in the shared user bottom navigation.
 enum UserNavDestination { dashboard, map, scan, records, profile }
