@@ -1,4 +1,7 @@
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
+import 'package:intl/intl.dart';
+import '../../services/scan_record_service.dart';
 import 'package:flutter_map/flutter_map.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:latlong2/latlong.dart';
@@ -270,6 +273,12 @@ class _CotsMapPageState extends State<CotsMapPage> {
   /// Set after a successful My Location fix; shown as a red dot on the map.
   LatLng? _userLocation;
 
+  // Viewport bounds for live geohashed Firestore queries
+  double _minLat = 6.5;
+  double _minLng = 125.0;
+  double _maxLat = 7.5;
+  double _maxLng = 126.5;
+
   void _toggleBasemap() {
     setState(() {
       _basemap = _basemap == BasemapKind.standard
@@ -300,7 +309,7 @@ class _CotsMapPageState extends State<CotsMapPage> {
     }
   }
 
-  List<CircleMarker> _buildHeatmapCircles() {
+  List<CircleMarker> _buildHeatmapCircles(List<QueryDocumentSnapshot<Map<String, dynamic>>> records) {
     const radii = <double>[60000, 30000, 12000];
     const opacities = <double>[0.12, 0.28, 0.55];
     final out = <CircleMarker>[];
@@ -319,11 +328,34 @@ class _CotsMapPageState extends State<CotsMapPage> {
         );
       }
     }
+
+    for (final doc in records) {
+      final data = doc.data();
+      final gps = data['gps'] as Map?;
+      final lat = gps?['latitude'] as double?;
+      final lng = gps?['longitude'] as double?;
+      if (lat != null && lng != null) {
+        final count = data['cots_count'] as int? ?? 0;
+        final c = count > 15 ? kHigh : count > 5 ? kModerate : kLow;
+        for (var i = 0; i < radii.length; i++) {
+          out.add(
+            CircleMarker(
+              point: LatLng(lat, lng),
+              radius: radii[i] / 4,
+              useRadiusInMeter: true,
+              color: c.withValues(alpha: opacities[i]),
+              borderStrokeWidth: 0,
+              borderColor: Colors.transparent,
+            ),
+          );
+        }
+      }
+    }
     return out;
   }
 
-  List<CircleMarker> _buildDensityCircles() {
-    return kSampleZones
+  List<CircleMarker> _buildDensityCircles(List<QueryDocumentSnapshot<Map<String, dynamic>>> records) {
+    final out = kSampleZones
         .map(
           (zone) => CircleMarker(
             point: zone.position,
@@ -335,9 +367,31 @@ class _CotsMapPageState extends State<CotsMapPage> {
           ),
         )
         .toList();
+
+    for (final doc in records) {
+      final data = doc.data();
+      final gps = data['gps'] as Map?;
+      final lat = gps?['latitude'] as double?;
+      final lng = gps?['longitude'] as double?;
+      if (lat != null && lng != null) {
+        final count = data['cots_count'] as int? ?? 0;
+        final c = count > 15 ? kHigh : count > 5 ? kModerate : kLow;
+        out.add(
+          CircleMarker(
+            point: LatLng(lat, lng),
+            radius: 2000,
+            useRadiusInMeter: true,
+            color: c.withValues(alpha: 0.15),
+            borderStrokeWidth: 2,
+            borderColor: c,
+          ),
+        );
+      }
+    }
+    return out;
   }
 
-  List<Widget> _mapLayers() {
+  List<Widget> _mapLayers(List<QueryDocumentSnapshot<Map<String, dynamic>>> records) {
     final layers = <Widget>[
       TileLayer(
         key: ValueKey(_basemap),
@@ -349,18 +403,123 @@ class _CotsMapPageState extends State<CotsMapPage> {
     ];
 
     if (_viewMode == MapViewMode.heatmap) {
-      layers.add(CircleLayer(circles: _buildHeatmapCircles()));
+      layers.add(CircleLayer(circles: _buildHeatmapCircles(records)));
     } else if (_viewMode == MapViewMode.density) {
-      layers.add(CircleLayer(circles: _buildDensityCircles()));
+      layers.add(CircleLayer(circles: _buildDensityCircles(records)));
     }
 
     final markers = kSampleZones.map((zone) => _zoneMarker(zone)).toList();
+
+    for (final doc in records) {
+      final data = doc.data();
+      final gps = data['gps'] as Map?;
+      final lat = gps?['latitude'] as double?;
+      final lng = gps?['longitude'] as double?;
+      if (lat != null && lng != null) {
+        markers.add(_liveRecordMarker(doc.id, LatLng(lat, lng), data));
+      }
+    }
+
     if (_userLocation != null) {
       markers.add(_myLocationDotMarker(_userLocation!));
     }
     layers.add(MarkerLayer(markers: markers));
 
     return layers;
+  }
+
+  Marker _liveRecordMarker(String id, LatLng point, Map<String, dynamic> data) {
+    final count = data['cots_count'] as int? ?? 0;
+    final color = count > 15 
+        ? kHigh 
+        : count > 5 
+            ? kModerate 
+            : kLow;
+
+    return Marker(
+      point: point,
+      width: 40,
+      height: 40,
+      alignment: Alignment.center,
+      child: GestureDetector(
+        onTap: () => _showRecordDetailsDialog(data),
+        child: Container(
+          decoration: BoxDecoration(
+            color: color.withValues(alpha: 0.8),
+            shape: BoxShape.circle,
+            border: Border.all(color: Colors.white, width: 2),
+            boxShadow: const [
+              BoxShadow(color: Colors.black26, blurRadius: 4, offset: Offset(0, 2))
+            ],
+          ),
+          alignment: Alignment.center,
+          child: Text(
+            count.toString(),
+            style: const TextStyle(
+              color: Colors.white,
+              fontWeight: FontWeight.bold,
+              fontSize: 12,
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  void _showRecordDetailsDialog(Map<String, dynamic> data) {
+    showDialog<void>(
+      context: context,
+      builder: (ctx) {
+        final count = data['cots_count'] as int? ?? 0;
+        final conf = data['confidence'] as double? ?? 0.0;
+        final depth = data['depth'] as double? ?? data['capture_depth'] as double?;
+        final date = data['date_taken'] as Timestamp?;
+        final dateStr = date != null 
+            ? DateFormat('MMM dd, yyyy h:mm a').format(date.toDate()) 
+            : 'Unknown Date';
+        
+        return AlertDialog(
+          backgroundColor: kDarkCard,
+          title: Text(
+            data['image_name'] as String? ?? 'Telemetry Record',
+            style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 16),
+          ),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              _dialogDetailRow('COTS Count', '$count starfish'),
+              _dialogDetailRow('Inference Confidence', '${(conf * 100).toStringAsFixed(0)}%'),
+              _dialogDetailRow('Depth', depth != null ? '${depth.toStringAsFixed(1)} m' : '--'),
+              _dialogDetailRow('Submitted By', data['submitted_by'] as String? ?? '--'),
+              _dialogDetailRow('Capture Time', dateStr),
+              _dialogDetailRow('Activity Type', data['activity_type'] as String? ?? 'Detection Only'),
+            ],
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(ctx),
+              child: const Text('Close', style: TextStyle(color: kTeal)),
+            ),
+          ],
+        );
+      },
+    );
+  }
+
+  Widget _dialogDetailRow(String label, String value) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 4),
+      child: RichText(
+        text: TextSpan(
+          style: const TextStyle(color: Colors.white70, fontSize: 13),
+          children: [
+            TextSpan(text: '$label: ', style: const TextStyle(fontWeight: FontWeight.bold, color: Colors.white)),
+            TextSpan(text: value),
+          ],
+        ),
+      ),
+    );
   }
 
   /// Red dot at GPS position after My Location is used.
@@ -668,16 +827,38 @@ class _CotsMapPageState extends State<CotsMapPage> {
       body: Stack(
         children: [
           Positioned.fill(
-            child: FlutterMap(
-              mapController: _mapController,
-              options: const MapOptions(
-                initialCenter: LatLng(7.05, 125.67),
-                initialZoom: 9.5,
-                interactionOptions: InteractionOptions(
-                  flags: InteractiveFlag.all,
-                ),
+            child: StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
+              stream: ScanRecordService.queryByGeohash(
+                minLat: _minLat,
+                minLng: _minLng,
+                maxLat: _maxLat,
+                maxLng: _maxLng,
               ),
-              children: _mapLayers(),
+              builder: (context, snapshot) {
+                final records = snapshot.data?.docs ?? const [];
+                return FlutterMap(
+                  mapController: _mapController,
+                  options: MapOptions(
+                    initialCenter: const LatLng(7.05, 125.67),
+                    initialZoom: 9.5,
+                    interactionOptions: const InteractionOptions(
+                      flags: InteractiveFlag.all,
+                    ),
+                    onPositionChanged: (position, hasGesture) {
+                      final bounds = position.bounds;
+                      if (bounds != null) {
+                        setState(() {
+                          _minLat = bounds.southWest.latitude;
+                          _minLng = bounds.southWest.longitude;
+                          _maxLat = bounds.northEast.latitude;
+                          _maxLng = bounds.northEast.longitude;
+                        });
+                      }
+                    },
+                  ),
+                  children: _mapLayers(records),
+                );
+              },
             ),
           ),
           Positioned(
