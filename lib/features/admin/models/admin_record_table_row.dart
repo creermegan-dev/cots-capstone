@@ -17,6 +17,11 @@ class AdminRecordTableRow {
     this.confidencePercent, {
     this.adminConfirmed = false,
     this.adminRejected = false,
+    this.activityType = 'Detection Only',
+    this.aiCount,
+    this.removedQuantity,
+    this.averageSizeCm,
+    this.captureSource = 'GoPro Image',
   });
 
   final int number;
@@ -33,6 +38,13 @@ class AdminRecordTableRow {
   final bool adminConfirmed;
   /// When true, an admin rejected a **Needs Review** submission.
   final bool adminRejected;
+  final String activityType;
+  final int? aiCount;
+  final int? removedQuantity;
+  final double? averageSizeCm;
+  final String captureSource;
+
+  int get displayAiCount => aiCount ?? cotsCount;
 
   /// Effective queue status for filters and badges.
   String get displayStatus {
@@ -60,6 +72,11 @@ class AdminRecordTableRow {
       confidencePercent,
       adminConfirmed: c,
       adminRejected: r,
+      activityType: activityType,
+      aiCount: aiCount,
+      removedQuantity: removedQuantity,
+      averageSizeCm: averageSizeCm,
+      captureSource: captureSource,
     );
   }
 }

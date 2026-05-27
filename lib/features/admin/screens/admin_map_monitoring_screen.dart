@@ -32,6 +32,7 @@ class _AdminMapMonitoringScreenState extends State<AdminMapMonitoringScreen>
   bool _densityHeatmap = false;
   bool _zoneLabels = true;
   bool _satelliteView = true;
+  bool _removalRecordsLayer = false;
   int _mapRefreshGeneration = 0;
 
   @override
@@ -91,6 +92,7 @@ class _AdminMapMonitoringScreenState extends State<AdminMapMonitoringScreen>
       _densityHeatmap = false;
       _zoneLabels = true;
       _satelliteView = true;
+      _removalRecordsLayer = false;
       _viewMode = MapMonitoringViewMode.mapViewing;
     });
   }
@@ -152,6 +154,7 @@ class _AdminMapMonitoringScreenState extends State<AdminMapMonitoringScreen>
                         densityHeatmapEnabled: _densityHeatmap,
                         showLabels: _zoneLabels,
                         useSatelliteTiles: _satelliteView,
+                        showRemovalRecords: _removalRecordsLayer,
                       ),
                       const SizedBox(height: 18),
                       MapMonitoringAnalyticsPanel(
@@ -160,6 +163,7 @@ class _AdminMapMonitoringScreenState extends State<AdminMapMonitoringScreen>
                         densityLayers: _viewMode == MapMonitoringViewMode.densityLayers,
                         zoneLabels: _zoneLabels,
                         satelliteView: _satelliteView,
+                        removalRecords: _removalRecordsLayer,
                         onZoneBoundariesChanged: (v) => setState(() => _zoneBoundaries = v),
                         onDensityHeatmapChanged: (v) => setState(() => _densityHeatmap = v),
                         onDensityLayersChanged: (v) => setState(() {
@@ -171,6 +175,7 @@ class _AdminMapMonitoringScreenState extends State<AdminMapMonitoringScreen>
                         }),
                         onZoneLabelsChanged: (v) => setState(() => _zoneLabels = v),
                         onSatelliteViewChanged: (v) => setState(() => _satelliteView = v),
+                        onRemovalRecordsChanged: (v) => setState(() => _removalRecordsLayer = v),
                         onResetLayers: _resetLayers,
                       ),
                     ],
@@ -185,6 +190,7 @@ class _AdminMapMonitoringScreenState extends State<AdminMapMonitoringScreen>
                     densityHeatmapEnabled: _densityHeatmap,
                     showLabels: _zoneLabels,
                     useSatelliteTiles: _satelliteView,
+                    showRemovalRecords: _removalRecordsLayer,
                   ),
                   const SizedBox(height: 18),
                   MapMonitoringAnalyticsPanel(
@@ -193,6 +199,7 @@ class _AdminMapMonitoringScreenState extends State<AdminMapMonitoringScreen>
                     densityLayers: _viewMode == MapMonitoringViewMode.densityLayers,
                     zoneLabels: _zoneLabels,
                     satelliteView: _satelliteView,
+                    removalRecords: _removalRecordsLayer,
                     onZoneBoundariesChanged: (v) => setState(() => _zoneBoundaries = v),
                     onDensityHeatmapChanged: (v) => setState(() => _densityHeatmap = v),
                     onDensityLayersChanged: (v) => setState(() {
@@ -204,6 +211,7 @@ class _AdminMapMonitoringScreenState extends State<AdminMapMonitoringScreen>
                     }),
                     onZoneLabelsChanged: (v) => setState(() => _zoneLabels = v),
                     onSatelliteViewChanged: (v) => setState(() => _satelliteView = v),
+                    onRemovalRecordsChanged: (v) => setState(() => _removalRecordsLayer = v),
                     onResetLayers: _resetLayers,
                   ),
                 ],

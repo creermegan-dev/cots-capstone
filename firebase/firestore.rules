@@ -7,14 +7,11 @@ service cloud.firestore {
     match /users/{userId} {
       allow read: if request.auth != null && request.auth.uid == userId;
 
-      // Signup always creates a field account (`user`). The single app admin is assigned
-      // in Firebase Console (set `accountRole` to `admin` on one `users/{uid}` doc).
       allow create: if request.auth != null
         && request.auth.uid == userId
         && request.resource.data.uid == request.auth.uid
         && request.resource.data.accountRole == 'user';
 
-      // Updates: same user only; client cannot change accountRole (admin promotions via Console / Cloud Functions).
       allow update: if request.auth != null
         && request.auth.uid == userId
         && request.resource.data.accountRole == resource.data.accountRole;
@@ -22,6 +19,17 @@ service cloud.firestore {
       allow delete: if request.auth != null && request.auth.uid == userId;
     }
 
-    // Everything else is denied by default until you add explicit rules.
+    // Citizen science GoPro scan records (image-only submissions).
+    match /scan_records/{recordId} {
+      allow read: if request.auth != null;
+
+      allow create: if request.auth != null
+        && request.resource.data.uid == request.auth.uid
+        && request.resource.data.capture_source == 'GoPro Underwater Image'
+        && request.resource.data.citizen_contribution == true
+        && request.resource.data.activity_type in ['detection_only', 'removal_activity'];
+
+      allow update, delete: if false;
+    }
   }
 }

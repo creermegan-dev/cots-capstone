@@ -31,15 +31,17 @@ class _AdminRecordsSubmissionsScreenState
 
   static const List<AdminDataTableColumn> _tableColumns = [
     AdminDataTableColumn('#', 44, headerAlign: TextAlign.center),
-    AdminDataTableColumn('Record ID', 124),
-    AdminDataTableColumn('Zone', 84, headerAlign: TextAlign.center),
-    AdminDataTableColumn('Date & Time', 176),
-    AdminDataTableColumn('COTS Count', 92, headerAlign: TextAlign.right),
-    AdminDataTableColumn('Density (COTS/ha)', 112, headerAlign: TextAlign.right),
-    AdminDataTableColumn('Risk Level', 104, headerAlign: TextAlign.center),
-    AdminDataTableColumn('Status', 100, headerAlign: TextAlign.center),
-    AdminDataTableColumn('Submitted By', 148),
-    AdminDataTableColumn('Actions', 124, headerAlign: TextAlign.right),
+    AdminDataTableColumn('Record ID', 108),
+    AdminDataTableColumn('Activity', 108, headerAlign: TextAlign.center),
+    AdminDataTableColumn('AI Count', 72, headerAlign: TextAlign.right),
+    AdminDataTableColumn('Removed', 72, headerAlign: TextAlign.right),
+    AdminDataTableColumn('Avg Size', 76, headerAlign: TextAlign.right),
+    AdminDataTableColumn('Capture', 100),
+    AdminDataTableColumn('Zone', 72, headerAlign: TextAlign.center),
+    AdminDataTableColumn('Date & Time', 156),
+    AdminDataTableColumn('Status', 92, headerAlign: TextAlign.center),
+    AdminDataTableColumn('Submitted By', 120),
+    AdminDataTableColumn('Actions', 108, headerAlign: TextAlign.right),
   ];
 
   static const _zones = ['All Zones', 'Zone A', 'Zone B', 'Zone C', 'Zone D'];
@@ -50,9 +52,52 @@ class _AdminRecordsSubmissionsScreenState
   final List<AdminRecordTableRow> _rows = _seedRows();
 
   static List<AdminRecordTableRow> _seedRows() => [
-        const AdminRecordTableRow(1, 'REC-2026-0156', 'Zone A', 'May 18, 2026 09:15 AM', 67, 78.40, 'High', 'Juan Dela Cruz', 92),
-        const AdminRecordTableRow(2, 'REC-2026-0155', 'Zone B', 'May 18, 2026 08:45 AM', 51, 55.40, 'High', 'Pedro Reyes', 71),
-        const AdminRecordTableRow(3, 'REC-2026-0154', 'Zone C', 'May 17, 2026 04:30 PM', 28, 41.75, 'Moderate', 'Maria Santos', 88),
+        const AdminRecordTableRow(
+          1,
+          'REC-101',
+          'Zone A',
+          'May 18, 2026 09:15 AM',
+          4,
+          78.40,
+          'High',
+          'Citizen Diver',
+          92,
+          activityType: 'Removal Activity',
+          aiCount: 4,
+          removedQuantity: 4,
+          averageSizeCm: 35,
+          captureSource: 'GoPro Image',
+        ),
+        const AdminRecordTableRow(
+          2,
+          'REC-2026-0155',
+          'Zone B',
+          'May 18, 2026 08:45 AM',
+          3,
+          55.40,
+          'High',
+          'Pedro Reyes',
+          71,
+          activityType: 'Detection Only',
+          aiCount: 3,
+          captureSource: 'GoPro Image',
+        ),
+        const AdminRecordTableRow(
+          3,
+          'REC-2026-0154',
+          'Zone C',
+          'May 17, 2026 04:30 PM',
+          2,
+          41.75,
+          'Moderate',
+          'Maria Santos',
+          88,
+          activityType: 'Removal Activity',
+          aiCount: 2,
+          removedQuantity: 2,
+          averageSizeCm: 28,
+          captureSource: 'GoPro Image',
+        ),
         const AdminRecordTableRow(4, 'REC-2026-0153', 'Zone D', 'May 17, 2026 11:20 AM', 46, 72.10, 'High', 'Luis Mendoza', 60),
         const AdminRecordTableRow(5, 'REC-2026-0152', 'Zone E', 'May 16, 2026 10:10 AM', 10, 8.30, 'Low', 'Ana Garcia', 44),
         const AdminRecordTableRow(6, 'REC-2026-0151', 'Zone F', 'May 16, 2026 09:10 AM', 15, 22.60, 'Moderate', 'Jose Villanueva', 84),
@@ -457,6 +502,9 @@ class _AdminRecordsSubmissionsScreenState
   }
 
   List<TableCell> _recordRowCells(AdminRecordTableRow r) {
+    final removed = r.removedQuantity != null ? '${r.removedQuantity}' : '—';
+    final avgSize =
+        r.averageSizeCm != null ? '${r.averageSizeCm!.toStringAsFixed(0)} cm' : '—';
     return [
       AdminDataTableCells.text('${r.number}', align: TextAlign.center),
       AdminDataTableCells.cell(
@@ -473,18 +521,13 @@ class _AdminRecordsSubmissionsScreenState
           ),
         ),
       ),
+      AdminDataTableCells.text(r.activityType, align: TextAlign.center),
+      AdminDataTableCells.text('${r.displayAiCount}', align: TextAlign.right),
+      AdminDataTableCells.text(removed, align: TextAlign.right),
+      AdminDataTableCells.text(avgSize, align: TextAlign.right),
+      AdminDataTableCells.text(r.captureSource),
       AdminDataTableCells.text(r.zone, align: TextAlign.center),
       AdminDataTableCells.text(r.dateTime, style: AdminDateTimeTokens.inlineDateTimeTextStyle()),
-      AdminDataTableCells.text('${r.cotsCount}', align: TextAlign.right),
-      AdminDataTableCells.text(
-        r.density.toStringAsFixed(2),
-        align: TextAlign.right,
-        style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 12.5),
-      ),
-      AdminDataTableCells.cell(
-        align: TextAlign.center,
-        child: AdminDataTableBadge(label: r.risk, foreground: _riskColor(r.risk), background: _riskColor(r.risk).withValues(alpha: 0.13)),
-      ),
       AdminDataTableCells.cell(
         align: TextAlign.center,
         child: AdminDataTableBadge(

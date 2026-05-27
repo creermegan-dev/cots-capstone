@@ -197,7 +197,7 @@ class _ScanNavItem extends StatelessWidget {
             ),
             const SizedBox(height: 2),
             Text(
-              'Scan',
+              'Detect',
               style: TextStyle(
                 fontSize: 10,
                 fontWeight: isActive ? FontWeight.w700 : FontWeight.w500,
@@ -211,7 +211,7 @@ class _ScanNavItem extends StatelessWidget {
   }
 }
 
-/// Center scan FAB on shell screens (opens GoPro import / detection page).
+/// Center FAB on shell screens (opens New Detection / GoPro image flow).
 Widget userShellScanFab(
   BuildContext context, {
   Color backgroundColor = kDarkTeal,

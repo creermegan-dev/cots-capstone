@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
-import 'package:cots_monitor/features/auth/admin_login_screen.dart';
 import 'package:cots_monitor/providers/auth_provider.dart';
 import '../layout/admin_nav_entries.dart';
 import '../layout/admin_responsive_chrome.dart';
@@ -33,11 +32,7 @@ class _AdminShellScreenState extends State<AdminShellScreen> {
 
   Future<void> _logout() async {
     if (!context.mounted) return;
-    final auth = context.read<AuthProvider>();
-    Navigator.of(context).push<void>(
-      MaterialPageRoute<void>(builder: (_) => const AdminLoginScreen()),
-    );
-    await auth.signOut();
+    await context.read<AuthProvider>().signOut();
   }
 
   @override

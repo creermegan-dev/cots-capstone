@@ -42,10 +42,10 @@ class _LandingGlowButtonState extends State<LandingGlowButton> {
           gradient: LandingColors.buttonGradient,
           boxShadow: [
             BoxShadow(
-              color: LandingColors.teal.withValues(alpha: _hovered ? 0.55 : 0.28),
-              blurRadius: _hovered ? 22 : 14,
-              spreadRadius: _hovered ? 2 : 0,
-              offset: const Offset(0, 4),
+              color: LandingColors.teal.withValues(alpha: _hovered ? 0.35 : 0.2),
+              blurRadius: _hovered ? 18 : 12,
+              spreadRadius: _hovered ? 1 : 0,
+              offset: const Offset(0, 6),
             ),
           ],
         ),

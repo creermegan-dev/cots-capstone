@@ -2,7 +2,9 @@ import 'package:flutter/material.dart';
 
 import '../../../core/cots_colors.dart';
 
-/// Circular logo placeholder — replace with [Image.asset] when assets are ready.
+const String kCotsLogoAsset = 'assets/images/cots_logo.png';
+
+/// Circular COTS logo badge used across auth pages.
 class CotsAuthLogoBadge extends StatelessWidget {
   const CotsAuthLogoBadge({super.key, this.size = 96});
 
@@ -24,15 +26,25 @@ class CotsAuthLogoBadge extends StatelessWidget {
           boxShadow: kSoftCardShadow,
           border: Border.all(color: const Color(0x331F7A7A)),
         ),
-        child: Stack(
-          alignment: Alignment.center,
-          children: [
-            Icon(Icons.waves_rounded, size: size * 0.4, color: kOceanCyan),
-            Positioned(
-              top: size * 0.23,
-              child: Icon(Icons.star_border_rounded, size: size * 0.35, color: kPrimaryTeal),
+        child: ClipOval(
+          child: Image.asset(
+            kCotsLogoAsset,
+            fit: BoxFit.cover,
+            errorBuilder: (_, __, ___) => Stack(
+              alignment: Alignment.center,
+              children: [
+                Icon(Icons.waves_rounded, size: size * 0.4, color: kOceanCyan),
+                Positioned(
+                  top: size * 0.23,
+                  child: Icon(
+                    Icons.star_border_rounded,
+                    size: size * 0.35,
+                    color: kPrimaryTeal,
+                  ),
+                ),
+              ],
             ),
-          ],
+          ),
         ),
       ),
     );

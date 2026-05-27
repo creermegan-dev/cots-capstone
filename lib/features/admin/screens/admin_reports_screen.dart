@@ -53,12 +53,19 @@ class _AdminReportsScreenState extends State<AdminReportsScreen> {
     'https://images.unsplash.com/photo-1559827260-dc66d52bef19?w=800&q=80',
   ];
 
-  static const _types = ['All Types', 'COTS Detection', 'Outbreak Alert', 'Zone Activity'];
+  static const _types = [
+    'All Types',
+    'COTS Detection',
+    'Citizen Removal Record',
+    'Outbreak Alert',
+    'Zone Activity',
+  ];
   static const _statuses = ['All Status', 'Auto Approved', 'For Review', 'Rejected', 'Completed'];
   static const _confidences = ['All Confidence Levels', 'High', 'Medium', 'Low'];
   static const _zones = ['All Zones', 'Zone A', 'Zone B', 'Zone C', 'Zone D', 'Zone E'];
 
   static const _allRows = <_ReportRow>[
+    _ReportRow('RPT-00025', _ReportType.citizenRemoval, 'Citizen Diver', 'Zone A', 'May 18, 2026 10:00 AM', 90, _RepStatus.autoApproved, 'GoPro removal record — 4 COTS removed.'),
     _ReportRow('RPT-00024', _ReportType.cotsDetection, 'Juan Dela Cruz', 'Zone A', 'May 18, 2026 09:30 AM', 92, _RepStatus.autoApproved, 'Auto-approved at submission.'),
     _ReportRow('RPT-00023', _ReportType.cotsDetection, 'Maria Santos', 'Zone B', 'May 18, 2026 08:45 AM', 78, _RepStatus.forReview, 'Pending admin review'),
     _ReportRow('RPT-00022', _ReportType.outbreakAlert, 'Pedro Reyes', 'Zone C', 'May 17, 2026 04:45 PM', 66, _RepStatus.forReview, 'Pending admin review'),
@@ -847,23 +854,26 @@ class _StatCardState extends State<_StatCard> {
   }
 }
 
-enum _ReportType { cotsDetection, outbreakAlert, zoneActivity }
+enum _ReportType { cotsDetection, citizenRemoval, outbreakAlert, zoneActivity }
 
 extension on _ReportType {
   String get label => switch (this) {
         _ReportType.cotsDetection => 'COTS Detection',
+        _ReportType.citizenRemoval => 'Citizen Removal Record',
         _ReportType.outbreakAlert => 'Outbreak Alert',
         _ReportType.zoneActivity => 'Zone Activity',
       };
 
   IconData get icon => switch (this) {
         _ReportType.cotsDetection => Icons.biotech_outlined,
+        _ReportType.citizenRemoval => Icons.cleaning_services_outlined,
         _ReportType.outbreakAlert => Icons.warning_amber_rounded,
         _ReportType.zoneActivity => Icons.grid_view_rounded,
       };
 
   Color get color => switch (this) {
         _ReportType.cotsDetection => AdminColors.statBlue,
+        _ReportType.citizenRemoval => AdminColors.statGreen,
         _ReportType.outbreakAlert => AdminColors.statYellow,
         _ReportType.zoneActivity => AdminColors.statPurple,
       };
