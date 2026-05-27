@@ -52,13 +52,14 @@ class YoloImagePreprocessor {
     img.compositeImage(canvas, resized, dstX: meta.padX, dstY: meta.padY);
 
     final tensor = Float32List(inputSize * inputSize * 3);
-    var index = 0;
+    final channelSize = inputSize * inputSize;
     for (var y = 0; y < inputSize; y++) {
       for (var x = 0; x < inputSize; x++) {
         final pixel = canvas.getPixel(x, y);
-        tensor[index++] = pixel.r / 255.0;
-        tensor[index++] = pixel.g / 255.0;
-        tensor[index++] = pixel.b / 255.0;
+        final pixelIndex = y * inputSize + x;
+        tensor[pixelIndex] = pixel.r / 255.0;                  // Red plane
+        tensor[channelSize + pixelIndex] = pixel.g / 255.0;     // Green plane
+        tensor[channelSize * 2 + pixelIndex] = pixel.b / 255.0; // Blue plane
       }
     }
 
