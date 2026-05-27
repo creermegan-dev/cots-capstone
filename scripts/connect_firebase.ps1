@@ -4,8 +4,8 @@
 #   Interactive (pick project from list — USE THIS if "project not found"):
 #     powershell -ExecutionPolicy Bypass -File scripts\connect_firebase.ps1
 #
-#   With a known Project ID (see Firebase Console → Project settings → Project ID):
-#     powershell -ExecutionPolicy Bypass -File scripts\connect_firebase.ps1 -ProjectId YOUR_PROJECT_ID
+#   Team default Project ID (cots-monitor):
+#     powershell -ExecutionPolicy Bypass -File scripts\connect_firebase.ps1 -ProjectId cots-monitor
 #
 # If the wrong Google account is logged in, run first: firebase login
 
@@ -36,7 +36,7 @@ if ([string]::IsNullOrWhiteSpace($ProjectId)) {
     Write-Host "Use the Google account that OWNS 'COTS Monitor' in the browser if asked." -ForegroundColor Gray
     Write-Host ""
     & $flutterfire configure `
-        --platforms=web,android `
+        --platforms=web,android,windows `
         --android-package-name=com.example.cots_monitor `
         --overwrite-firebase-options
 } else {
@@ -45,7 +45,7 @@ if ([string]::IsNullOrWhiteSpace($ProjectId)) {
     & $flutterfire configure `
         -y `
         --project=$ProjectId `
-        --platforms=web,android `
+        --platforms=web,android,windows `
         --android-package-name=com.example.cots_monitor `
         --overwrite-firebase-options
 }
@@ -59,7 +59,11 @@ if ($LASTEXITCODE -ne 0) {
 }
 
 Write-Host ""
-Write-Host "Done. Open lib\firebase_options.dart and confirm projectId looks correct." -ForegroundColor Green
+Write-Host "Done. Open lib\firebase_options.dart and confirm projectId is cots-monitor" -ForegroundColor Green
+Write-Host "  (android, web, windows blocks)." -ForegroundColor Gray
 Write-Host "Then run:" -ForegroundColor Green
 Write-Host "  flutter pub get" -ForegroundColor Green
+Write-Host "  flutter run -d windows" -ForegroundColor Green
 Write-Host "  flutter run -d chrome" -ForegroundColor Green
+Write-Host ""
+Write-Host "Team guide: FIREBASE_COLLABORATION_GUIDE.md" -ForegroundColor Gray

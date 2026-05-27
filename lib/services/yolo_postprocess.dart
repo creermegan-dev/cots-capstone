@@ -6,14 +6,17 @@ import 'yolo_image_preprocess.dart';
 /// Parses YOLOv8 ONNX output and applies NMS.
 class YoloPostprocessor {
   const YoloPostprocessor({
-    this.confThreshold = 0.25,
-    this.iouThreshold = 0.45,
-    this.maxDetections = 300,
+    // Stricter defaults reduce false positives for single-COTS images.
+    this.confThreshold = 0.55,
+    this.iouThreshold = 0.35,
+    this.maxDetections = 25,
+    this.minBoxAreaRatio = 0.00025,
   });
 
   final double confThreshold;
   final double iouThreshold;
   final int maxDetections;
+  final double minBoxAreaRatio;
 
   List<CotsBoundingBox> decode(
     List<dynamic> flatOutput,
@@ -32,7 +35,7 @@ class YoloPostprocessor {
       final cy = _value(flatOutput, channels, anchors, 1, i);
       final w = _value(flatOutput, channels, anchors, 2, i);
       final h = _value(flatOutput, channels, anchors, 3, i);
-      final score = _value(flatOutput, channels, anchors, 4, i);
+      final score = _score(flatOutput, channels, anchors, i);
 
       if (score < confThreshold) continue;
 
@@ -41,12 +44,23 @@ class YoloPostprocessor {
       final x2 = _toSourceX((cx + w / 2), meta);
       final y2 = _toSourceY((cy + h / 2), meta);
 
+      final clampedX1 = x1.clamp(0.0, meta.sourceWidth.toDouble()).toDouble();
+      final clampedY1 = y1.clamp(0.0, meta.sourceHeight.toDouble()).toDouble();
+      final clampedX2 = x2.clamp(0.0, meta.sourceWidth.toDouble()).toDouble();
+      final clampedY2 = y2.clamp(0.0, meta.sourceHeight.toDouble()).toDouble();
+
+      final boxW = (clampedX2 - clampedX1).abs();
+      final boxH = (clampedY2 - clampedY1).abs();
+      final sourceArea = (meta.sourceWidth * meta.sourceHeight).toDouble();
+      final boxAreaRatio = sourceArea <= 0 ? 0.0 : (boxW * boxH) / sourceArea;
+      if (boxAreaRatio < minBoxAreaRatio) continue;
+
       candidates.add(
         CotsBoundingBox(
-          x1: x1.clamp(0, meta.sourceWidth.toDouble()),
-          y1: y1.clamp(0, meta.sourceHeight.toDouble()),
-          x2: x2.clamp(0, meta.sourceWidth.toDouble()),
-          y2: y2.clamp(0, meta.sourceHeight.toDouble()),
+          x1: clampedX1,
+          y1: clampedY1,
+          x2: clampedX2,
+          y2: clampedY2,
           score: score,
         ),
       );
@@ -64,6 +78,31 @@ class YoloPostprocessor {
   ) {
     final index = channel * anchors + anchor;
     return (flat[index] as num).toDouble();
+  }
+
+  double _score(
+    List<dynamic> flat,
+    int channels,
+    int anchors,
+    int anchor,
+  ) {
+    // YOLOv8 exports are typically [x, y, w, h, class0, class1, ...] (no obj).
+    if (channels == 5) {
+      return _value(flat, channels, anchors, 4, anchor);
+    }
+
+    // Some exports include objectness at channel 4 and class logits after that.
+    if (channels > 5) {
+      final objectness = _value(flat, channels, anchors, 4, anchor);
+      var bestClass = 0.0;
+      for (var ch = 5; ch < channels; ch++) {
+        final cls = _value(flat, channels, anchors, ch, anchor);
+        if (cls > bestClass) bestClass = cls;
+      }
+      return objectness * bestClass;
+    }
+
+    return 0.0;
   }
 
   double _toSourceX(double x, LetterboxMeta meta) => (x - meta.padX) / meta.scale;
