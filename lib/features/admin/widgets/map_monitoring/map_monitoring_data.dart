@@ -42,6 +42,9 @@ class MonitoringZone {
     required this.statusLabel,
     required this.lastMonitoring,
     required this.outbreakStatus,
+    this.cotsDetected = 0,
+    this.cotsRemoved = 0,
+    this.averageSizeCm,
   });
 
   final String code;
@@ -52,6 +55,9 @@ class MonitoringZone {
   final String statusLabel;
   final String lastMonitoring;
   final String outbreakStatus;
+  final int cotsDetected;
+  final int cotsRemoved;
+  final double? averageSizeCm;
 
   LatLng get centroid {
     double lat = 0, lng = 0;
@@ -121,6 +127,9 @@ abstract final class MapMonitoringMock {
       statusLabel: 'Active (Outbreak)',
       lastMonitoring: 'May 18, 2026 · 09:12',
       outbreakStatus: 'Active',
+      cotsDetected: 78,
+      cotsRemoved: 35,
+      averageSizeCm: 38,
       polygon: const [
         LatLng(7.14, 125.58),
         LatLng(7.20, 125.64),

@@ -16,7 +16,6 @@ class WindowsAuthRestService {
   final http.Client _client;
 
   static const _options = DefaultFirebaseOptions.windows;
-  static const String _projectId = 'cots-capstone-project';
 
   Future<WindowsAuthSession> signIn({
     required String email,
@@ -63,7 +62,7 @@ class WindowsAuthRestService {
     required String idToken,
   }) async {
     final uri = Uri.parse(
-      'https://firestore.googleapis.com/v1/projects/$_projectId'
+      'https://firestore.googleapis.com/v1/projects/${_options.projectId}'
       '/databases/(default)/documents/users/$uid',
     );
     final response = await _client.get(
@@ -85,7 +84,7 @@ class WindowsAuthRestService {
     required String idToken,
   }) async {
     final uri = Uri.parse(
-      'https://firestore.googleapis.com/v1/projects/$_projectId'
+      'https://firestore.googleapis.com/v1/projects/${_options.projectId}'
       '/databases/(default)/documents/users?documentId=${model.uid}',
     );
     final response = await _client.post(
@@ -197,9 +196,22 @@ class WindowsAuthRestService {
       case 'TOO_MANY_ATTEMPTS_TRY_LATER':
         return 'Too many attempts. Try again later.';
       case 'OPERATION_NOT_ALLOWED':
-        return 'Email/password sign-in is disabled in Firebase Console.';
+        return 'Email/password sign-in is disabled in Firebase Console. '
+            'Enable it under Authentication → Sign-in method → Email/Password.';
+      case 'CONFIGURATION_NOT_FOUND':
+        return 'Firebase Authentication is not set up for this project yet. '
+            'Open Firebase Console → Authentication → Get started, then enable '
+            'Email/Password. Project: ${_options.projectId}. '
+            'See FIREBASE_SETUP.md in the repo for steps.';
+      case 'API_KEY_INVALID':
+        return 'Invalid Firebase API key. Re-run flutterfire configure and rebuild the app.';
       default:
-        return message.replaceAll('_', ' ').toLowerCase();
+        if (message.contains('CONFIGURATION_NOT_FOUND')) {
+          return 'Firebase Authentication is not set up for this project yet. '
+              'Open Firebase Console → Authentication → Get started, then enable '
+              'Email/Password.';
+        }
+        return 'Authentication failed: ${message.replaceAll('_', ' ')}.';
     }
   }
 }

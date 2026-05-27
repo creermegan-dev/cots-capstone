@@ -4,7 +4,6 @@ import 'package:fl_chart/fl_chart.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
-import 'package:cots_monitor/features/auth/admin_login_screen.dart';
 import 'package:cots_monitor/providers/auth_provider.dart';
 import '../layout/admin_breakpoints.dart';
 import '../layout/admin_responsive_chrome.dart';
@@ -70,11 +69,7 @@ class _AdminZoneDetailsScreenState extends State<AdminZoneDetailsScreen> {
 
   Future<void> _logout() async {
     if (!context.mounted) return;
-    final auth = context.read<AuthProvider>();
-    Navigator.of(context).push<void>(
-      MaterialPageRoute<void>(builder: (_) => const AdminLoginScreen()),
-    );
-    await auth.signOut();
+    await context.read<AuthProvider>().signOut();
   }
 
   void _onSidebarSelect(int index) {

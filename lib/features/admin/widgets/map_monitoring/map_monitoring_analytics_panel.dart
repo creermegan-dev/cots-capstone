@@ -12,11 +12,13 @@ class MapMonitoringAnalyticsPanel extends StatelessWidget {
     required this.densityLayers,
     required this.zoneLabels,
     required this.satelliteView,
+    required this.removalRecords,
     required this.onZoneBoundariesChanged,
     required this.onDensityHeatmapChanged,
     required this.onDensityLayersChanged,
     required this.onZoneLabelsChanged,
     required this.onSatelliteViewChanged,
+    required this.onRemovalRecordsChanged,
     required this.onResetLayers,
   });
 
@@ -25,11 +27,13 @@ class MapMonitoringAnalyticsPanel extends StatelessWidget {
   final bool densityLayers;
   final bool zoneLabels;
   final bool satelliteView;
+  final bool removalRecords;
   final ValueChanged<bool> onZoneBoundariesChanged;
   final ValueChanged<bool> onDensityHeatmapChanged;
   final ValueChanged<bool> onDensityLayersChanged;
   final ValueChanged<bool> onZoneLabelsChanged;
   final ValueChanged<bool> onSatelliteViewChanged;
+  final ValueChanged<bool> onRemovalRecordsChanged;
   final VoidCallback onResetLayers;
 
   static const double _cardRowGap = 14;
@@ -243,6 +247,11 @@ class MapMonitoringAnalyticsPanel extends StatelessWidget {
               'Satellite View',
               satelliteView,
               onSatelliteViewChanged,
+            ),
+            _tileCheckbox(
+              'Removal Records',
+              removalRecords,
+              onRemovalRecordsChanged,
             ),
             const SizedBox(height: 10),
             SizedBox(

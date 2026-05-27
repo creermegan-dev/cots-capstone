@@ -1,4 +1,3 @@
-import 'package:cots_monitor/widgets/app_back_icon_button.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
@@ -7,16 +6,16 @@ import '../../core/cots_colors.dart';
 import '../../core/root_scaffold_messenger.dart';
 import '../../providers/auth_provider.dart';
 import '../../services/auth_service.dart';
+import 'auth_navigation.dart';
+import 'login_screen.dart';
+import 'widgets/auth_layout.dart';
+import 'widgets/auth_responsive_scaffold.dart';
 import 'widgets/cots_auth_dropdown.dart';
-import 'widgets/cots_auth_logo_badge.dart';
 import 'widgets/cots_auth_password_field.dart';
 import 'widgets/cots_auth_text_field.dart';
 import 'widgets/cots_gradient_primary_button.dart';
-import 'widgets/ocean_background.dart';
-import 'auth_routes.dart';
-import 'login_screen.dart';
 
-/// Create Account screen — marine-themed signup with validation.
+/// Create Account screen — responsive marine-themed signup with validation.
 class SignupScreen extends StatefulWidget {
   const SignupScreen({super.key});
 
@@ -33,16 +32,18 @@ class _SignupScreenState extends State<SignupScreen> {
   final _passwordCtrl = TextEditingController();
   final _confirmCtrl = TextEditingController();
 
-  /// Empty string means role not chosen yet (matches first dropdown item).
   String _role = '';
   String? _organization;
 
   static const _roles = <String>[
-    'Field Monitor',
+    'Citizen Scientist',
     'Researcher',
     'Marine Biologist',
-    'Park Ranger',
-    'Administrator',
+    'Volunteer Diver',
+    'Conservation Staff',
+    'Student Researcher',
+    'LGU Personnel',
+    'BFAR Personnel',
   ];
 
   static const _organizations = <String>[
@@ -134,10 +135,9 @@ class _SignupScreenState extends State<SignupScreen> {
         organization: _organization,
         password: _passwordCtrl.text,
       );
-      // Account exists but send user to login instead of staying signed in → dashboard.
       await auth.signOut();
       if (!mounted) return;
-      Navigator.of(context).popUntil((route) => route.isFirst);
+      resetToAuthRoot(context);
       kRootScaffoldMessengerKey.currentState?.showSnackBar(
         const SnackBar(
           behavior: SnackBarBehavior.floating,
@@ -169,221 +169,169 @@ class _SignupScreenState extends State<SignupScreen> {
     }
   }
 
-  @override
-  Widget build(BuildContext context) {
-    final bottomInset = MediaQuery.paddingOf(context).bottom;
-    final auth = context.watch<AuthProvider>();
+  void _goLanding() {
+    resetToAuthRoot(context);
+  }
 
-    return Scaffold(
-      extendBodyBehindAppBar: true,
-      appBar: AppBar(
-        backgroundColor: Colors.transparent,
-        elevation: 0,
-        scrolledUnderElevation: 0,
-        leading: AppBackIconButton(
-          onPressed: () => Navigator.of(context).maybePop(),
-          iconColor: kDarkTeal,
+  double get _fieldGap => authUseDesktopFields(context) ? 14 : 18;
+
+  Widget _buildFields(AuthProvider auth) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        CotsAuthTextField(
+          controller: _nameCtrl,
+          label: 'Full Name',
+          hint: 'Enter your full name',
+          prefixIcon: Icons.person_outline_rounded,
+          textInputAction: TextInputAction.next,
+          autofillHints: const [AutofillHints.name],
+          validator: _validateName,
         ),
-        title: const Text(
-          'Create Account',
-          style: TextStyle(
-            color: kDarkTeal,
-            fontWeight: FontWeight.w700,
-            fontSize: 18,
-          ),
+        SizedBox(height: _fieldGap),
+        CotsAuthTextField(
+          controller: _emailCtrl,
+          label: 'Email Address',
+          hint: 'Enter your email',
+          prefixIcon: Icons.mail_outline_rounded,
+          keyboardType: TextInputType.emailAddress,
+          textInputAction: TextInputAction.next,
+          autofillHints: const [AutofillHints.email],
+          validator: _validateEmail,
         ),
-        centerTitle: true,
-      ),
-      body: OceanBackground(
-        child: SafeArea(
-          child: SingleChildScrollView(
-            padding: EdgeInsets.fromLTRB(20, 8, 20, 24 + bottomInset),
-            child: Form(
-              key: _formKey,
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: [
-                  const SizedBox(height: 8),
-                  const CotsAuthLogoBadge(),
-                  const SizedBox(height: 16),
-                  Text(
-                    'COTS Monitor',
-                    textAlign: TextAlign.center,
-                    style: Theme.of(context).textTheme.headlineSmall?.copyWith(
-                          color: kDarkTeal,
-                          fontWeight: FontWeight.w800,
-                          letterSpacing: -0.5,
-                        ),
-                  ),
-                  const SizedBox(height: 6),
-                  Text(
-                    'Crown-of-Thorns Starfish Monitoring',
-                    textAlign: TextAlign.center,
-                    style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                          color: kMutedGray,
-                          fontWeight: FontWeight.w500,
-                        ),
-                  ),
-                  const SizedBox(height: 28),
-                  DecoratedBox(
-                    decoration: BoxDecoration(
-                      color: Colors.white,
-                      borderRadius: BorderRadius.circular(22),
-                      boxShadow: const [
-                        BoxShadow(
-                          color: Color(0x14000000),
-                          blurRadius: 24,
-                          offset: Offset(0, 10),
-                        ),
-                        BoxShadow(
-                          color: Color(0x08000000),
-                          blurRadius: 6,
-                          offset: Offset(0, 2),
-                        ),
-                      ],
-                    ),
-                    child: Padding(
-                      padding: const EdgeInsets.fromLTRB(18, 22, 18, 22),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.stretch,
-                        children: [
-                          CotsAuthTextField(
-                            controller: _nameCtrl,
-                            label: 'Full Name',
-                            hint: 'Enter your full name',
-                            prefixIcon: Icons.person_outline_rounded,
-                            textInputAction: TextInputAction.next,
-                            autofillHints: const [AutofillHints.name],
-                            validator: _validateName,
-                          ),
-                          const SizedBox(height: 18),
-                          CotsAuthTextField(
-                            controller: _emailCtrl,
-                            label: 'Email Address',
-                            hint: 'Enter your email',
-                            prefixIcon: Icons.mail_outline_rounded,
-                            keyboardType: TextInputType.emailAddress,
-                            textInputAction: TextInputAction.next,
-                            autofillHints: const [AutofillHints.email],
-                            validator: _validateEmail,
-                          ),
-                          const SizedBox(height: 18),
-                          CotsAuthTextField(
-                            controller: _phoneCtrl,
-                            label: 'Phone Number',
-                            hint: 'Enter your phone number',
-                            prefixIcon: Icons.phone_outlined,
-                            keyboardType: TextInputType.phone,
-                            textInputAction: TextInputAction.next,
-                            autofillHints: const [AutofillHints.telephoneNumber],
-                            inputFormatters: [
-                              FilteringTextInputFormatter.allow(RegExp(r'[\d+\-\s().]')),
-                            ],
-                            validator: _validatePhone,
-                          ),
-                          const SizedBox(height: 18),
-                          CotsAuthDropdown<String>(
-                            label: 'Position / Role',
-                            hint: 'Select your role',
-                            prefixIcon: Icons.work_outline_rounded,
-                            value: _role,
-                            items: _roleItems(),
-                            onChanged: (v) => setState(() => _role = v ?? ''),
-                            validator: _validateRole,
-                          ),
-                          const SizedBox(height: 18),
-                          CotsAuthDropdown<String?>(
-                            label: 'Organization (Optional)',
-                            hint: 'Select organization (optional)',
-                            prefixIcon: Icons.business_outlined,
-                            value: _organization,
-                            items: [
-                              const DropdownMenuItem<String?>(
-                                value: null,
-                                child: Text('No organization', overflow: TextOverflow.ellipsis),
-                              ),
-                              ..._organizations.map(
-                                (o) => DropdownMenuItem<String?>(
-                                  value: o,
-                                  child: Text(o, overflow: TextOverflow.ellipsis),
-                                ),
-                              ),
-                            ],
-                            onChanged: (v) => setState(() => _organization = v),
-                          ),
-                          const SizedBox(height: 18),
-                          CotsAuthPasswordField(
-                            controller: _passwordCtrl,
-                            label: 'Password',
-                            hint: 'Create a password',
-                            textInputAction: TextInputAction.next,
-                            validator: _validatePassword,
-                          ),
-                          const SizedBox(height: 18),
-                          CotsAuthPasswordField(
-                            controller: _confirmCtrl,
-                            label: 'Confirm Password',
-                            hint: 'Confirm your password',
-                            textInputAction: TextInputAction.done,
-                            validator: _validateConfirm,
-                            onFieldSubmitted: (_) => _submit(),
-                          ),
-                          const SizedBox(height: 26),
-                          CotsGradientPrimaryButton(
-                            label: 'Create Account',
-                            isLoading: auth.isBusy,
-                            onPressed: _submit,
-                          ),
-                        ],
-                      ),
-                    ),
-                  ),
-                  const SizedBox(height: 22),
-                  Wrap(
-                    alignment: WrapAlignment.center,
-                    crossAxisAlignment: WrapCrossAlignment.center,
-                    children: [
-                      Text(
-                        'Already have an account? ',
-                        style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                              color: kMutedGray,
-                            ),
-                      ),
-                      GestureDetector(
-                        onTap: _goLogin,
-                        child: Text(
-                          'Login',
-                          style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                                color: kPrimaryTeal,
-                                fontWeight: FontWeight.w700,
-                              ),
-                        ),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 14),
-                  Center(
-                    child: TextButton(
-                      onPressed: auth.isBusy
-                          ? null
-                          : () => Navigator.of(context).pushNamed(AuthRoutes.adminLogin),
-                      child: Text(
-                        'Login as admin',
-                        style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                              color: kDarkTeal,
-                              fontWeight: FontWeight.w700,
-                              decoration: TextDecoration.underline,
-                              decorationColor: kDarkTeal.withValues(alpha: 0.5),
-                            ),
-                      ),
-                    ),
-                  ),
-                ],
+        SizedBox(height: _fieldGap),
+        CotsAuthTextField(
+          controller: _phoneCtrl,
+          label: 'Phone Number',
+          hint: 'Enter your phone number',
+          prefixIcon: Icons.phone_outlined,
+          keyboardType: TextInputType.phone,
+          textInputAction: TextInputAction.next,
+          autofillHints: const [AutofillHints.telephoneNumber],
+          inputFormatters: [
+            FilteringTextInputFormatter.allow(RegExp(r'[\d+\-\s().]')),
+          ],
+          validator: _validatePhone,
+        ),
+        SizedBox(height: _fieldGap),
+        CotsAuthDropdown<String>(
+          label: 'Position / Role',
+          hint: 'Select your role',
+          prefixIcon: Icons.work_outline_rounded,
+          value: _role,
+          items: _roleItems(),
+          onChanged: (v) => setState(() => _role = v ?? ''),
+          validator: _validateRole,
+        ),
+        SizedBox(height: _fieldGap),
+        CotsAuthDropdown<String?>(
+          label: 'Organization (Optional)',
+          hint: 'Select organization (optional)',
+          prefixIcon: Icons.business_outlined,
+          value: _organization,
+          items: [
+            const DropdownMenuItem<String?>(
+              value: null,
+              child: Text('No organization', overflow: TextOverflow.ellipsis),
+            ),
+            ..._organizations.map(
+              (o) => DropdownMenuItem<String?>(
+                value: o,
+                child: Text(o, overflow: TextOverflow.ellipsis),
               ),
             ),
+          ],
+          onChanged: (v) => setState(() => _organization = v),
+        ),
+        SizedBox(height: _fieldGap),
+        CotsAuthPasswordField(
+          controller: _passwordCtrl,
+          label: 'Password',
+          hint: 'Create a password',
+          textInputAction: TextInputAction.next,
+          validator: _validatePassword,
+        ),
+        SizedBox(height: _fieldGap),
+        CotsAuthPasswordField(
+          controller: _confirmCtrl,
+          label: 'Confirm Password',
+          hint: 'Confirm your password',
+          textInputAction: TextInputAction.done,
+          validator: _validateConfirm,
+          onFieldSubmitted: (_) => _submit(),
+        ),
+        SizedBox(height: authUseDesktopFields(context) ? 22 : 26),
+        CotsGradientPrimaryButton(
+          label: 'Create Account',
+          isLoading: auth.isBusy,
+          onPressed: _submit,
+        ),
+      ],
+    );
+  }
+
+  Widget _buildFooter(AuthProvider auth) {
+    return Column(
+      children: [
+        Wrap(
+          alignment: WrapAlignment.center,
+          crossAxisAlignment: WrapCrossAlignment.center,
+          children: [
+            Text(
+              'Already have an account? ',
+              style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                    color: authUseDesktopFields(context)
+                        ? AuthTokens.subtitleGray
+                        : kMutedGray,
+                  ),
+            ),
+            GestureDetector(
+              onTap: _goLogin,
+              child: Text(
+                'Login',
+                style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                      color: AuthTokens.focusTeal,
+                      fontWeight: FontWeight.w700,
+                    ),
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 10),
+        TextButton.icon(
+          onPressed: auth.isBusy ? null : _goLanding,
+          icon: const Icon(Icons.arrow_back_rounded, size: 18),
+          label: const Text('Back to Landing'),
+          style: TextButton.styleFrom(
+            foregroundColor: AuthTokens.focusTeal,
           ),
         ),
+      ],
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final auth = context.watch<AuthProvider>();
+    final isMobile = authLayoutModeOf(context) == AuthLayoutMode.mobile;
+
+    final form = Form(
+      key: _formKey,
+      child: isMobile
+          ? AuthMobileFormCard(child: _buildFields(auth))
+          : _buildFields(auth),
+    );
+
+    return AuthResponsiveScaffold(
+      mobileAppBarTitle: 'Create Account',
+      showMobileBackButton: true,
+      mobileHeader: const AuthMobileHeader(),
+      desktopHeader: const AuthCardHeader(
+        title: 'Create Account',
+        subtitle: 'Join COTS Monitor to help protect coral reefs.',
       ),
+      formChild: form,
+      footer: _buildFooter(auth),
     );
   }
 }

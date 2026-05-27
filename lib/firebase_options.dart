@@ -44,20 +44,21 @@ class DefaultFirebaseOptions {
   }
 
   static const FirebaseOptions web = FirebaseOptions(
-    apiKey: 'AIzaSyA5SwQT_6RhD3jl5Jo3mWZT1c1c6yGxhZM',
-    appId: '1:278284094347:web:3b2bfabc10afb9ab88fd8e',
-    messagingSenderId: '278284094347',
-    projectId: 'cots-capstone-project',
-    authDomain: 'cots-capstone-project.firebaseapp.com',
-    storageBucket: 'cots-capstone-project.firebasestorage.app',
+    apiKey: 'AIzaSyAkatvgtQ5pqXKnwYc2NUCYlJm6c5iunfU',
+    appId: '1:785638963949:web:66d01fa301ee91257f2ae4',
+    messagingSenderId: '785638963949',
+    projectId: 'cots-monitor',
+    authDomain: 'cots-monitor.firebaseapp.com',
+    storageBucket: 'cots-monitor.firebasestorage.app',
+    measurementId: 'G-MR30ELK1J8',
   );
 
   static const FirebaseOptions android = FirebaseOptions(
-    apiKey: 'AIzaSyCVYl-RBvyNH4I4S7yH4JYUp8io_RgQZVU',
-    appId: '1:278284094347:android:97f4a2eb220cad8488fd8e',
-    messagingSenderId: '278284094347',
-    projectId: 'cots-capstone-project',
-    storageBucket: 'cots-capstone-project.firebasestorage.app',
+    apiKey: 'AIzaSyBcThI6jDzVRwliC3RFhGDz0dI_dAyjo0o',
+    appId: '1:785638963949:android:7ff67e78bbf9a5eb7f2ae4',
+    messagingSenderId: '785638963949',
+    projectId: 'cots-monitor',
+    storageBucket: 'cots-monitor.firebasestorage.app',
   );
 
   static const FirebaseOptions ios = FirebaseOptions(
@@ -70,12 +71,13 @@ class DefaultFirebaseOptions {
   );
 
   static const FirebaseOptions windows = FirebaseOptions(
-    apiKey: 'AIzaSyA5SwQT_6RhD3jl5Jo3mWZT1c1c6yGxhZM',
-    appId: '1:278284094347:web:7f64a345fdfded3788fd8e',
-    messagingSenderId: '278284094347',
-    projectId: 'cots-capstone-project',
-    authDomain: 'cots-capstone-project.firebaseapp.com',
-    storageBucket: 'cots-capstone-project.firebasestorage.app',
+    apiKey: 'AIzaSyAkatvgtQ5pqXKnwYc2NUCYlJm6c5iunfU',
+    appId: '1:785638963949:web:591ea7ae9d8a9ebc7f2ae4',
+    messagingSenderId: '785638963949',
+    projectId: 'cots-monitor',
+    authDomain: 'cots-monitor.firebaseapp.com',
+    storageBucket: 'cots-monitor.firebasestorage.app',
+    measurementId: 'G-KZ8CC3EL2J',
   );
 
 }

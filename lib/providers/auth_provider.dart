@@ -44,9 +44,6 @@ class AuthProvider extends ChangeNotifier {
   bool _busy = false;
   String? _lastError;
 
-  bool _wantsAdminSession = false;
-  bool _pendingUserPortalSignIn = false;
-
   User? get firebaseUser => _firebaseUser;
   UserModel? get userModel => _userModel;
 
@@ -66,33 +63,6 @@ class AuthProvider extends ChangeNotifier {
   bool get isLoadingProfile => _loadingProfile;
   bool get isBusy => _busy;
   String? get lastError => _lastError;
-  bool get wantsAdminSession => _wantsAdminSession;
-  bool get pendingUserPortalSignIn => _pendingUserPortalSignIn;
-
-  void beginUserPortalSignInAttempt() {
-    _pendingUserPortalSignIn = true;
-  }
-
-  void beginAdminPortalSignInAttempt() {
-    _pendingUserPortalSignIn = false;
-  }
-
-  void clearPendingUserPortalSignIn() {
-    if (!_pendingUserPortalSignIn) return;
-    _pendingUserPortalSignIn = false;
-    notifyListeners();
-  }
-
-  void setWantsAdminSession(bool value) {
-    _wantsAdminSession = value;
-    notifyListeners();
-  }
-
-  void clearWantsAdminSession() {
-    if (!_wantsAdminSession) return;
-    _wantsAdminSession = false;
-    notifyListeners();
-  }
 
   Future<void> _onAuthStateChanged(User? user) async {
     _firebaseUser = user;
@@ -101,8 +71,6 @@ class AuthProvider extends ChangeNotifier {
     if (user == null) {
       _userModel = null;
       _loadingProfile = false;
-      _wantsAdminSession = false;
-      _pendingUserPortalSignIn = false;
       notifyListeners();
       return;
     }
@@ -120,9 +88,6 @@ class AuthProvider extends ChangeNotifier {
     }
 
     _loadingProfile = false;
-    if (_userModel != null && !effectiveIsAdmin) {
-      _pendingUserPortalSignIn = false;
-    }
     notifyListeners();
   }
 
@@ -146,9 +111,6 @@ class AuthProvider extends ChangeNotifier {
     }
 
     _loadingProfile = false;
-    if (_userModel != null && !effectiveIsAdmin) {
-      _pendingUserPortalSignIn = false;
-    }
     notifyListeners();
   }
 
@@ -315,8 +277,6 @@ class AuthProvider extends ChangeNotifier {
       if (deferFirebaseUntilFirstUse) {
         _windowsSession = null;
         _userModel = null;
-        _wantsAdminSession = false;
-        _pendingUserPortalSignIn = false;
         notifyListeners();
         return;
       }

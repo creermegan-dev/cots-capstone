@@ -93,6 +93,21 @@ If Gradle complains about Google Services, confirm `google-services.json` is the
 
 ## 6. Troubleshooting
 
+### `configuration not found` / `CONFIGURATION_NOT_FOUND` on login
+
+This means **Firebase Authentication has not been turned on** for your project yet (common on new projects).
+
+1. Open [Firebase Console → Authentication](https://console.firebase.google.com/project/cots-capstone-project/authentication).
+2. Click **Get started** (if you see it).
+3. Open **Sign-in method** → **Email/Password** → **Enable** → **Save**.
+4. Restart the app and try logging in again.
+
+On Windows, the app uses the Identity Toolkit REST API; login will not work until step 3 is complete.
+
+Optional: In [Google Cloud Console](https://console.cloud.google.com/apis/library/identitytoolkit.googleapis.com?project=cots-capstone-project), ensure **Identity Toolkit API** is enabled.
+
+### Other issues
+
 - **Profile unavailable after login**: Check Firestore rules deployment and device network; use **Retry** on the error screen or view logs.
 - **Email already in use**: Sign in instead of registering again.
 - **OneDrive / locked `build` folder** (Windows): See `scripts/windows_deep_clean_flutter.ps1` and consider moving the repo outside synced folders.

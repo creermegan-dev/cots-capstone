@@ -17,6 +17,7 @@ class MapMonitoringMap extends StatefulWidget {
     required this.densityHeatmapEnabled,
     required this.showLabels,
     required this.useSatelliteTiles,
+    this.showRemovalRecords = false,
     this.mapHeight = 460,
     this.onFullscreenTap,
   });
@@ -27,6 +28,7 @@ class MapMonitoringMap extends StatefulWidget {
   final bool densityHeatmapEnabled;
   final bool showLabels;
   final bool useSatelliteTiles;
+  final bool showRemovalRecords;
   final double mapHeight;
   /// When set, shows a "View Fullscreen" control on the map (not in the page header).
   final VoidCallback? onFullscreenTap;
@@ -99,7 +101,7 @@ class _MapMonitoringMapState extends State<MapMonitoringMap> {
             width: 168,
             height: 118,
             alignment: Alignment.bottomCenter,
-            child: _ZoneMarkerCard(zone: z),
+            child: _ZoneMarkerCard(zone: z, showRemovalStats: widget.showRemovalRecords),
           ),
         )
         .toList();
@@ -322,9 +324,13 @@ class _DensityHeatLegend extends StatelessWidget {
 /// Hover / scale is isolated here so panning the map does not rebuild [MapMonitoringMap]
 /// (parent used to call `setState` on every marker enter/exit while the cursor moved).
 class _ZoneMarkerCard extends StatefulWidget {
-  const _ZoneMarkerCard({required this.zone});
+  const _ZoneMarkerCard({
+    required this.zone,
+    this.showRemovalStats = false,
+  });
 
   final MonitoringZone zone;
+  final bool showRemovalStats;
 
   @override
   State<_ZoneMarkerCard> createState() => _ZoneMarkerCardState();
@@ -376,15 +382,36 @@ class _ZoneMarkerCardState extends State<_ZoneMarkerCard> {
                         fontSize: 12,
                       ),
                     ),
-                    const SizedBox(height: 4),
-                    Text(
-                      '${z.densityCotsPerHa.toStringAsFixed(1)} COTS/ha',
-                      style: TextStyle(
-                        color: z.risk.color.withValues(alpha: 1),
-                        fontWeight: FontWeight.w700,
-                        fontSize: 11,
+                    if (widget.showRemovalStats && z.cotsDetected > 0) ...[
+                      const SizedBox(height: 4),
+                      Text(
+                        'Detected: ${z.cotsDetected} · Removed: ${z.cotsRemoved}',
+                        style: const TextStyle(
+                          color: Colors.white70,
+                          fontSize: 10,
+                          fontWeight: FontWeight.w600,
+                        ),
                       ),
-                    ),
+                      if (z.averageSizeCm != null)
+                        Text(
+                          'Avg Size: ${z.averageSizeCm!.toStringAsFixed(0)} cm',
+                          style: const TextStyle(
+                            color: Colors.white70,
+                            fontSize: 10,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                    ] else ...[
+                      const SizedBox(height: 4),
+                      Text(
+                        '${z.densityCotsPerHa.toStringAsFixed(1)} COTS/ha',
+                        style: TextStyle(
+                          color: z.risk.color.withValues(alpha: 1),
+                          fontWeight: FontWeight.w700,
+                          fontSize: 11,
+                        ),
+                      ),
+                    ],
                     const SizedBox(height: 4),
                     Container(
                       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
