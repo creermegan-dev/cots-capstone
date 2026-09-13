@@ -10,7 +10,7 @@ enum AdminAlertType {
   cotsDetected,
   highDensity,
   outbreak,
-  equipment,
+  expertValidation,
 }
 
 extension AdminAlertTypeX on AdminAlertType {
@@ -18,21 +18,21 @@ extension AdminAlertTypeX on AdminAlertType {
         AdminAlertType.cotsDetected => 'COTS Detected',
         AdminAlertType.highDensity => 'High Density Alert',
         AdminAlertType.outbreak => 'Outbreak Alert',
-        AdminAlertType.equipment => 'Equipment Notice',
+        AdminAlertType.expertValidation => 'Expert Validation Alert',
       };
 
   IconData get icon => switch (this) {
         AdminAlertType.cotsDetected => Icons.shield_outlined,
         AdminAlertType.highDensity => Icons.warning_amber_rounded,
         AdminAlertType.outbreak => Icons.bubble_chart_outlined,
-        AdminAlertType.equipment => Icons.sensors_outlined,
+        AdminAlertType.expertValidation => Icons.fact_check_outlined,
       };
 
   Color get iconColor => switch (this) {
         AdminAlertType.cotsDetected => AdminColors.statRed,
         AdminAlertType.highDensity => AdminColors.statYellow,
         AdminAlertType.outbreak => AdminColors.statYellow,
-        AdminAlertType.equipment => AdminColors.statBlue,
+        AdminAlertType.expertValidation => AdminColors.statBlue,
       };
 }
 

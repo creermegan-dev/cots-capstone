@@ -53,12 +53,19 @@ class _AdminReportsScreenState extends State<AdminReportsScreen> {
     'https://images.unsplash.com/photo-1559827260-dc66d52bef19?w=800&q=80',
   ];
 
-  static const _types = ['All Types', 'COTS Detection', 'Outbreak Alert', 'Zone Activity'];
+  static const _types = [
+    'All Types',
+    'COTS Detection',
+    'Citizen Removal Record',
+    'Outbreak Alert',
+    'Zone Activity',
+  ];
   static const _statuses = ['All Status', 'Auto Approved', 'For Review', 'Rejected', 'Completed'];
   static const _confidences = ['All Confidence Levels', 'High', 'Medium', 'Low'];
   static const _zones = ['All Zones', 'Zone A', 'Zone B', 'Zone C', 'Zone D', 'Zone E'];
 
   static const _allRows = <_ReportRow>[
+    _ReportRow('RPT-00025', _ReportType.citizenRemoval, 'Citizen Diver', 'Zone A', 'May 18, 2026 10:00 AM', 90, _RepStatus.autoApproved, 'GoPro removal record — 4 COTS removed.'),
     _ReportRow('RPT-00024', _ReportType.cotsDetection, 'Juan Dela Cruz', 'Zone A', 'May 18, 2026 09:30 AM', 92, _RepStatus.autoApproved, 'Auto-approved at submission.'),
     _ReportRow('RPT-00023', _ReportType.cotsDetection, 'Maria Santos', 'Zone B', 'May 18, 2026 08:45 AM', 78, _RepStatus.forReview, 'Pending admin review'),
     _ReportRow('RPT-00022', _ReportType.outbreakAlert, 'Pedro Reyes', 'Zone C', 'May 17, 2026 04:45 PM', 66, _RepStatus.forReview, 'Pending admin review'),
@@ -219,7 +226,7 @@ class _AdminReportsScreenState extends State<AdminReportsScreen> {
           OutlinedButton.icon(
             onPressed: () {},
             icon: AdminDateTimeTokens.dateChipIcon(),
-            label: const Text(AdminDateTimeTokens.demoDateRangeLabel, style: AdminDateTimeTokens.dateRangeChipTextStyle),
+            label: Text(AdminDateTimeTokens.demoDateRangeLabel, style: AdminDateTimeTokens.dateRangeChipTextStyle),
             style: AdminDateTimeTokens.dateRangeOutlinedButtonStyle(),
           ),
           const SizedBox(width: 10),
@@ -252,14 +259,29 @@ class _AdminReportsScreenState extends State<AdminReportsScreen> {
           OutlinedButton.icon(
             onPressed: () {
               ScaffoldMessenger.of(context).showSnackBar(
-                const SnackBar(content: Text('Export (mock).')),
+                const SnackBar(content: Text('Export PDF started (demo).')),
               );
             },
-            icon: const Icon(Icons.download_outlined, size: 18),
-            label: const Text('Export'),
+            icon: const Icon(Icons.picture_as_pdf_outlined, size: 18),
+            label: const Text('Export PDF'),
             style: OutlinedButton.styleFrom(
-              foregroundColor: AdminColors.statBlue,
-              side: BorderSide(color: AdminColors.statBlue.withValues(alpha: 0.35)),
+              foregroundColor: AdminColors.statRed,
+              side: BorderSide(color: AdminColors.statRed.withValues(alpha: 0.35)),
+              backgroundColor: Colors.white,
+            ),
+          ),
+          const SizedBox(width: 10),
+          OutlinedButton.icon(
+            onPressed: () {
+              ScaffoldMessenger.of(context).showSnackBar(
+                const SnackBar(content: Text('Export Excel started (demo).')),
+              );
+            },
+            icon: const Icon(Icons.table_view_outlined, size: 18),
+            label: const Text('Export Excel'),
+            style: OutlinedButton.styleFrom(
+              foregroundColor: AdminColors.statGreen,
+              side: BorderSide(color: AdminColors.statGreen.withValues(alpha: 0.35)),
               backgroundColor: Colors.white,
             ),
           ),
@@ -316,10 +338,10 @@ class _AdminReportsScreenState extends State<AdminReportsScreen> {
 
   Widget _statCards() {
     final specs = [
-      const _StatSpec(0, Icons.description_outlined, 'Total Reports', '56', 'All reports submitted', AdminColors.statBlue),
-      const _StatSpec(1, Icons.schedule_rounded, 'For Admin Review', '14', 'Detection: 60%–84%', AdminColors.statGreen),
+      const _StatSpec(0, Icons.pest_control_outlined, 'Total Detections', '248', 'All COTS detections', AdminColors.statBlue),
+      const _StatSpec(1, Icons.calendar_month_outlined, 'Monthly Reports', '12', 'Generated this year', AdminColors.statGreen),
       const _StatSpec(2, Icons.check_circle_outline_rounded, 'Auto Approved (High)', '26', 'Detection ≥ 85%', AdminColors.statPurple),
-      const _StatSpec(3, Icons.event_available_outlined, 'Scheduled', '6', 'Scheduled / Upcoming', AdminColors.statYellow),
+      const _StatSpec(3, Icons.map_outlined, 'Reef Zone Summary', '8', 'Zones with detections', AdminColors.statYellow),
       const _StatSpec(4, Icons.cancel_outlined, 'Rejected (Low)', '10', 'Detection < 60%', AdminColors.statRed),
     ];
     return LayoutBuilder(
@@ -708,7 +730,7 @@ class _AdminReportsScreenState extends State<AdminReportsScreen> {
       isForReview: st == _RepStatus.forReview,
       cotsCount: cots,
       reviewDetailsLine: _reviewOf(r),
-      detectionMethod: 'AI Detection',
+      detectionMethod: 'Machine Learning Detection',
       gpsCoordinates: '14.1956° N, 120.5952° E',
       detectedDate: detDate,
       detectedTime: detTime,
@@ -847,23 +869,26 @@ class _StatCardState extends State<_StatCard> {
   }
 }
 
-enum _ReportType { cotsDetection, outbreakAlert, zoneActivity }
+enum _ReportType { cotsDetection, citizenRemoval, outbreakAlert, zoneActivity }
 
 extension on _ReportType {
   String get label => switch (this) {
         _ReportType.cotsDetection => 'COTS Detection',
+        _ReportType.citizenRemoval => 'Citizen Removal Record',
         _ReportType.outbreakAlert => 'Outbreak Alert',
         _ReportType.zoneActivity => 'Zone Activity',
       };
 
   IconData get icon => switch (this) {
         _ReportType.cotsDetection => Icons.biotech_outlined,
+        _ReportType.citizenRemoval => Icons.cleaning_services_outlined,
         _ReportType.outbreakAlert => Icons.warning_amber_rounded,
         _ReportType.zoneActivity => Icons.grid_view_rounded,
       };
 
   Color get color => switch (this) {
         _ReportType.cotsDetection => AdminColors.statBlue,
+        _ReportType.citizenRemoval => AdminColors.statGreen,
         _ReportType.outbreakAlert => AdminColors.statYellow,
         _ReportType.zoneActivity => AdminColors.statPurple,
       };

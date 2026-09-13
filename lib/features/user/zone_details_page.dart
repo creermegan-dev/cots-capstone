@@ -4,7 +4,6 @@ import 'package:cots_monitor/widgets/app_back_icon_button.dart';
 import 'package:flutter/material.dart';
 
 import 'cots_map_page.dart';
-import 'update_status_modal.dart';
 
 class ZoneDetailsPage extends StatelessWidget {
   const ZoneDetailsPage({super.key, required this.zone});
@@ -145,72 +144,37 @@ class ZoneDetailsPage extends StatelessWidget {
             const SizedBox(height: 12),
             _statusHistoryCard(),
             const SizedBox(height: 20),
-            Row(
-              children: [
-                Expanded(
-                  flex: 2,
-                  child: ElevatedButton(
-                    onPressed: () {
-                      showModalBottomSheet<void>(
-                        context: context,
-                        isScrollControlled: true,
-                        backgroundColor: Colors.transparent,
-                        builder: (_) => UpdateStatusModal(zone: zone),
-                      );
-                    },
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: kGreen,
-                      foregroundColor: Colors.white,
-                      elevation: 0,
-                      padding: const EdgeInsets.symmetric(vertical: 16),
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(12),
-                      ),
+            OutlinedButton.icon(
+              onPressed: () {
+                final nav = Navigator.of(context);
+                if (nav.canPop()) {
+                  nav.pop();
+                } else {
+                  nav.push<void>(
+                    MaterialPageRoute<void>(
+                      builder: (context) => const CotsMapPage(),
                     ),
-                    child: const Text(
-                      'UPDATE STATUS',
-                      style: TextStyle(
-                        fontWeight: FontWeight.w700,
-                        letterSpacing: 0.8,
-                      ),
-                    ),
-                  ),
+                  );
+                }
+              },
+              icon: const Icon(Icons.map_outlined, size: 18),
+              label: const Text(
+                'VIEW ON MAP',
+                style: TextStyle(
+                  fontSize: 13,
+                  fontWeight: FontWeight.w700,
+                  letterSpacing: 0.6,
                 ),
-                const SizedBox(width: 12),
-                Expanded(
-                  flex: 1,
-                  child: OutlinedButton.icon(
-                    onPressed: () {
-                      final nav = Navigator.of(context);
-                      if (nav.canPop()) {
-                        nav.pop();
-                      } else {
-                        nav.push<void>(
-                          MaterialPageRoute<void>(
-                            builder: (context) => const CotsMapPage(),
-                          ),
-                        );
-                      }
-                    },
-                    icon: const Icon(Icons.map_outlined, size: 16),
-                    label: const Text(
-                      'VIEW ON MAP',
-                      style: TextStyle(
-                        fontSize: 11,
-                        fontWeight: FontWeight.w600,
-                      ),
-                    ),
-                    style: OutlinedButton.styleFrom(
-                      foregroundColor: kGreen,
-                      side: const BorderSide(color: kGreen, width: 1.5),
-                      padding: const EdgeInsets.symmetric(vertical: 14),
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(12),
-                      ),
-                    ),
-                  ),
+              ),
+              style: OutlinedButton.styleFrom(
+                foregroundColor: kGreen,
+                side: const BorderSide(color: kGreen, width: 1.5),
+                padding: const EdgeInsets.symmetric(vertical: 16),
+                minimumSize: const Size.fromHeight(52),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(12),
                 ),
-              ],
+              ),
             ),
           ],
         ),

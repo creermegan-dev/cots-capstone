@@ -17,6 +17,10 @@ class _AdminSettingsScreenState extends State<AdminSettingsScreen> {
   final _emailCtrl = TextEditingController(text: 'admin@cotsmonitoring.com');
   final _roleCtrl = TextEditingController(text: 'Administrator');
 
+  final _currentPasswordCtrl = TextEditingController();
+  final _newPasswordCtrl = TextEditingController();
+  final _confirmPasswordCtrl = TextEditingController();
+
   String _language = 'English';
   bool _useDarkTheme = false;
   String _dateFormat = 'May 18, 2026 (MM DD, YYYY)';
@@ -26,6 +30,9 @@ class _AdminSettingsScreenState extends State<AdminSettingsScreen> {
   bool _highRiskAlerts = true;
   bool _systemUpdates = true;
   bool _weeklyReports = false;
+  bool _twoFactorAuth = false;
+  bool _loginAlerts = true;
+  bool _sessionTimeout = true;
 
   final _highThresholdCtrl = TextEditingController(text: '15');
   final _moderateThresholdCtrl = TextEditingController(text: '5');
@@ -44,6 +51,9 @@ class _AdminSettingsScreenState extends State<AdminSettingsScreen> {
     _fullNameCtrl.dispose();
     _emailCtrl.dispose();
     _roleCtrl.dispose();
+    _currentPasswordCtrl.dispose();
+    _newPasswordCtrl.dispose();
+    _confirmPasswordCtrl.dispose();
     _highThresholdCtrl.dispose();
     _moderateThresholdCtrl.dispose();
     _lowThresholdCtrl.dispose();
@@ -201,9 +211,9 @@ class _AdminSettingsScreenState extends State<AdminSettingsScreen> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        pair(_profileCard(), _systemPreferencesCard()),
+        pair(_profileCard(), _changePasswordCard()),
         SizedBox(height: gap),
-        pair(_notificationsCard(), _alertThresholdsCard()),
+        pair(_notificationsCard(), _securitySettingsCard()),
       ],
     );
   }
@@ -213,7 +223,7 @@ class _AdminSettingsScreenState extends State<AdminSettingsScreen> {
       icon: Icons.person_rounded,
       iconBg: AdminColors.statBlue.withValues(alpha: 0.14),
       iconColor: AdminColors.statBlue,
-      title: 'Profile Settings',
+      title: 'Profile Information',
       subtitle: 'Update your profile information.',
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -290,6 +300,92 @@ class _AdminSettingsScreenState extends State<AdminSettingsScreen> {
     );
   }
 
+  Widget _changePasswordCard() {
+    return _settingsCard(
+      icon: Icons.lock_outline_rounded,
+      iconBg: AdminColors.statPurple.withValues(alpha: 0.14),
+      iconColor: AdminColors.statPurple,
+      title: 'Change Password',
+      subtitle: 'Update your account password.',
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          _fieldLabel('Current Password'),
+          const SizedBox(height: 8),
+          TextField(
+            controller: _currentPasswordCtrl,
+            obscureText: true,
+            style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 14),
+            decoration: _inputDeco().copyWith(hintText: 'Enter current password'),
+          ),
+          const SizedBox(height: 16),
+          _fieldLabel('New Password'),
+          const SizedBox(height: 8),
+          TextField(
+            controller: _newPasswordCtrl,
+            obscureText: true,
+            style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 14),
+            decoration: _inputDeco().copyWith(hintText: 'Enter new password'),
+          ),
+          const SizedBox(height: 16),
+          _fieldLabel('Confirm New Password'),
+          const SizedBox(height: 8),
+          TextField(
+            controller: _confirmPasswordCtrl,
+            obscureText: true,
+            style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 14),
+            decoration: _inputDeco().copyWith(hintText: 'Re-enter new password'),
+          ),
+          const SizedBox(height: 22),
+          Align(
+            alignment: Alignment.centerLeft,
+            child: _saveButton(onPressed: () => _snack('Password updated (demo).')),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _securitySettingsCard() {
+    return _settingsCard(
+      icon: Icons.security_rounded,
+      iconBg: AdminColors.statYellow.withValues(alpha: 0.18),
+      iconColor: const Color(0xFFE65100),
+      title: 'Security Settings',
+      subtitle: 'Manage account security preferences.',
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          _toggleTile(
+            title: 'Two-Factor Authentication',
+            subtitle: 'Require a second step when signing in',
+            value: _twoFactorAuth,
+            onChanged: (v) => setState(() => _twoFactorAuth = v),
+          ),
+          const Divider(height: 22),
+          _toggleTile(
+            title: 'Login Alerts',
+            subtitle: 'Notify me of new device sign-ins',
+            value: _loginAlerts,
+            onChanged: (v) => setState(() => _loginAlerts = v),
+          ),
+          const Divider(height: 22),
+          _toggleTile(
+            title: 'Auto Session Timeout',
+            subtitle: 'Sign out after inactivity',
+            value: _sessionTimeout,
+            onChanged: (v) => setState(() => _sessionTimeout = v),
+          ),
+          const SizedBox(height: 22),
+          Align(
+            alignment: Alignment.centerLeft,
+            child: _saveButton(onPressed: () => _snack('Security settings saved (demo).')),
+          ),
+        ],
+      ),
+    );
+  }
+
   Widget _systemPreferencesCard() {
     return _settingsCard(
       icon: Icons.tune_rounded,
@@ -353,7 +449,7 @@ class _AdminSettingsScreenState extends State<AdminSettingsScreen> {
       icon: Icons.notifications_active_outlined,
       iconBg: AdminColors.statGreen.withValues(alpha: 0.14),
       iconColor: AdminColors.statGreen,
-      title: 'Notifications',
+      title: 'Notification Settings',
       subtitle: 'Manage your notification settings.',
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,

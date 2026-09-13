@@ -1,5 +1,8 @@
 import 'package:flutter/material.dart';
+import 'package:intl/intl.dart';
 
+import '../../../models/scan_record_model.dart';
+import '../../../services/scan_record_repository.dart';
 import '../theme/admin_theme.dart';
 import 'admin_data_table.dart';
 
@@ -9,26 +12,19 @@ class RecentSubmissionsTableCard extends StatefulWidget {
   /// Fixed viewport height for dashboard embedding inside [SingleChildScrollView].
   static const double _tableViewportHeight = 360;
 
-  static const _rows = [
-    _Row('1', 'May 18, 2026 · 09:42', 'Field Monitor A', 'Zone B', '18', _Status.scheduled),
-    _Row('2', 'May 18, 2026 · 08:15', 'Researcher K', 'Zone A', '42', _Status.active),
-    _Row('3', 'May 17, 2026 · 16:03', 'Ranger M', 'Zone F', '0', _Status.cleared),
-    _Row('4', 'May 17, 2026 · 11:22', 'Biologist P', 'Zone C', '12', _Status.scheduled),
-    _Row('5', 'May 16, 2026 · 14:50', 'Field Monitor A', 'Zone E', '7', _Status.cleared),
-  ];
-
   static const List<AdminDataTableColumn> _columns = [
     AdminDataTableColumn('#', 44, headerAlign: TextAlign.center),
-    AdminDataTableColumn('Date & Time', 196),
-    AdminDataTableColumn('User', 180),
-    AdminDataTableColumn('Zone', 88, headerAlign: TextAlign.center),
+    AdminDataTableColumn('Date and Time', 196),
+    AdminDataTableColumn('Diver/User', 180),
+    AdminDataTableColumn('Reef Zone', 100, headerAlign: TextAlign.center),
     AdminDataTableColumn('COTS Detected', 100, headerAlign: TextAlign.right),
-    AdminDataTableColumn('Status', 120, headerAlign: TextAlign.center),
+    AdminDataTableColumn('Validation Status', 140, headerAlign: TextAlign.center),
     AdminDataTableColumn('Actions', 100, headerAlign: TextAlign.right),
   ];
 
   @override
-  State<RecentSubmissionsTableCard> createState() => _RecentSubmissionsTableCardState();
+  State<RecentSubmissionsTableCard> createState() =>
+      _RecentSubmissionsTableCardState();
 }
 
 class _RecentSubmissionsTableCardState extends State<RecentSubmissionsTableCard> {
@@ -61,11 +57,11 @@ class _RecentSubmissionsTableCardState extends State<RecentSubmissionsTableCard>
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          Row(
+          const Row(
             children: [
-              const Expanded(
+              Expanded(
                 child: Text(
-                  'Recent Submissions',
+                  'Recent Monitoring Captures',
                   style: TextStyle(
                     fontSize: 17,
                     fontWeight: FontWeight.w800,
@@ -73,39 +69,82 @@ class _RecentSubmissionsTableCardState extends State<RecentSubmissionsTableCard>
                   ),
                 ),
               ),
-              TextButton(
-                onPressed: () {},
-                child: const Text('View All'),
-              ),
             ],
           ),
+          const SizedBox(height: 4),
+          const Text(
+            'Latest diver monitoring captures with expert validation status',
+            style: TextStyle(fontSize: 12.5, color: AdminColors.muted),
+          ),
           const SizedBox(height: 8),
-          LayoutBuilder(
-            builder: (context, c) {
-              return SizedBox(
-                height: RecentSubmissionsTableCard._tableViewportHeight,
-                child: Scrollbar(
-                  controller: _horizontalScroll,
-                  thumbVisibility: c.maxWidth < 900,
-                  child: SingleChildScrollView(
-                    controller: _horizontalScroll,
-                    scrollDirection: Axis.horizontal,
-                    child: SizedBox(
-                      width: c.maxWidth < tableW + 40 ? tableW + 40 : c.maxWidth - 40,
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.stretch,
-                        children: [
-                          AdminDataTableHeader(columns: RecentSubmissionsTableCard._columns),
-                          for (final r in RecentSubmissionsTableCard._rows)
-                            AdminDataTableStaticRow(
-                              columnWidths: colMap,
-                              cells: _rowCells(r),
-                            ),
-                        ],
-                      ),
+          StreamBuilder<List<ScanRecordModel>>(
+            stream: ScanRecordRepository.watchRecent(limit: 5),
+            builder: (context, snapshot) {
+              if (snapshot.connectionState == ConnectionState.waiting &&
+                  !snapshot.hasData) {
+                return const SizedBox(
+                  height: RecentSubmissionsTableCard._tableViewportHeight,
+                  child: Center(
+                    child: CircularProgressIndicator(color: AdminColors.statBlue),
+                  ),
+                );
+              }
+
+              if (snapshot.hasError) {
+                return SizedBox(
+                  height: RecentSubmissionsTableCard._tableViewportHeight,
+                  child: Center(
+                    child: Text(
+                      'Could not load submissions.',
+                      style: TextStyle(color: AdminColors.muted),
                     ),
                   ),
-                ),
+                );
+              }
+
+              final records = snapshot.data ?? [];
+              if (records.isEmpty) {
+                return const SizedBox(
+                  height: RecentSubmissionsTableCard._tableViewportHeight,
+                  child: Center(
+                    child: Text(
+                      'No submissions yet.',
+                      style: TextStyle(color: AdminColors.muted),
+                    ),
+                  ),
+                );
+              }
+
+              return LayoutBuilder(
+                builder: (context, c) {
+                  return SizedBox(
+                    height: RecentSubmissionsTableCard._tableViewportHeight,
+                    child: Scrollbar(
+                      controller: _horizontalScroll,
+                      thumbVisibility: c.maxWidth < 900,
+                      child: SingleChildScrollView(
+                        controller: _horizontalScroll,
+                        scrollDirection: Axis.horizontal,
+                        child: SizedBox(
+                          width: c.maxWidth < tableW + 40 ? tableW + 40 : c.maxWidth - 40,
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.stretch,
+                            children: [
+                              AdminDataTableHeader(
+                                columns: RecentSubmissionsTableCard._columns,
+                              ),
+                              for (var i = 0; i < records.length; i++)
+                                AdminDataTableStaticRow(
+                                  columnWidths: colMap,
+                                  cells: _rowCells(records[i], i + 1),
+                                ),
+                            ],
+                          ),
+                        ),
+                      ),
+                    ),
+                  );
+                },
               );
             },
           ),
@@ -114,16 +153,23 @@ class _RecentSubmissionsTableCardState extends State<RecentSubmissionsTableCard>
     );
   }
 
-  List<TableCell> _rowCells(_Row r) {
+  List<TableCell> _rowCells(ScanRecordModel record, int index) {
+    final when = record.submittedAt ?? record.dateTaken ?? DateTime.now();
+    final dt = DateFormat('MMM d, yyyy · HH:mm').format(when);
+    final status = _validationStatus(record);
+
     return [
-      AdminDataTableCells.text(r.id, align: TextAlign.center),
-      AdminDataTableCells.text(r.dt, style: AdminDateTimeTokens.inlineDateTimeTextStyle()),
-      AdminDataTableCells.text(r.user),
-      AdminDataTableCells.text(r.zone, align: TextAlign.center),
-      AdminDataTableCells.text(r.cots, align: TextAlign.right),
+      AdminDataTableCells.text('$index', align: TextAlign.center),
+      AdminDataTableCells.text(dt, style: AdminDateTimeTokens.inlineDateTimeTextStyle()),
+      AdminDataTableCells.text(record.submittedBy),
+      AdminDataTableCells.text(
+        record.zone.isEmpty ? '—' : record.zone,
+        align: TextAlign.center,
+      ),
+      AdminDataTableCells.text('${record.aiDetectedCount}', align: TextAlign.right),
       AdminDataTableCells.cell(
         align: TextAlign.center,
-        child: _statusBadge(r.status),
+        child: _statusBadge(status),
       ),
       AdminDataTableCells.cell(
         align: TextAlign.right,
@@ -138,18 +184,25 @@ class _RecentSubmissionsTableCardState extends State<RecentSubmissionsTableCard>
               color: AdminColors.statBlue,
               onPressed: () {},
             ),
-            IconButton(
-              tooltip: 'Edit',
-              padding: EdgeInsets.zero,
-              constraints: const BoxConstraints(minWidth: 36, minHeight: 36),
-              icon: const Icon(Icons.edit_outlined, size: 20),
-              color: AdminColors.muted,
-              onPressed: () {},
-            ),
           ],
         ),
       ),
     ];
+  }
+
+  static _Status _validationStatus(ScanRecordModel record) {
+    if (record.adminConfirmed ||
+        record.userStatusLabel == 'Accepted' ||
+        record.userStatusLabel == 'Automatically Accepted') {
+      return _Status.validated;
+    }
+    if (record.adminRejected || record.userStatusLabel == 'Retake Photo') {
+      return _Status.cleared;
+    }
+    if (record.aiDetectedCount >= 15) {
+      return _Status.intervention;
+    }
+    return _Status.pending;
   }
 
   static Widget _statusBadge(_Status s) {
@@ -157,15 +210,20 @@ class _RecentSubmissionsTableCardState extends State<RecentSubmissionsTableCard>
     late Color fg;
     late String label;
     switch (s) {
-      case _Status.active:
-        bg = AdminColors.statRed.withValues(alpha: 0.12);
-        fg = AdminColors.statRed;
-        label = 'Active';
-        break;
-      case _Status.scheduled:
+      case _Status.pending:
         bg = AdminColors.statYellow.withValues(alpha: 0.18);
         fg = const Color(0xFFF57F17);
-        label = 'Scheduled';
+        label = 'Pending Validation';
+        break;
+      case _Status.validated:
+        bg = AdminColors.statBlue.withValues(alpha: 0.12);
+        fg = AdminColors.statBlue;
+        label = 'Validated';
+        break;
+      case _Status.intervention:
+        bg = AdminColors.statRed.withValues(alpha: 0.12);
+        fg = AdminColors.statRed;
+        label = 'Intervention Required';
         break;
       case _Status.cleared:
         bg = AdminColors.statGreen.withValues(alpha: 0.12);
@@ -177,15 +235,4 @@ class _RecentSubmissionsTableCardState extends State<RecentSubmissionsTableCard>
   }
 }
 
-enum _Status { active, scheduled, cleared }
-
-class _Row {
-  const _Row(this.id, this.dt, this.user, this.zone, this.cots, this.status);
-
-  final String id;
-  final String dt;
-  final String user;
-  final String zone;
-  final String cots;
-  final _Status status;
-}
+enum _Status { pending, validated, intervention, cleared }

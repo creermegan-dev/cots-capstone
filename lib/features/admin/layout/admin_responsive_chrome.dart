@@ -16,6 +16,7 @@ class AdminResponsiveChrome extends StatefulWidget {
     required this.onLogout,
     required this.pageTitle,
     required this.body,
+    this.navBadgeFor,
     this.showDeskTopBar = true,
     this.showBackButton = false,
     this.onBack,
@@ -26,6 +27,8 @@ class AdminResponsiveChrome extends StatefulWidget {
   final VoidCallback onLogout;
   final String pageTitle;
   final Widget body;
+  /// Dynamic nav badge counts keyed by [AdminNavItemData.index].
+  final int? Function(int navIndex)? navBadgeFor;
   final bool showDeskTopBar;
   final bool showBackButton;
   final VoidCallback? onBack;
@@ -54,6 +57,7 @@ class _AdminResponsiveChromeState extends State<AdminResponsiveChrome> {
               selectedIndex: widget.selectedNavIndex,
               onSelect: widget.onNavSelect,
               onLogout: widget.onLogout,
+              badgeFor: widget.navBadgeFor,
             ),
             appBar: AdminShellAppBar(
               title: widget.pageTitle,
@@ -81,6 +85,7 @@ class _AdminResponsiveChromeState extends State<AdminResponsiveChrome> {
               selectedIndex: widget.selectedNavIndex,
               onSelect: widget.onNavSelect,
               onLogout: widget.onLogout,
+              badgeFor: widget.navBadgeFor,
               width: sidebarWidth,
               compact: rail,
               showRailToggle: tablet,

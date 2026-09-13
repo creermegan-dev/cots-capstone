@@ -1,0 +1,62 @@
+record_id,date,zone,municipality,barangay,ai_detected_count,confidence,confidence_percent,activity_type,admin_confirmed,admin_rejected,predicted_label,actual_label
+
+SIM-001,2026-05-01,Brgy. Cagangohan,Panabo City,Brgy. Cagangohan,0,0.12,12,detection_only,false,false,0,0
+
+SIM-002,2026-05-02,Brgy. Salvacion,Panabo City,Brgy. Salvacion,3,0.91,91,detection_only,false,false,1,1
+
+SIM-003,2026-05-03,Brgy. Cagangohan,Panabo City,Brgy. Cagangohan,2,0.85,85,detection_only,false,false,1,1
+
+SIM-004,2026-05-04,Brgy. J. P. Laurel,Panabo City,Brgy. J. P. Laurel,0,0.18,18,detection_only,false,false,0,0
+
+SIM-005,2026-05-05,Brgy. Tibungol,Panabo City,Brgy. Tibungol,1,0.42,42,detection_only,false,false,1,0
+
+SIM-006,2026-05-06,Brgy. Busaon,Tagum City,Brgy. Busaon,0,0.14,14,detection_only,false,false,0,0
+
+SIM-007,2026-05-07,Brgy. Salvacion,Panabo City,Brgy. Salvacion,16,0.94,94,detection_only,false,false,1,1
+
+SIM-008,2026-05-08,Brgy. Madaum,Tagum City,Brgy. Madaum,6,0.78,78,detection_only,false,false,1,1
+
+SIM-009,2026-05-09,Brgy. Poblacion (Kaputian),Island Garden City of Samal,Brgy. Poblacion (Kaputian),0,0.55,55,detection_only,false,false,0,1
+
+SIM-010,2026-05-10,Brgy. Tibungol,Panabo City,Brgy. Tibungol,3,0.89,89,detection_only,false,false,1,1
+
+SIM-011,2026-05-11,Brgy. Tibungol,Panabo City,Brgy. Tibungol,0,0.17,17,detection_only,false,false,0,0
+
+SIM-012,2026-05-12,Brgy. Salvacion,Panabo City,Brgy. Salvacion,18,0.92,92,citizen_removal,false,false,1,1
+
+SIM-013,2026-05-13,Brgy. Tibungol,Panabo City,Brgy. Tibungol,2,0.38,38,detection_only,false,false,1,0
+
+SIM-014,2026-05-14,Brgy. Liboganon,Tagum City,Brgy. Liboganon,0,0.20,20,detection_only,false,false,0,0
+
+SIM-015,2026-05-15,Brgy. Cagangohan,Panabo City,Brgy. Cagangohan,8,0.90,90,detection_only,false,false,1,1
+
+SIM-016,2026-05-16,Brgy. Tibungol,Panabo City,Brgy. Tibungol,5,0.82,82,detection_only,false,false,1,1
+
+SIM-017,2026-05-17,Brgy. Talomo Proper,Davao City,Brgy. Talomo Proper,0,0.16,16,detection_only,false,false,0,0
+
+SIM-018,2026-05-18,Brgy. J. P. Laurel,Panabo City,Brgy. J. P. Laurel,4,0.87,87,detection_only,true,false,1,1
+
+SIM-019,2026-05-19,Brgy. Sasa,Davao City,Brgy. Sasa,0,0.48,48,detection_only,false,true,0,0
+
+SIM-020,2026-05-20,Brgy. Peñaplata (Poblacion),Island Garden City of Samal,Brgy. Peñaplata (Poblacion),2,0.83,83,detection_only,false,false,1,1
+
+SIM-021,2026-05-21,Brgy. J. P. Laurel,Panabo City,Brgy. J. P. Laurel,3,0.91,91,detection_only,false,false,1,1
+
+SIM-022,2026-05-22,Brgy. Madaum,Tagum City,Brgy. Madaum,0,0.19,19,detection_only,false,false,0,0
+
+SIM-023,2026-05-23,Brgy. Cagangohan,Panabo City,Brgy. Cagangohan,15,0.88,88,detection_only,false,false,1,1
+
+SIM-024,2026-05-24,Brgy. Aplaya,Digos City,Brgy. Aplaya,1,0.44,44,detection_only,false,false,1,0
+
+SIM-025,2026-05-25,Brgy. Tambo,Island Garden City of Samal,Brgy. Tambo,0,0.15,15,detection_only,false,false,0,0
+
+SIM-026,2026-05-26,Brgy. Salvacion,Panabo City,Brgy. Salvacion,7,0.90,90,detection_only,false,false,1,1
+
+SIM-027,2026-05-27,Brgy. Bucana,Maco,Brgy. Bucana,2,0.86,86,detection_only,false,false,1,1
+
+SIM-028,2026-05-28,Brgy. Matina Aplaya,Davao City,Brgy. Matina Aplaya,0,0.22,22,detection_only,false,false,0,0
+
+SIM-029,2026-05-29,Brgy. Tibungol,Panabo City,Brgy. Tibungol,4,0.92,92,detection_only,false,false,1,1
+
+SIM-030,2026-05-30,Brgy. Salvacion,Panabo City,Brgy. Salvacion,20,0.93,93,detection_only,false,false,1,1
+

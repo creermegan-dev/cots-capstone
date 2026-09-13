@@ -38,6 +38,27 @@ class AuthService {
     await _auth.sendPasswordResetEmail(email: email.trim());
   }
 
+  Future<void> changePassword({
+    required String currentPassword,
+    required String newPassword,
+  }) async {
+    final user = _auth.currentUser;
+    final email = user?.email;
+    if (user == null || email == null || email.isEmpty) {
+      throw FirebaseAuthException(
+        code: 'user-not-found',
+        message: 'No signed-in user.',
+      );
+    }
+
+    final credential = EmailAuthProvider.credential(
+      email: email,
+      password: currentPassword,
+    );
+    await user.reauthenticateWithCredential(credential);
+    await user.updatePassword(newPassword);
+  }
+
   /// Deletes the signed-in user (rollback after failed Firestore write).
   Future<void> deleteCurrentUser() async {
     await _auth.currentUser?.delete();

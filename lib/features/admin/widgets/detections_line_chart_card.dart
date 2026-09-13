@@ -3,7 +3,7 @@ import 'package:flutter/material.dart';
 
 import '../theme/admin_theme.dart';
 
-/// Mock line chart — COTS detections over time.
+/// Mock line chart — expert-validated COTS detections over time.
 class DetectionsLineChartCard extends StatefulWidget {
   const DetectionsLineChartCard({super.key});
 
@@ -19,18 +19,19 @@ class _DetectionsLineChartCardState extends State<DetectionsLineChartCard> {
   List<FlSpot> get _spots {
     switch (_range) {
       case 'This Month':
-        return List.generate(10, (i) => FlSpot(i.toDouble(), 20 + (i * 7.0 % 55)));
+        return List.generate(10, (i) => FlSpot(i.toDouble(), 18 + (i * 6.0 % 48)));
       case 'This Year':
-        return List.generate(12, (i) => FlSpot(i.toDouble(), 15 + (i * 11 % 70)));
+        return List.generate(12, (i) => FlSpot(i.toDouble(), 12 + (i * 9 % 58)));
       default:
+        // Expert-validated detection counts (mock trend).
         return const [
-          FlSpot(0, 32),
-          FlSpot(1, 45),
-          FlSpot(2, 38),
-          FlSpot(3, 52),
-          FlSpot(4, 78),
-          FlSpot(5, 61),
-          FlSpot(6, 44),
+          FlSpot(0, 24),
+          FlSpot(1, 31),
+          FlSpot(2, 28),
+          FlSpot(3, 36),
+          FlSpot(4, 42),
+          FlSpot(5, 38),
+          FlSpot(6, 33),
         ];
     }
   }
@@ -56,13 +57,27 @@ class _DetectionsLineChartCardState extends State<DetectionsLineChartCard> {
           Row(
             children: [
               const Expanded(
-                child: Text(
-                  'COTS Detections Over Time',
-                  style: TextStyle(
-                    fontSize: 17,
-                    fontWeight: FontWeight.w800,
-                    color: AdminColors.headerTitle,
-                  ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'Validated COTS Detections Over Time',
+                      style: TextStyle(
+                        fontSize: 17,
+                        fontWeight: FontWeight.w800,
+                        color: AdminColors.headerTitle,
+                      ),
+                    ),
+                    SizedBox(height: 4),
+                    Text(
+                      'Trends based on expert-validated detection records only',
+                      style: TextStyle(
+                        fontSize: 12,
+                        fontWeight: FontWeight.w600,
+                        color: AdminColors.muted,
+                      ),
+                    ),
+                  ],
                 ),
               ),
               DropdownButtonHideUnderline(

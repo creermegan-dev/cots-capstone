@@ -12,22 +12,22 @@ class AdminSummaryFooterCards extends StatelessWidget {
         final narrow = c.maxWidth < 720;
         final row = [
           _mini(
-            icon: Icons.flag_outlined,
-            color: AdminColors.statRed,
-            title: 'Recommended Actions',
-            body: 'Total COTS to eliminate: 33',
-          ),
-          _mini(
-            icon: Icons.place_outlined,
+            icon: Icons.map_outlined,
             color: AdminColors.statBlue,
-            title: 'Zones Needing Action',
-            body: '4 require immediate attention',
+            title: 'GIS Mapping',
+            body: 'Open interactive reef map',
           ),
           _mini(
-            icon: Icons.check_circle_outline_rounded,
+            icon: Icons.fact_check_outlined,
+            color: AdminColors.statYellow,
+            title: 'Expert Validation',
+            body: '27 records pending review',
+          ),
+          _mini(
+            icon: Icons.assessment_outlined,
             color: AdminColors.statGreen,
-            title: 'Cleared This Week',
-            body: '2 zones successfully cleared',
+            title: 'Reports & Analytics',
+            body: 'View charts and export reports',
           ),
         ];
         if (narrow) {

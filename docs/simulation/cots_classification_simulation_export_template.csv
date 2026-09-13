@@ -1,0 +1,4 @@
+record_id,date,zone,ai_detected_count,confidence,confidence_percent,activity_type,admin_confirmed,admin_rejected,predicted_label,actual_label
+REC-001,2026-05-10,Zone A,0,0.15,15,detection_only,false,false,0,0
+REC-002,2026-05-11,Zone B,3,0.88,88,detection_only,false,false,1,1
+REC-003,2026-05-12,Zone D,12,0.76,76,detection_only,false,false,1,1

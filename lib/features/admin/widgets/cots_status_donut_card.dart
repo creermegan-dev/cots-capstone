@@ -3,16 +3,17 @@ import 'package:flutter/material.dart';
 
 import '../theme/admin_theme.dart';
 
-/// Donut chart — COTS by status (mock).
+/// Donut chart — COTS by validation / intervention status (mock).
 class CotsStatusDonutCard extends StatelessWidget {
   const CotsStatusDonutCard({super.key});
 
   @override
   Widget build(BuildContext context) {
     const total = 520.0;
-    const active = 249.6; // 48%
-    const scheduled = 124.8; // 24%
-    const cleared = 145.6; // 28%
+    const pending = 140.4; // 27%
+    const validated = 192.4; // 37%
+    const intervention = 93.6; // 18%
+    const cleared = 93.6; // 18%
 
     return Container(
       padding: const EdgeInsets.all(20),
@@ -40,7 +41,7 @@ class CotsStatusDonutCard extends StatelessWidget {
           ),
           const SizedBox(height: 8),
           SizedBox(
-            height: 200,
+            height: 220,
             child: Row(
               children: [
                 Expanded(
@@ -48,39 +49,50 @@ class CotsStatusDonutCard extends StatelessWidget {
                   child: PieChart(
                     PieChartData(
                       sectionsSpace: 2,
-                      centerSpaceRadius: 52,
+                      centerSpaceRadius: 48,
                       sections: [
                         PieChartSectionData(
-                          value: active,
-                          color: AdminColors.statRed.withValues(alpha: 0.9),
-                          radius: 44,
-                          title: '48%',
-                          titleStyle: const TextStyle(
-                            color: Colors.white,
-                            fontWeight: FontWeight.w800,
-                            fontSize: 12,
-                          ),
-                        ),
-                        PieChartSectionData(
-                          value: scheduled,
+                          value: pending,
                           color: AdminColors.statYellow.withValues(alpha: 0.95),
-                          radius: 44,
-                          title: '24%',
+                          radius: 42,
+                          title: '27%',
                           titleStyle: const TextStyle(
                             color: Color(0xFF5D4037),
                             fontWeight: FontWeight.w800,
-                            fontSize: 12,
+                            fontSize: 11,
+                          ),
+                        ),
+                        PieChartSectionData(
+                          value: validated,
+                          color: AdminColors.statBlue.withValues(alpha: 0.9),
+                          radius: 42,
+                          title: '37%',
+                          titleStyle: const TextStyle(
+                            color: Colors.white,
+                            fontWeight: FontWeight.w800,
+                            fontSize: 11,
+                          ),
+                        ),
+                        PieChartSectionData(
+                          value: intervention,
+                          color: AdminColors.statRed.withValues(alpha: 0.9),
+                          radius: 42,
+                          title: '18%',
+                          titleStyle: const TextStyle(
+                            color: Colors.white,
+                            fontWeight: FontWeight.w800,
+                            fontSize: 11,
                           ),
                         ),
                         PieChartSectionData(
                           value: cleared,
                           color: AdminColors.statGreen.withValues(alpha: 0.9),
-                          radius: 44,
-                          title: '28%',
+                          radius: 42,
+                          title: '18%',
                           titleStyle: const TextStyle(
                             color: Colors.white,
                             fontWeight: FontWeight.w800,
-                            fontSize: 12,
+                            fontSize: 11,
                           ),
                         ),
                       ],
@@ -88,7 +100,7 @@ class CotsStatusDonutCard extends StatelessWidget {
                   ),
                 ),
                 Expanded(
-                  flex: 2,
+                  flex: 3,
                   child: Column(
                     mainAxisAlignment: MainAxisAlignment.center,
                     crossAxisAlignment: CrossAxisAlignment.start,
@@ -96,7 +108,7 @@ class CotsStatusDonutCard extends StatelessWidget {
                       Text(
                         '${total.toInt()}',
                         style: const TextStyle(
-                          fontSize: 28,
+                          fontSize: 26,
                           fontWeight: FontWeight.w900,
                           color: AdminColors.headerTitle,
                         ),
@@ -109,10 +121,11 @@ class CotsStatusDonutCard extends StatelessWidget {
                           fontWeight: FontWeight.w600,
                         ),
                       ),
-                      const SizedBox(height: 16),
-                      _legend('Active', '248', '48%', AdminColors.statRed),
-                      _legend('Scheduled', '125', '24%', AdminColors.statYellow),
-                      _legend('Cleared', '146', '28%', AdminColors.statGreen),
+                      const SizedBox(height: 12),
+                      _legend('Pending Validation', '140', '27%', AdminColors.statYellow),
+                      _legend('Validated', '192', '37%', AdminColors.statBlue),
+                      _legend('Intervention Required', '94', '18%', AdminColors.statRed),
+                      _legend('Cleared', '94', '18%', AdminColors.statGreen),
                     ],
                   ),
                 ),
@@ -126,7 +139,7 @@ class CotsStatusDonutCard extends StatelessWidget {
 
   static Widget _legend(String label, String count, String pct, Color color) {
     return Padding(
-      padding: const EdgeInsets.only(bottom: 10),
+      padding: const EdgeInsets.only(bottom: 8),
       child: Row(
         children: [
           Container(
@@ -138,13 +151,13 @@ class CotsStatusDonutCard extends StatelessWidget {
           Expanded(
             child: Text(
               label,
-              style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 12.5),
+              style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 11.5),
             ),
           ),
           Text(
             '$count · $pct',
             style: TextStyle(
-              fontSize: 12,
+              fontSize: 11,
               color: AdminColors.muted.withValues(alpha: 0.95),
               fontWeight: FontWeight.w600,
             ),

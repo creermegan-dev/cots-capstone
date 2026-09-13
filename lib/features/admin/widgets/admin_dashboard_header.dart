@@ -119,7 +119,7 @@ class AdminDashboardHeader extends StatelessWidget {
       OutlinedButton.icon(
         onPressed: () {},
         icon: AdminDateTimeTokens.dateChipIcon(),
-        label: const Text(AdminDateTimeTokens.demoDateRangeLabel, style: AdminDateTimeTokens.dateRangeChipTextStyle),
+        label: Text(AdminDateTimeTokens.demoDateRangeLabel, style: AdminDateTimeTokens.dateRangeChipTextStyle),
         style: AdminDateTimeTokens.dateRangeOutlinedButtonStyle(),
       ),
     ];

@@ -92,7 +92,7 @@ class MapMonitoringHeader extends StatelessWidget {
       OutlinedButton.icon(
         onPressed: onDateRangeTap,
         icon: AdminDateTimeTokens.dateChipIcon(),
-        label: const Text(AdminDateTimeTokens.demoDateRangeLabel, style: AdminDateTimeTokens.dateRangeChipTextStyle),
+        label: Text(AdminDateTimeTokens.demoDateRangeLabel, style: AdminDateTimeTokens.dateRangeChipTextStyle),
         style: AdminDateTimeTokens.dateRangeOutlinedButtonStyle(),
       ),
       const SizedBox(width: 10),

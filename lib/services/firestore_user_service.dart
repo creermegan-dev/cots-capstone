@@ -37,4 +37,21 @@ class FirestoreUserService {
       'profileImage': downloadUrl,
     });
   }
+
+  Future<void> updateUserProfile({
+    required String uid,
+    required String fullName,
+    required String phoneNumber,
+    required String role,
+    required String organization,
+    required String assignedArea,
+  }) async {
+    await userRef(uid).update({
+      'fullName': fullName.trim(),
+      'phoneNumber': phoneNumber.trim(),
+      'role': role.trim(),
+      'organization': organization.trim(),
+      'assignedArea': assignedArea.trim(),
+    });
+  }
 }

@@ -1,10 +1,12 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
-import 'package:cots_monitor/features/auth/admin_login_screen.dart';
-import 'package:cots_monitor/providers/auth_provider.dart';
+import '../../../providers/admin_record_review_tracker.dart';
+import '../../../services/scan_record_repository.dart';
+import '../../auth/auth_navigation.dart';
 import '../layout/admin_nav_entries.dart';
 import '../layout/admin_responsive_chrome.dart';
+import '../models/admin_record_table_row.dart';
 import '../theme/admin_theme.dart';
 import 'admin_alerts_screen.dart';
 import 'admin_analytics_screen.dart';
@@ -32,12 +34,7 @@ class _AdminShellScreenState extends State<AdminShellScreen> {
   late int _index;
 
   Future<void> _logout() async {
-    if (!context.mounted) return;
-    final auth = context.read<AuthProvider>();
-    Navigator.of(context).push<void>(
-      MaterialPageRoute<void>(builder: (_) => const AdminLoginScreen()),
-    );
-    await auth.signOut();
+    await confirmAndSignOut(context);
   }
 
   @override
@@ -46,29 +43,54 @@ class _AdminShellScreenState extends State<AdminShellScreen> {
     _index = widget.initialIndex.clamp(0, kAdminShellPageTitles.length - 1);
   }
 
+  static const int _recordsNavIndex = 3;
+
+  int? _recordsNavBadge(AdminRecordReviewTracker tracker, List<AdminRecordTableRow> rows) {
+    final count = tracker.unopenedNeedsReviewCount(rows);
+    return count > 0 ? count : null;
+  }
+
   @override
   Widget build(BuildContext context) {
-    return adminThemedSubtree(
-      context,
-      child: AdminResponsiveChrome(
-        selectedNavIndex: _index,
-        onNavSelect: (i) => setState(() => _index = i.clamp(0, kAdminShellPageTitles.length - 1)),
-        onLogout: _logout,
-        pageTitle: kAdminShellPageTitles[_index],
-        body: switch (_index) {
-          0 => const AdminDashboardScreen(),
-          1 => const AdminMapMonitoringScreen(),
-          2 => const AdminZonesManagementScreen(),
-          3 => const AdminRecordsSubmissionsScreen(),
-          4 => const AdminAlertsScreen(),
-          5 => const AdminNotificationsScreen(),
-          6 => const AdminAnalyticsScreen(),
-          7 => const AdminReportsScreen(),
-          8 => const AdminUsersScreen(),
-          9 => const AdminSettingsScreen(),
-          _ => AdminPlaceholderScreen(title: kAdminShellPageTitles[_index.clamp(0, kAdminShellPageTitles.length - 1)]),
-        },
-      ),
+    final tracker = context.watch<AdminRecordReviewTracker>();
+
+    return StreamBuilder<List<AdminRecordTableRow>>(
+      stream: ScanRecordRepository.watchAdminTableRows(),
+      builder: (context, snapshot) {
+        final rows = snapshot.data ?? const <AdminRecordTableRow>[];
+        int? navBadgeFor(int index) {
+          if (index == _recordsNavIndex) return _recordsNavBadge(tracker, rows);
+          return null;
+        }
+
+        return adminThemedSubtree(
+          context,
+          child: AdminResponsiveChrome(
+            selectedNavIndex: _index,
+            onNavSelect: (i) => setState(() => _index = i.clamp(0, kAdminShellPageTitles.length - 1)),
+            onLogout: _logout,
+            pageTitle: kAdminShellPageTitles[_index],
+            navBadgeFor: navBadgeFor,
+            body: switch (_index) {
+              0 => AdminDashboardScreen(
+                onOpenMapMonitoring: () => setState(() => _index = 1),
+              ),
+              1 => const AdminMapMonitoringScreen(),
+              2 => const AdminZonesManagementScreen(),
+              3 => const AdminRecordsSubmissionsScreen(viewOnly: true),
+              4 => const AdminAlertsScreen(),
+              5 => const AdminNotificationsScreen(),
+              6 => const AdminAnalyticsScreen(),
+              7 => const AdminReportsScreen(),
+              8 => const AdminUsersScreen(),
+              9 => const AdminSettingsScreen(),
+              _ => AdminPlaceholderScreen(
+                title: kAdminShellPageTitles[_index.clamp(0, kAdminShellPageTitles.length - 1)],
+              ),
+            },
+          ),
+        );
+      },
     );
   }
 }

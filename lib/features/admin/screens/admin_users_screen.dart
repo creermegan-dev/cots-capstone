@@ -1,5 +1,9 @@
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
 
+import '../../../models/user_model.dart';
+import '../../../providers/auth_provider.dart';
+import '../../../services/personnel_repository.dart';
 import '../models/admin_user_models.dart';
 import '../theme/admin_theme.dart';
 import '../widgets/admin_dashboard_header.dart';
@@ -179,7 +183,9 @@ class _AdminUsersScreenState extends State<AdminUsersScreen> {
           r.organization.toLowerCase().contains(q);
       final byR = _role == 'All Roles' || r.role == _role;
       final byO = _org == 'All Organizations' || r.organization == _org;
-      final byS = _status == 'All Status' || (_status == 'Active' && r.active) || (_status == 'Inactive' && !r.active);
+      final byS = _status == 'All Status' ||
+          (_status == 'Active' && r.active) ||
+          (_status == 'Inactive' && !r.active);
       return byQ && byR && byO && byS;
     }).toList();
   }
@@ -208,7 +214,10 @@ class _AdminUsersScreenState extends State<AdminUsersScreen> {
     final start = _page * _rowsPerPage;
     final pageRows = filtered.skip(start).take(_rowsPerPage).toList();
     final end = pageRows.isEmpty ? 0 : start + pageRows.length;
-    final displayTotal = _searchCtrl.text.trim().isEmpty && _role == 'All Roles' && _org == 'All Organizations' && _status == 'All Status'
+    final displayTotal = _searchCtrl.text.trim().isEmpty &&
+            _role == 'All Roles' &&
+            _org == 'All Organizations' &&
+            _status == 'All Status'
         ? _totalUsers
         : filtered.length;
 
@@ -218,6 +227,8 @@ class _AdminUsersScreenState extends State<AdminUsersScreen> {
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           _header(),
+          const SizedBox(height: 18),
+          const _PersonnelVerificationPanel(),
           const SizedBox(height: 18),
           _statRow(),
           const SizedBox(height: 18),
@@ -235,7 +246,8 @@ class _AdminUsersScreenState extends State<AdminUsersScreen> {
     final addUserBtn = FilledButton.icon(
       onPressed: () {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Add New User (mock) — form not implemented.')),
+          const SnackBar(
+              content: Text('Add New User (mock) — form not implemented.')),
         );
       },
       icon: const Icon(Icons.person_add_outlined, size: 20),
@@ -258,10 +270,14 @@ class _AdminUsersScreenState extends State<AdminUsersScreen> {
 
   Widget _statRow() {
     const specs = [
-      _UserStatSpec(Icons.groups_outlined, 'Total Users', '48', 'All registered users', AdminColors.statBlue),
-      _UserStatSpec(Icons.verified_user_outlined, 'Active Users', '42', 'Enabled accounts', AdminColors.statGreen),
-      _UserStatSpec(Icons.person_off_outlined, 'Inactive Users', '6', 'Disabled accounts', AdminColors.statYellow),
-      _UserStatSpec(Icons.admin_panel_settings_outlined, 'Roles', '8', 'User roles defined', AdminColors.statPurple),
+      _UserStatSpec(Icons.groups_outlined, 'Total Users', '48',
+          'All registered users', AdminColors.statBlue),
+      _UserStatSpec(Icons.verified_user_outlined, 'Active Users', '42',
+          'Enabled accounts', AdminColors.statGreen),
+      _UserStatSpec(Icons.person_off_outlined, 'Inactive Users', '6',
+          'Disabled accounts', AdminColors.statYellow),
+      _UserStatSpec(Icons.admin_panel_settings_outlined, 'Roles', '8',
+          'User roles defined', AdminColors.statPurple),
     ];
     return LayoutBuilder(
       builder: (context, c) {
@@ -270,7 +286,9 @@ class _AdminUsersScreenState extends State<AdminUsersScreen> {
           return Wrap(
             spacing: 12,
             runSpacing: 12,
-            children: specs.map((s) => SizedBox(width: w, child: _UserStatCard(spec: s))).toList(),
+            children: specs
+                .map((s) => SizedBox(width: w, child: _UserStatCard(spec: s)))
+                .toList(),
           );
         }
         return Row(
@@ -312,7 +330,9 @@ class _AdminUsersScreenState extends State<AdminUsersScreen> {
                   child: DropdownButton<String>(
                     value: _role,
                     isExpanded: true,
-                    items: _roles.map((e) => DropdownMenuItem(value: e, child: Text(e))).toList(),
+                    items: _roles
+                        .map((e) => DropdownMenuItem(value: e, child: Text(e)))
+                        .toList(),
                     onChanged: (v) => setState(() {
                       _role = v ?? 'All Roles';
                       _page = 0;
@@ -328,7 +348,9 @@ class _AdminUsersScreenState extends State<AdminUsersScreen> {
                   child: DropdownButton<String>(
                     value: _org,
                     isExpanded: true,
-                    items: _orgs.map((e) => DropdownMenuItem(value: e, child: Text(e))).toList(),
+                    items: _orgs
+                        .map((e) => DropdownMenuItem(value: e, child: Text(e)))
+                        .toList(),
                     onChanged: (v) => setState(() {
                       _org = v ?? 'All Organizations';
                       _page = 0;
@@ -344,7 +366,9 @@ class _AdminUsersScreenState extends State<AdminUsersScreen> {
                   child: DropdownButton<String>(
                     value: _status,
                     isExpanded: true,
-                    items: _statuses.map((e) => DropdownMenuItem(value: e, child: Text(e))).toList(),
+                    items: _statuses
+                        .map((e) => DropdownMenuItem(value: e, child: Text(e)))
+                        .toList(),
                     onChanged: (v) => setState(() {
                       _status = v ?? 'All Status';
                       _page = 0;
@@ -360,7 +384,8 @@ class _AdminUsersScreenState extends State<AdminUsersScreen> {
                 backgroundColor: const Color(0xFFF7F9FC),
                 foregroundColor: AdminColors.headerTitle,
                 padding: const EdgeInsets.all(12),
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(10)),
               ),
             ),
           ];
@@ -375,7 +400,11 @@ class _AdminUsersScreenState extends State<AdminUsersScreen> {
               ],
             );
           }
-          return Wrap(spacing: 10, runSpacing: 10, crossAxisAlignment: WrapCrossAlignment.center, children: children);
+          return Wrap(
+              spacing: 10,
+              runSpacing: 10,
+              crossAxisAlignment: WrapCrossAlignment.center,
+              children: children);
         },
       ),
     );
@@ -393,7 +422,8 @@ class _AdminUsersScreenState extends State<AdminUsersScreen> {
     );
   }
 
-  Widget _tableCard(List<AdminUserTableRow> pageRows, int start, int end, int displayTotal, int pageCount) {
+  Widget _tableCard(List<AdminUserTableRow> pageRows, int start, int end,
+      int displayTotal, int pageCount) {
     final colMap = AdminDataTableColumn.widthsMap(_tableColumns);
     final tableW = AdminDataTableColumn.totalWidth(_tableColumns);
     return _card(
@@ -440,14 +470,17 @@ class _AdminUsersScreenState extends State<AdminUsersScreen> {
   List<TableCell> _userRowCells(AdminUserTableRow r) {
     final rc = adminUserRoleColor(r.role);
     return [
-      AdminDataTableCells.text(r.id, style: const TextStyle(fontWeight: FontWeight.w900, fontSize: 12)),
+      AdminDataTableCells.text(r.id,
+          style: const TextStyle(fontWeight: FontWeight.w900, fontSize: 12)),
       AdminDataTableCells.cell(
         child: Row(
           children: [
             CircleAvatar(
               radius: 16,
               backgroundColor: rc.withValues(alpha: 0.18),
-              child: Text(r.initials, style: TextStyle(fontSize: 11, fontWeight: FontWeight.w900, color: rc)),
+              child: Text(r.initials,
+                  style: TextStyle(
+                      fontSize: 11, fontWeight: FontWeight.w900, color: rc)),
             ),
             const SizedBox(width: 8),
             Expanded(
@@ -467,21 +500,31 @@ class _AdminUsersScreenState extends State<AdminUsersScreen> {
           ],
         ),
       ),
-      AdminDataTableCells.text(r.email, style: TextStyle(fontSize: 12.5, color: AdminColors.headerTitle.withValues(alpha: 0.88))),
+      AdminDataTableCells.text(r.email,
+          style: TextStyle(
+              fontSize: 12.5,
+              color: AdminColors.headerTitle.withValues(alpha: 0.88))),
       AdminDataTableCells.cell(
         align: TextAlign.center,
-        child: AdminDataTableBadge(label: r.role, foreground: rc, background: rc.withValues(alpha: 0.12)),
+        child: AdminDataTableBadge(
+            label: r.role,
+            foreground: rc,
+            background: rc.withValues(alpha: 0.12)),
       ),
-      AdminDataTableCells.text(r.organization, style: const TextStyle(fontSize: 12)),
+      AdminDataTableCells.text(r.organization,
+          style: const TextStyle(fontSize: 12)),
       AdminDataTableCells.cell(
         align: TextAlign.center,
         child: AdminDataTableBadge(
           label: r.active ? 'Active' : 'Inactive',
           foreground: r.active ? AdminColors.statGreen : AdminColors.statRed,
-          background: (r.active ? AdminColors.statGreen : AdminColors.statRed).withValues(alpha: 0.14),
+          background: (r.active ? AdminColors.statGreen : AdminColors.statRed)
+              .withValues(alpha: 0.14),
         ),
       ),
-      AdminDataTableCells.text(r.joined, style: TextStyle(fontSize: 12, color: AdminColors.muted.withValues(alpha: 0.95))),
+      AdminDataTableCells.text(r.joined,
+          style: TextStyle(
+              fontSize: 12, color: AdminColors.muted.withValues(alpha: 0.95))),
       AdminDataTableCells.cell(
         align: TextAlign.right,
         child: Row(
@@ -492,13 +535,15 @@ class _AdminUsersScreenState extends State<AdminUsersScreen> {
               padding: EdgeInsets.zero,
               constraints: const BoxConstraints(minWidth: 32, minHeight: 32),
               onPressed: () => _openProfile(r),
-              icon: Icon(Icons.visibility_outlined, size: 20, color: AdminColors.statBlue.withValues(alpha: 0.9)),
+              icon: Icon(Icons.visibility_outlined,
+                  size: 20, color: AdminColors.statBlue.withValues(alpha: 0.9)),
             ),
             IconButton(
               padding: EdgeInsets.zero,
               constraints: const BoxConstraints(minWidth: 32, minHeight: 32),
               onPressed: () {},
-              icon: Icon(Icons.more_vert_rounded, size: 20, color: AdminColors.muted.withValues(alpha: 0.85)),
+              icon: Icon(Icons.more_vert_rounded,
+                  size: 20, color: AdminColors.muted.withValues(alpha: 0.85)),
             ),
           ],
         ),
@@ -514,18 +559,25 @@ class _AdminUsersScreenState extends State<AdminUsersScreen> {
           child: Row(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Icon(Icons.info_outline_rounded, color: AdminColors.statBlue.withValues(alpha: 0.85)),
+              Icon(Icons.info_outline_rounded,
+                  color: AdminColors.statBlue.withValues(alpha: 0.85)),
               const SizedBox(width: 12),
               Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    const Text('About user roles & organizations', style: TextStyle(fontWeight: FontWeight.w900, fontSize: 14)),
+                    const Text('About user roles & organizations',
+                        style: TextStyle(
+                            fontWeight: FontWeight.w900, fontSize: 14)),
                     const SizedBox(height: 8),
                     Text(
                       'Roles define the level of access and permissions in the system.\n\n'
                       'Organizations help group users by their affiliation or agency.',
-                      style: TextStyle(fontSize: 13, height: 1.45, color: AdminColors.headerTitle.withValues(alpha: 0.88)),
+                      style: TextStyle(
+                          fontSize: 13,
+                          height: 1.45,
+                          color:
+                              AdminColors.headerTitle.withValues(alpha: 0.88)),
                     ),
                   ],
                 ),
@@ -537,13 +589,21 @@ class _AdminUsersScreenState extends State<AdminUsersScreen> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              const Text('Role legend', style: TextStyle(fontWeight: FontWeight.w900, fontSize: 14)),
+              const Text('Role legend',
+                  style: TextStyle(fontWeight: FontWeight.w900, fontSize: 14)),
               const SizedBox(height: 10),
-              _legendLine(const Color(0xFF6A1B9A), 'Administrator', 'Full system access and management'),
-              _legendLine(AdminColors.statBlue, 'Marine Conservation Officer / Field Officer', 'Monitoring and review access'),
-              _legendLine(AdminColors.statGreen, 'LGU Staff / BFAR Staff', 'Data submission and monitoring access'),
-              _legendLine(const Color(0xFFF57C00), 'Researcher', 'View and analyze data'),
-              _legendLine(AdminColors.statRed, 'Volunteer', 'Limited access for data submission'),
+              _legendLine(const Color(0xFF6A1B9A), 'Administrator',
+                  'Full system access and management'),
+              _legendLine(
+                  AdminColors.statBlue,
+                  'Marine Conservation Officer / Field Officer',
+                  'Monitoring and review access'),
+              _legendLine(AdminColors.statGreen, 'LGU Staff / BFAR Staff',
+                  'Data submission and monitoring access'),
+              _legendLine(const Color(0xFFF57C00), 'Researcher',
+                  'View and analyze data'),
+              _legendLine(AdminColors.statRed, 'Volunteer',
+                  'Limited access for data submission'),
               _legendLine(AdminColors.muted, 'Other', 'Custom access level'),
             ],
           ),
@@ -571,16 +631,27 @@ class _AdminUsersScreenState extends State<AdminUsersScreen> {
         children: [
           Padding(
             padding: const EdgeInsets.only(top: 4),
-            child: Container(width: 10, height: 10, decoration: BoxDecoration(color: dot, shape: BoxShape.circle)),
+            child: Container(
+                width: 10,
+                height: 10,
+                decoration: BoxDecoration(color: dot, shape: BoxShape.circle)),
           ),
           const SizedBox(width: 10),
           Expanded(
             child: RichText(
               text: TextSpan(
-                style: TextStyle(fontSize: 12.5, height: 1.35, color: AdminColors.headerTitle.withValues(alpha: 0.88), decoration: TextDecoration.none),
+                style: TextStyle(
+                    fontSize: 12.5,
+                    height: 1.35,
+                    color: AdminColors.headerTitle.withValues(alpha: 0.88),
+                    decoration: TextDecoration.none),
                 children: [
-                  TextSpan(text: '$title — ', style: const TextStyle(fontWeight: FontWeight.w900)),
-                  TextSpan(text: text, style: const TextStyle(fontWeight: FontWeight.w500)),
+                  TextSpan(
+                      text: '$title — ',
+                      style: const TextStyle(fontWeight: FontWeight.w900)),
+                  TextSpan(
+                      text: text,
+                      style: const TextStyle(fontWeight: FontWeight.w500)),
                 ],
               ),
             ),
@@ -597,7 +668,10 @@ class _AdminUsersScreenState extends State<AdminUsersScreen> {
         color: Colors.white,
         borderRadius: BorderRadius.circular(14),
         boxShadow: [
-          BoxShadow(color: Colors.black.withValues(alpha: 0.06), blurRadius: 18, offset: const Offset(0, 6)),
+          BoxShadow(
+              color: Colors.black.withValues(alpha: 0.06),
+              blurRadius: 18,
+              offset: const Offset(0, 6)),
         ],
       ),
       child: child,
@@ -605,8 +679,213 @@ class _AdminUsersScreenState extends State<AdminUsersScreen> {
   }
 }
 
+class _PersonnelVerificationPanel extends StatefulWidget {
+  const _PersonnelVerificationPanel();
+
+  @override
+  State<_PersonnelVerificationPanel> createState() =>
+      _PersonnelVerificationPanelState();
+}
+
+class _PersonnelVerificationPanelState
+    extends State<_PersonnelVerificationPanel> {
+  String? _savingUid;
+
+  Future<void> _setVerified(UserModel user, bool verified) async {
+    final action = verified ? 'verify' : 'revoke verification for';
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title:
+            Text(verified ? 'Verify field personnel?' : 'Revoke verification?'),
+        content: Text(
+          'Do you want to $action ${user.fullName}? '
+          '${verified ? 'Only confirm credentials that were checked outside the app.' : 'They will no longer be eligible for new assignments.'}',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext, false),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(dialogContext, true),
+            child: Text(verified ? 'Verify' : 'Revoke'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true || !mounted) return;
+
+    final admin = context.read<AuthProvider>().userModel;
+    setState(() => _savingUid = user.uid);
+    try {
+      await PersonnelRepository.setVerification(
+        userId: user.uid,
+        verified: verified,
+        verifiedBy: admin?.uid ?? '',
+      );
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            verified
+                ? '${user.fullName} is now verified field personnel.'
+                : '${user.fullName} is no longer verified field personnel.',
+          ),
+        ),
+      );
+    } catch (error) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Could not update verification: $error')),
+      );
+    } finally {
+      if (mounted) setState(() => _savingUid = null);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: AdminColors.statGreen.withValues(alpha: 0.2)),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.06),
+            blurRadius: 18,
+            offset: const Offset(0, 6),
+          ),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          const Row(
+            children: [
+              Icon(Icons.verified_user_outlined, color: AdminColors.statGreen),
+              SizedBox(width: 10),
+              Expanded(
+                child: Text(
+                  'Field Personnel Verification',
+                  style: TextStyle(
+                    fontWeight: FontWeight.w900,
+                    fontSize: 15,
+                    color: AdminColors.headerTitle,
+                  ),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 6),
+          const Text(
+            'Confirm only credentials checked with the issuing organization. '
+            'Verified users become available for intervention assignment.',
+            style: TextStyle(color: AdminColors.muted, fontSize: 12.5),
+          ),
+          const SizedBox(height: 12),
+          StreamBuilder<List<UserModel>>(
+            stream: PersonnelRepository.watchUsers(),
+            builder: (context, snapshot) {
+              if (snapshot.connectionState == ConnectionState.waiting &&
+                  !snapshot.hasData) {
+                return const Center(child: CircularProgressIndicator());
+              }
+              if (snapshot.hasError) {
+                return Text(
+                  'Could not load registered users: ${snapshot.error}',
+                  style: const TextStyle(color: AdminColors.statRed),
+                );
+              }
+              final users = (snapshot.data ?? const <UserModel>[])
+                  .where((u) => !u.isAdmin && !u.isExpert && u.isActive)
+                  .toList();
+              if (users.isEmpty) {
+                return const Text('No eligible registered users found.');
+              }
+              return Column(
+                children: [
+                  for (var index = 0; index < users.length; index++) ...[
+                    if (index > 0) const Divider(height: 18),
+                    _personnelRow(users[index]),
+                  ],
+                ],
+              );
+            },
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _personnelRow(UserModel user) {
+    final verified = user.fieldPersonnelVerified;
+    final busy = _savingUid == user.uid;
+    return Row(
+      children: [
+        CircleAvatar(
+          backgroundColor:
+              (verified ? AdminColors.statGreen : AdminColors.muted)
+                  .withValues(alpha: 0.14),
+          child: Icon(
+            verified ? Icons.verified_rounded : Icons.person_outline_rounded,
+            color: verified ? AdminColors.statGreen : AdminColors.muted,
+          ),
+        ),
+        const SizedBox(width: 10),
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                user.fullName.isEmpty ? user.email : user.fullName,
+                style: const TextStyle(
+                  fontWeight: FontWeight.w800,
+                  color: AdminColors.headerTitle,
+                ),
+              ),
+              Text(
+                [
+                  if (user.role.isNotEmpty) user.role,
+                  if (user.organization.isNotEmpty) user.organization,
+                  if (user.assignedArea.isNotEmpty) user.assignedArea,
+                ].join(' · '),
+                style: const TextStyle(fontSize: 12, color: AdminColors.muted),
+              ),
+            ],
+          ),
+        ),
+        const SizedBox(width: 10),
+        OutlinedButton.icon(
+          onPressed: busy ? null : () => _setVerified(user, !verified),
+          icon: busy
+              ? const SizedBox(
+                  width: 16,
+                  height: 16,
+                  child: CircularProgressIndicator(strokeWidth: 2),
+                )
+              : Icon(
+                  verified
+                      ? Icons.verified_user_outlined
+                      : Icons.fact_check_outlined,
+                  size: 18,
+                ),
+          label: Text(verified ? 'Verified' : 'Verify'),
+          style: OutlinedButton.styleFrom(
+            foregroundColor:
+                verified ? AdminColors.statGreen : AdminColors.statBlue,
+          ),
+        ),
+      ],
+    );
+  }
+}
+
 class _UserStatSpec {
-  const _UserStatSpec(this.icon, this.title, this.value, this.subtitle, this.color);
+  const _UserStatSpec(
+      this.icon, this.title, this.value, this.subtitle, this.color);
   final IconData icon;
   final String title;
   final String value;
@@ -650,7 +929,9 @@ class _UserStatCardState extends State<_UserStatCard> {
             Container(
               width: 46,
               height: 46,
-              decoration: BoxDecoration(color: s.color.withValues(alpha: 0.12), borderRadius: BorderRadius.circular(12)),
+              decoration: BoxDecoration(
+                  color: s.color.withValues(alpha: 0.12),
+                  borderRadius: BorderRadius.circular(12)),
               child: Icon(s.icon, color: s.color, size: 24),
             ),
             const SizedBox(width: 12),
@@ -658,9 +939,20 @@ class _UserStatCardState extends State<_UserStatCard> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text(s.title, style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 12, color: AdminColors.headerTitle)),
-                  Text(s.value, style: const TextStyle(fontWeight: FontWeight.w900, fontSize: 24, color: AdminColors.headerTitle)),
-                  Text(s.subtitle, style: TextStyle(fontSize: 11, color: AdminColors.muted.withValues(alpha: 0.9))),
+                  Text(s.title,
+                      style: const TextStyle(
+                          fontWeight: FontWeight.w800,
+                          fontSize: 12,
+                          color: AdminColors.headerTitle)),
+                  Text(s.value,
+                      style: const TextStyle(
+                          fontWeight: FontWeight.w900,
+                          fontSize: 24,
+                          color: AdminColors.headerTitle)),
+                  Text(s.subtitle,
+                      style: TextStyle(
+                          fontSize: 11,
+                          color: AdminColors.muted.withValues(alpha: 0.9))),
                 ],
               ),
             ),
@@ -670,4 +962,3 @@ class _UserStatCardState extends State<_UserStatCard> {
     );
   }
 }
-

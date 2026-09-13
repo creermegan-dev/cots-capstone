@@ -9,9 +9,9 @@ import '../firebase_options.dart';
 bool get deferFirebaseUntilFirstUse =>
     !kIsWeb && Platform.isWindows;
 
-/// Ensures Firebase is initialized (idempotent). Not required for Windows auth.
+/// Ensures Firebase is initialized (idempotent).
 Future<void> ensureFirebaseInitialized() async {
-  if (deferFirebaseUntilFirstUse || Firebase.apps.isNotEmpty) return;
+  if (Firebase.apps.isNotEmpty) return;
   await Firebase.initializeApp(
     options: DefaultFirebaseOptions.currentPlatform,
   );

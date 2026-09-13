@@ -53,7 +53,7 @@ class MapMonitoringFilters extends StatelessWidget {
             onChanged: onStatusChanged,
           ),
           _FilterCard(
-            label: 'Risk Level',
+            label: 'Infestation Level',
             value: riskFilter,
             items: _risk,
             onChanged: onRiskChanged,

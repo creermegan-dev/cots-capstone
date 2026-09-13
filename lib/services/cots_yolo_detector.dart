@@ -6,7 +6,7 @@ import '../models/cots_detection_result.dart';
 import 'yolo_image_preprocess.dart';
 import 'yolo_postprocess.dart';
 
-/// On-device COTS detector using YOLOv8 ONNX via flutter_onnxruntime.
+/// On-device COTS detector using YOLOv8 / RT-DETR ONNX via flutter_onnxruntime.
 class CotsYoloDetector {
   CotsYoloDetector._();
 
@@ -33,10 +33,6 @@ class CotsYoloDetector {
 
     _initializing = true;
     try {
-      if (kIsWeb) {
-        throw UnsupportedError('ONNX detection is only supported on mobile builds.');
-      }
-
       _session = await _runtime.createSessionFromAsset(modelAssetPath);
       final inputs = await _session!.getInputInfo();
       final outputs = await _session!.getOutputInfo();
@@ -47,6 +43,12 @@ class CotsYoloDetector {
 
       _inputName = inputs.first['name'] as String? ?? 'images';
       _outputName = outputs.first['name'] as String? ?? 'output0';
+
+      if (kDebugMode) {
+        debugPrint('ONNX model loaded: $modelAssetPath');
+        debugPrint('ONNX inputs: $inputs');
+        debugPrint('ONNX outputs: $outputs');
+      }
     } finally {
       _initializing = false;
     }
@@ -62,8 +64,10 @@ class CotsYoloDetector {
     if (decoded == null) {
       throw FormatException('Could not decode image for detection.');
     }
+    // Match display orientation so boxes align with the uploaded photo.
+    final oriented = img.bakeOrientation(decoded);
 
-    final preprocessed = _preprocessor.preprocess(decoded);
+    final preprocessed = _preprocessor.preprocess(oriented);
     OrtValue? inputTensor;
     try {
       inputTensor = await OrtValue.fromList(
@@ -77,7 +81,18 @@ class CotsYoloDetector {
       try {
         final flat = await outputTensor.asFlattenedList();
         final shape = List<int>.from(outputTensor.shape);
+        if (kDebugMode) {
+          debugPrint('YOLO output shape: $shape');
+        }
         final boxes = _postprocessor.decode(flat, shape, preprocessed.meta);
+        if (kDebugMode) {
+          debugPrint('YOLO detections after NMS: ${boxes.length}');
+          if (boxes.isNotEmpty) {
+            debugPrint(
+              'YOLO top score: ${boxes.first.score.toStringAsFixed(3)}',
+            );
+          }
+        }
         return summarize(boxes);
       } finally {
         await outputTensor.dispose();

@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../../core/cots_colors.dart';
-import 'scan_detection_page_v2.dart';
+import 'scan_detection_page.dart';
 
 /// Which tab is highlighted in the shared user bottom navigation.
 enum UserNavDestination { dashboard, map, scan, records, profile }
@@ -197,7 +197,7 @@ class _ScanNavItem extends StatelessWidget {
             ),
             const SizedBox(height: 2),
             Text(
-              'Scan',
+              'Detect',
               style: TextStyle(
                 fontSize: 10,
                 fontWeight: isActive ? FontWeight.w700 : FontWeight.w500,
@@ -211,7 +211,7 @@ class _ScanNavItem extends StatelessWidget {
   }
 }
 
-/// Center scan FAB on shell screens (opens GoPro import / detection page).
+/// Center FAB on shell screens (opens New Detection / GoPro image flow).
 Widget userShellScanFab(
   BuildContext context, {
   Color backgroundColor = kDarkTeal,

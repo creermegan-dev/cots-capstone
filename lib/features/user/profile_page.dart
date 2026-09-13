@@ -1,17 +1,17 @@
 import 'package:cots_monitor/widgets/app_back_icon_button.dart';
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
 
+import '../../core/user_shell_theme.dart';
+import '../../models/user_model.dart';
+import '../../providers/auth_provider.dart';
+import '../../services/auth_service.dart';
+import '../auth/auth_navigation.dart';
 import 'cots_map_page.dart';
 import 'records_page.dart';
 import 'user_bottom_nav.dart';
 
-const String _userName = 'Juan Dela Cruz';
-const String _userRole = 'Field Officer';
-const String _userEmail = 'juan.delacruz@bfar.gov.ph';
-const String _userPhone = '+63 912 345 6789';
-const String _userOrg = 'BFAR';
-const String _userAssignedArea = 'Panabo Reef';
-const String _appVersion = '1.0.0';
+const String _appVersion = '1.0.2+3';
 
 const List<String> _kRoleOptions = <String>[
   'Diver',
@@ -35,6 +35,12 @@ const List<String> _kOrgOptions = <String>[
   'Independent / None',
   'Other',
 ];
+
+List<String> _optionsIncludingCurrent(String? current, List<String> options) {
+  final value = current?.trim() ?? '';
+  if (value.isEmpty || options.contains(value)) return options;
+  return [value, ...options];
+}
 
 class ProfilePage extends StatelessWidget {
   const ProfilePage({super.key});
@@ -74,13 +80,18 @@ class ProfilePage extends StatelessWidget {
       ),
       body: SafeArea(
         bottom: false,
-        child: ListView(
-          padding: const EdgeInsets.fromLTRB(16, 8, 16, 100),
-          children: [
-            _ProfileHeaderCard(),
-            const SizedBox(height: 16),
-            _OptionsCard(
+        child: Consumer<AuthProvider>(
+          builder: (context, auth, _) {
+            if (auth.isLoadingProfile && auth.userModel == null) {
+              return const Center(child: CircularProgressIndicator(color: kGreen));
+            }
+            return ListView(
+              padding: const EdgeInsets.fromLTRB(16, 8, 16, 100),
               children: [
+                _ProfileHeaderCard(user: auth.userModel),
+                const SizedBox(height: 16),
+                _OptionsCard(
+                  children: [
                 _ProfileOptionTile(
                   icon: Icons.person_outline,
                   label: 'Personal Information',
@@ -121,62 +132,30 @@ class ProfilePage extends StatelessWidget {
                   icon: Icons.logout_rounded,
                   label: 'Log Out',
                   isDestructive: true,
-                  onTap: () => _confirmLogOut(context),
+                  onTap: () => confirmAndSignOut(context, showSuccessSnackBar: true),
                 ),
               ],
             ),
           ],
+            );
+          },
         ),
       ),
     );
-  }
-
-  Future<void> _confirmLogOut(BuildContext context) async {
-    final result = await showDialog<bool>(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-        title: const Text(
-          'Log out?',
-          style: TextStyle(fontWeight: FontWeight.w700, color: kNavy),
-        ),
-        content: const Text(
-          'You will need to sign in again to access COTS Monitor.',
-          style: TextStyle(color: Color(0xFF4B5563)),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.of(ctx).pop(false),
-            child: const Text('Cancel'),
-          ),
-          ElevatedButton(
-            onPressed: () => Navigator.of(ctx).pop(true),
-            style: ElevatedButton.styleFrom(
-              backgroundColor: kHigh,
-              foregroundColor: Colors.white,
-              elevation: 0,
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(10),
-              ),
-            ),
-            child: const Text('Log Out'),
-          ),
-        ],
-      ),
-    );
-
-    if (result == true && context.mounted) {
-      Navigator.of(context).popUntil((r) => r.isFirst);
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Logged out (demo).')),
-      );
-    }
   }
 }
 
 class _ProfileHeaderCard extends StatelessWidget {
+  const _ProfileHeaderCard({required this.user});
+  final UserModel? user;
+
   @override
   Widget build(BuildContext context) {
+    final name = user?.fullName.trim().isNotEmpty == true
+        ? user!.fullName
+        : 'Your profile';
+    final role = user?.role.trim().isNotEmpty == true ? user!.role : '—';
+
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
@@ -208,7 +187,7 @@ class _ProfileHeaderCard extends StatelessWidget {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  _userName,
+                  name,
                   style: const TextStyle(
                     fontSize: 16,
                     fontWeight: FontWeight.w800,
@@ -217,32 +196,10 @@ class _ProfileHeaderCard extends StatelessWidget {
                 ),
                 const SizedBox(height: 2),
                 Text(
-                  _userRole,
+                  role,
                   style: TextStyle(
                     fontSize: 13,
                     color: Colors.grey.shade600,
-                  ),
-                ),
-              ],
-            ),
-          ),
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
-            decoration: BoxDecoration(
-              color: kLow.withValues(alpha: 0.12),
-              borderRadius: BorderRadius.circular(20),
-            ),
-            child: Row(
-              mainAxisSize: MainAxisSize.min,
-              children: const [
-                Icon(Icons.verified_rounded, color: kLow, size: 14),
-                SizedBox(width: 4),
-                Text(
-                  'Verified',
-                  style: TextStyle(
-                    fontSize: 11,
-                    fontWeight: FontWeight.w700,
-                    color: kLow,
                   ),
                 ),
               ],
@@ -388,18 +345,31 @@ class PersonalInformationPage extends StatefulWidget {
 class _PersonalInformationPageState extends State<PersonalInformationPage> {
   final _formKey = GlobalKey<FormState>();
 
-  late final TextEditingController _fullName =
-      TextEditingController(text: _userName);
-  late final TextEditingController _email =
-      TextEditingController(text: _userEmail);
-  late final TextEditingController _phone =
-      TextEditingController(text: _userPhone);
-  late final TextEditingController _assignedArea =
-      TextEditingController(text: _userAssignedArea);
+  late final TextEditingController _fullName = TextEditingController();
+  late final TextEditingController _email = TextEditingController();
+  late final TextEditingController _phone = TextEditingController();
+  late final TextEditingController _assignedArea = TextEditingController();
 
-  String _role = _userRole;
-  String? _organization = _userOrg;
+  String _role = _kRoleOptions.first;
+  String? _organization;
   bool _saving = false;
+  bool _initialized = false;
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    if (_initialized) return;
+    final user = context.read<AuthProvider>().userModel;
+    if (user != null) {
+      _fullName.text = user.fullName;
+      _email.text = user.email;
+      _phone.text = user.phoneNumber;
+      _assignedArea.text = user.assignedArea;
+      _role = user.role.trim().isNotEmpty ? user.role : _kRoleOptions.first;
+      _organization = user.organization.trim().isEmpty ? null : user.organization;
+    }
+    _initialized = true;
+  }
 
   @override
   void dispose() {
@@ -413,7 +383,29 @@ class _PersonalInformationPageState extends State<PersonalInformationPage> {
   Future<void> _save() async {
     if (!(_formKey.currentState?.validate() ?? false)) return;
     setState(() => _saving = true);
-    await Future<void>.delayed(const Duration(milliseconds: 700));
+
+    final auth = context.read<AuthProvider>();
+    auth.clearLastError();
+
+    try {
+      await auth.updateProfile(
+        fullName: _fullName.text,
+        phoneNumber: _phone.text,
+        role: _role,
+        organization: _organization ?? '',
+        assignedArea: _assignedArea.text,
+      );
+    } catch (e) {
+      if (!mounted) return;
+      setState(() => _saving = false);
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(auth.lastError ?? AuthService.messageFor(e)),
+        ),
+      );
+      return;
+    }
+
     if (!mounted) return;
     setState(() => _saving = false);
 
@@ -474,7 +466,7 @@ class _PersonalInformationPageState extends State<PersonalInformationPage> {
           child: ListView(
             padding: const EdgeInsets.fromLTRB(16, 12, 16, 110),
             children: [
-              const _PersonalHeaderCard(),
+              _PersonalHeaderCard(user: context.watch<AuthProvider>().userModel),
               const SizedBox(height: 14),
               _PersonalFormCard(
                 children: [
@@ -496,7 +488,7 @@ class _PersonalInformationPageState extends State<PersonalInformationPage> {
                     child: _DropdownInput<String>(
                       value: _role,
                       icon: Icons.badge_outlined,
-                      items: _kRoleOptions,
+                      items: _optionsIncludingCurrent(_role, _kRoleOptions),
                       onChanged: (v) =>
                           setState(() => _role = v ?? _role),
                     ),
@@ -508,14 +500,7 @@ class _PersonalInformationPageState extends State<PersonalInformationPage> {
                       icon: Icons.mail_outline,
                       hintText: 'name@example.com',
                       keyboardType: TextInputType.emailAddress,
-                      validator: (v) {
-                        final value = v?.trim() ?? '';
-                        if (value.isEmpty) return 'Required';
-                        final ok =
-                            RegExp(r'^[^@\s]+@[^@\s]+\.[^@\s]+$')
-                                .hasMatch(value);
-                        return ok ? null : 'Invalid email';
-                      },
+                      readOnly: true,
                     ),
                   ),
                   _LabeledField(
@@ -535,7 +520,10 @@ class _PersonalInformationPageState extends State<PersonalInformationPage> {
                     child: _DropdownInput<String>(
                       value: _organization,
                       icon: Icons.apartment_outlined,
-                      items: _kOrgOptions,
+                      items: _optionsIncludingCurrent(
+                        _organization,
+                        _kOrgOptions,
+                      ),
                       hint: 'Select organization',
                       onChanged: (v) =>
                           setState(() => _organization = v),
@@ -621,10 +609,19 @@ class _PersonalInformationPageState extends State<PersonalInformationPage> {
 }
 
 class _PersonalHeaderCard extends StatelessWidget {
-  const _PersonalHeaderCard();
+  const _PersonalHeaderCard({required this.user});
+  final UserModel? user;
 
   @override
   Widget build(BuildContext context) {
+    final name = user?.fullName.trim().isNotEmpty == true
+        ? user!.fullName
+        : 'Your profile';
+    final role = user?.role.trim().isNotEmpty == true ? user!.role : '—';
+    final email = user?.email.trim().isNotEmpty == true ? user!.email : '—';
+    final phone =
+        user?.phoneNumber.trim().isNotEmpty == true ? user!.phoneNumber : '—';
+
     return Container(
       padding: const EdgeInsets.fromLTRB(14, 14, 14, 14),
       decoration: BoxDecoration(
@@ -660,10 +657,10 @@ class _PersonalHeaderCard extends StatelessWidget {
                 Row(
                   crossAxisAlignment: CrossAxisAlignment.center,
                   children: [
-                    const Expanded(
+                    Expanded(
                       child: Text(
-                        _userName,
-                        style: TextStyle(
+                        name,
+                        style: const TextStyle(
                           color: kNavy,
                           fontSize: 16,
                           fontWeight: FontWeight.w800,
@@ -671,14 +668,12 @@ class _PersonalHeaderCard extends StatelessWidget {
                         ),
                       ),
                     ),
-                    const SizedBox(width: 8),
-                    const _VerifiedPill(),
                   ],
                 ),
                 const SizedBox(height: 2),
-                const Text(
-                  _userRole,
-                  style: TextStyle(
+                Text(
+                  role,
+                  style: const TextStyle(
                     color: Color(0xFF6B7280),
                     fontSize: 12,
                     fontWeight: FontWeight.w600,
@@ -686,9 +681,9 @@ class _PersonalHeaderCard extends StatelessWidget {
                   ),
                 ),
                 const SizedBox(height: 6),
-                const Text(
-                  _userEmail,
-                  style: TextStyle(
+                Text(
+                  email,
+                  style: const TextStyle(
                     color: kNavy,
                     fontSize: 12,
                     fontWeight: FontWeight.w500,
@@ -696,9 +691,9 @@ class _PersonalHeaderCard extends StatelessWidget {
                   ),
                 ),
                 const SizedBox(height: 2),
-                const Text(
-                  _userPhone,
-                  style: TextStyle(
+                Text(
+                  phone,
+                  style: const TextStyle(
                     color: kNavy,
                     fontSize: 12,
                     fontWeight: FontWeight.w500,
@@ -706,38 +701,6 @@ class _PersonalHeaderCard extends StatelessWidget {
                   ),
                 ),
               ],
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _VerifiedPill extends StatelessWidget {
-  const _VerifiedPill();
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
-      decoration: BoxDecoration(
-        color: const Color(0xFFE6F4EA),
-        borderRadius: BorderRadius.circular(999),
-        border: Border.all(color: const Color(0xFFB7E1C2)),
-      ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: const [
-          Icon(Icons.verified_rounded,
-              size: 14, color: Color(0xFF1B7F3A)),
-          SizedBox(width: 4),
-          Text(
-            'Verified',
-            style: TextStyle(
-              color: Color(0xFF1B7F3A),
-              fontWeight: FontWeight.w700,
-              fontSize: 11,
             ),
           ),
         ],
@@ -867,6 +830,7 @@ class _TextInput extends StatelessWidget {
     this.hintText,
     this.keyboardType,
     this.validator,
+    this.readOnly = false,
   });
 
   final TextEditingController controller;
@@ -874,6 +838,7 @@ class _TextInput extends StatelessWidget {
   final String? hintText;
   final TextInputType? keyboardType;
   final String? Function(String?)? validator;
+  final bool readOnly;
 
   @override
   Widget build(BuildContext context) {
@@ -881,8 +846,9 @@ class _TextInput extends StatelessWidget {
       controller: controller,
       keyboardType: keyboardType,
       validator: validator,
-      style: const TextStyle(
-        color: kNavy,
+      readOnly: readOnly,
+      style: TextStyle(
+        color: readOnly ? const Color(0xFF6B7280) : kNavy,
         fontSize: 13.5,
         fontWeight: FontWeight.w600,
       ),
@@ -1172,11 +1138,30 @@ class _ChangePasswordPageState extends State<ChangePasswordPage> {
   Future<void> _save() async {
     if (!(_formKey.currentState?.validate() ?? false)) return;
     setState(() => _saving = true);
-    await Future<void>.delayed(const Duration(milliseconds: 900));
+
+    final auth = context.read<AuthProvider>();
+    auth.clearLastError();
+
+    try {
+      await auth.changePassword(
+        currentPassword: _current.text,
+        newPassword: _next.text,
+      );
+    } catch (e) {
+      if (!mounted) return;
+      setState(() => _saving = false);
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(auth.lastError ?? AuthService.messageFor(e)),
+        ),
+      );
+      return;
+    }
+
     if (!mounted) return;
     setState(() => _saving = false);
     ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('Password updated (demo).')),
+      const SnackBar(content: Text('Password updated successfully.')),
     );
     Navigator.of(context).pop();
   }
@@ -1305,49 +1290,361 @@ class AboutPage extends StatelessWidget {
   Widget build(BuildContext context) {
     return _SubScaffold(
       title: 'About',
-      child: Container(
-        padding: const EdgeInsets.all(16),
-        decoration: BoxDecoration(
-          color: Colors.white,
-          borderRadius: BorderRadius.circular(14),
-          boxShadow: const [
-            BoxShadow(
-              color: Color(0x12000000),
-              blurRadius: 8,
-              offset: Offset(0, 2),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          _aboutHeroCard(),
+          const SizedBox(height: 14),
+          _aboutSectionCard(
+            icon: Icons.public_rounded,
+            iconColor: const Color(0xFFE53935),
+            title: 'Why COTS Must Be Controlled',
+            child: const Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  'Crown-of-Thorns Starfish (Acanthaster planci) are coral predators. '
+                  'During outbreak events they can strip reefs of living coral tissue, '
+                  'weaken biodiversity, and slow recovery for years.',
+                  style: TextStyle(fontSize: 13, color: kNavy, height: 1.45),
+                ),
+                SizedBox(height: 10),
+                Text(
+                  'Early detection and timely removal protect reef health, fisheries, '
+                  'and coastal communities that depend on healthy coral ecosystems.',
+                  style: TextStyle(fontSize: 13, color: kNavy, height: 1.45),
+                ),
+              ],
             ),
-          ],
+          ),
+          const SizedBox(height: 14),
+          _aboutSectionCard(
+            icon: Icons.lightbulb_outline_rounded,
+            iconColor: const Color(0xFFF6A623),
+            title: 'COTS Facts',
+            child: Column(
+              children: const [
+                _FactTile(
+                  emojiIcon: Icons.restaurant_rounded,
+                  title: 'Coral eaters',
+                  body:
+                      'A single adult COTS can consume large areas of coral tissue, '
+                      'preferring fast-growing reef-building corals.',
+                ),
+                _FactTile(
+                  emojiIcon: Icons.groups_rounded,
+                  title: 'Outbreak risk',
+                  body:
+                      'When populations boom, reefs can lose most live coral cover '
+                      'in months — turning vibrant reefs into white, dead skeletons.',
+                ),
+                _FactTile(
+                  emojiIcon: Icons.visibility_rounded,
+                  title: 'Hard to spot underwater',
+                  body:
+                      'COTS blend into reef textures. Divers and GoPro footage help '
+                      'catch infestations earlier than patrols alone.',
+                ),
+                _FactTile(
+                  emojiIcon: Icons.eco_rounded,
+                  title: 'Removal works',
+                  body:
+                      'Targeted manual removal and injection methods, guided by '
+                      'accurate maps, are proven ways to reduce outbreak pressure.',
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 14),
+          _aboutSectionCard(
+            icon: Icons.memory_rounded,
+            iconColor: const Color(0xFF1F7A7A),
+            title: 'About This System',
+            child: const Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  'COTS Monitoring is a Machine Learning-Based Crown of Thorn Starfish '
+                  'Detection and GIS Mapping System. It supports field divers and '
+                  'experts in finding, validating, and mapping COTS threats.',
+                  style: TextStyle(fontSize: 13, color: kNavy, height: 1.45),
+                ),
+                SizedBox(height: 12),
+                _SystemBullet(
+                  title: 'Machine Learning Detection',
+                  body: 'Upload GoPro images to detect COTS with confidence scores.',
+                ),
+                _SystemBullet(
+                  title: 'GIS Mapping',
+                  body: 'Visualize reef zones and infestation levels on interactive maps.',
+                ),
+                _SystemBullet(
+                  title: 'Expert Validation',
+                  body: 'Experts approve or reject uncertain detections before action.',
+                ),
+                _SystemBullet(
+                  title: 'Removal Evidence',
+                  body: 'Submit removal photos to close the monitoring–intervention loop.',
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 14),
+          _aboutSectionCard(
+            icon: Icons.handshake_outlined,
+            iconColor: const Color(0xFF2563EB),
+            title: 'Your Role as a Diver',
+            child: const Text(
+              'Every capture you submit strengthens outbreak awareness. Clear photos, '
+              'accurate GPS, and honest notes help experts validate detections faster '
+              'and guide where intervention teams should go next.',
+              style: TextStyle(fontSize: 13, color: kNavy, height: 1.45),
+            ),
+          ),
+          const SizedBox(height: 14),
+          Container(
+            padding: const EdgeInsets.all(16),
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(14),
+              boxShadow: const [
+                BoxShadow(
+                  color: Color(0x12000000),
+                  blurRadius: 8,
+                  offset: Offset(0, 2),
+                ),
+              ],
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Text(
+                  'App Information',
+                  style: TextStyle(
+                    fontSize: 15,
+                    fontWeight: FontWeight.w800,
+                    color: kNavy,
+                  ),
+                ),
+                const SizedBox(height: 8),
+                const _AboutRow(label: 'Version', value: _appVersion),
+                const _AboutDivider(),
+                const _AboutRow(
+                  label: 'Developer',
+                  value: 'Megan Creer',
+                ),
+                const _AboutDivider(),
+                const _AboutRow(
+                  label: 'Project Manager',
+                  value: 'Angek Lyhksine Mayor',
+                ),
+                const _AboutDivider(),
+                const _AboutRow(
+                  label: 'Project Analyst',
+                  value: 'Meariell Deace Bantillo',
+                ),
+                const _AboutDivider(),
+                const _AboutRow(label: 'Platform', value: 'Flutter (Windows / Mobile)'),
+                const _AboutDivider(),
+                const _AboutRow(label: 'License', value: 'Internal / Academic'),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  static Widget _aboutHeroCard() {
+    return Container(
+      padding: const EdgeInsets.all(18),
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(16),
+        gradient: const LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: [Color(0xFF0D1B2A), Color(0xFF174F57)],
         ),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            const Text(
-              'COTS Monitor',
-              style: TextStyle(
-                fontSize: 18,
-                fontWeight: FontWeight.w800,
-                color: kNavy,
+        boxShadow: const [
+          BoxShadow(
+            color: Color(0x22000000),
+            blurRadius: 12,
+            offset: Offset(0, 4),
+          ),
+        ],
+      ),
+      child: const Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            'COTS Monitor',
+            style: TextStyle(
+              fontSize: 22,
+              fontWeight: FontWeight.w900,
+              color: Colors.white,
+              letterSpacing: -0.3,
+            ),
+          ),
+          SizedBox(height: 8),
+          Text(
+            'Protect coral reefs through machine learning detection, expert validation, '
+            'and GIS-guided intervention.',
+            style: TextStyle(
+              fontSize: 13.5,
+              color: Colors.white70,
+              height: 1.4,
+              fontWeight: FontWeight.w500,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  static Widget _aboutSectionCard({
+    required IconData icon,
+    required Color iconColor,
+    required String title,
+    required Widget child,
+  }) {
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(14),
+        boxShadow: const [
+          BoxShadow(
+            color: Color(0x12000000),
+            blurRadius: 8,
+            offset: Offset(0, 2),
+          ),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Container(
+                width: 34,
+                height: 34,
+                decoration: BoxDecoration(
+                  color: iconColor.withValues(alpha: 0.12),
+                  borderRadius: BorderRadius.circular(10),
+                ),
+                child: Icon(icon, size: 18, color: iconColor),
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Text(
+                  title,
+                  style: const TextStyle(
+                    fontSize: 15,
+                    fontWeight: FontWeight.w800,
+                    color: kNavy,
+                  ),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 12),
+          child,
+        ],
+      ),
+    );
+  }
+}
+
+class _FactTile extends StatelessWidget {
+  const _FactTile({
+    required this.emojiIcon,
+    required this.title,
+    required this.body,
+  });
+
+  final IconData emojiIcon;
+  final String title;
+  final String body;
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 12),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Icon(emojiIcon, size: 18, color: const Color(0xFF1F7A7A)),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  title,
+                  style: const TextStyle(
+                    fontSize: 13,
+                    fontWeight: FontWeight.w800,
+                    color: kNavy,
+                  ),
+                ),
+                const SizedBox(height: 2),
+                Text(
+                  body,
+                  style: TextStyle(
+                    fontSize: 12.5,
+                    height: 1.4,
+                    color: Colors.grey.shade700,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _SystemBullet extends StatelessWidget {
+  const _SystemBullet({required this.title, required this.body});
+
+  final String title;
+  final String body;
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 10),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Padding(
+            padding: EdgeInsets.only(top: 5),
+            child: Icon(Icons.check_circle, size: 14, color: Color(0xFF1F7A7A)),
+          ),
+          const SizedBox(width: 8),
+          Expanded(
+            child: RichText(
+              text: TextSpan(
+                style: TextStyle(
+                  fontSize: 12.5,
+                  height: 1.4,
+                  color: Colors.grey.shade700,
+                ),
+                children: [
+                  TextSpan(
+                    text: '$title — ',
+                    style: const TextStyle(
+                      fontWeight: FontWeight.w800,
+                      color: kNavy,
+                    ),
+                  ),
+                  TextSpan(text: body),
+                ],
               ),
             ),
-            const SizedBox(height: 4),
-            Text(
-              'Version $_appVersion',
-              style: TextStyle(fontSize: 12, color: Colors.grey.shade600),
-            ),
-            const SizedBox(height: 12),
-            const Text(
-              'Crown-of-Thorns Starfish (COTS) monitoring app for field officers. '
-              'Capture scans, track outbreak zones, manage statuses, and review records.',
-              style: TextStyle(fontSize: 13, color: kNavy, height: 1.4),
-            ),
-            const SizedBox(height: 16),
-            const _AboutRow(label: 'Developer', value: 'Capstone Team'),
-            const _AboutDivider(),
-            const _AboutRow(label: 'Platform', value: 'Flutter (Web / Mobile)'),
-            const _AboutDivider(),
-            const _AboutRow(label: 'License', value: 'Internal / Academic'),
-          ],
-        ),
+          ),
+        ],
       ),
     );
   }

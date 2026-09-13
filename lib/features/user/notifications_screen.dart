@@ -1,7 +1,12 @@
 import 'package:cots_monitor/widgets/app_back_icon_button.dart';
 import 'package:flutter/material.dart';
+import 'package:intl/intl.dart';
+import 'package:provider/provider.dart';
 
 import '../../core/cots_colors.dart';
+import '../../models/app_notification.dart';
+import '../../providers/auth_provider.dart';
+import '../../services/notification_repository.dart';
 import 'cots_map_page.dart';
 import 'profile_page.dart';
 import 'records_page.dart';
@@ -12,6 +17,7 @@ enum NotificationCategory { all, alerts, reminders, updates }
 /// Row data for [NotificationCard].
 class NotificationListItem {
   const NotificationListItem({
+    required this.id,
     required this.title,
     required this.description,
     required this.actionLabel,
@@ -24,6 +30,7 @@ class NotificationListItem {
     required this.unread,
   });
 
+  final String id;
   final String title;
   final String description;
   final String actionLabel;
@@ -47,88 +54,58 @@ class NotificationsScreen extends StatefulWidget {
 class _NotificationsScreenState extends State<NotificationsScreen> {
   NotificationCategory _filter = NotificationCategory.all;
 
-  static const List<NotificationListItem> _all = [
-    NotificationListItem(
-      title: 'High Outbreak Detected',
-      description:
-          'High concentration of COTS detected in Zone D - Panabo Reef. Intervention is recommended.',
-      actionLabel: 'View Details',
-      timeText: '8:30 AM',
-      accent: kDangerRed,
-      iconBg: Color(0xFFFFE4E4),
-      icon: Icons.warning_amber_rounded,
-      category: NotificationCategory.alerts,
-      section: 'Today',
-      unread: true,
-    ),
-    NotificationListItem(
-      title: 'Removal Scheduled Today',
-      description:
-          'A removal activity is scheduled today in Zone A - Panabo Reef at 9:00 AM.',
-      actionLabel: 'View Schedule',
-      timeText: '7:00 AM',
-      accent: kWarningOrange,
-      iconBg: Color(0xFFFFF4E0),
-      icon: Icons.event_note_rounded,
-      category: NotificationCategory.reminders,
-      section: 'Today',
-      unread: true,
-    ),
-    NotificationListItem(
-      title: 'Zone Cleared',
-      description:
-          'Zone B - Sto. Niño Reef has been cleared. (0 COTS detected).',
-      actionLabel: 'View Record',
-      timeText: 'Yesterday, 4:30 PM',
-      accent: kInfoBlue,
-      iconBg: Color(0xFFE8EFFF),
-      icon: Icons.assignment_turned_in_rounded,
-      category: NotificationCategory.updates,
-      section: 'Earlier',
-      unread: false,
-    ),
-    NotificationListItem(
-      title: 'New COTS Detected',
-      description:
-          '15 COTS detected in Zone D - Panabo Reef. Density: 4.2 COTS/ha.',
-      actionLabel: 'View Details',
-      timeText: 'May 17, 2024\n10:20 AM',
-      accent: kSuccessGreen,
-      iconBg: Color(0xFFE8F7EA),
-      icon: Icons.add_circle_outline_rounded,
-      category: NotificationCategory.alerts,
-      section: 'Earlier',
-      unread: true,
-    ),
-    NotificationListItem(
-      title: 'Scan Completed',
-      description:
-          'Scan completed in Zone C - Coral Garden. 12 COTS detected.',
-      actionLabel: 'View Record',
-      timeText: 'May 16, 2024\n9:05 AM',
-      accent: kAccentPurple,
-      iconBg: Color(0xFFF3E8FF),
-      icon: Icons.event_available_rounded,
-      category: NotificationCategory.updates,
-      section: 'Earlier',
-      unread: false,
-    ),
-  ];
-
-  List<NotificationListItem> get _visible {
-    if (_filter == NotificationCategory.all) return _all;
-    return _all.where((e) => e.category == _filter).toList();
+  List<NotificationListItem> _visible(List<NotificationListItem> all) {
+    if (_filter == NotificationCategory.all) return all;
+    return all.where((item) => item.category == _filter).toList();
   }
 
-  Iterable<String> get _sections sync* {
+  Iterable<String> _sections(List<NotificationListItem> visible) sync* {
     final seen = <String>{};
-    for (final n in _visible) {
+    for (final n in visible) {
       if (seen.add(n.section)) yield n.section;
     }
   }
 
+  NotificationListItem _itemFor(AppNotification notification) {
+    final createdAt = notification.createdAt;
+    final today = DateUtils.isSameDay(createdAt, DateTime.now());
+    final category = switch (notification.type) {
+      AppNotification.interventionAssigned => NotificationCategory.reminders,
+      AppNotification.reviewRejected => NotificationCategory.alerts,
+      _ => NotificationCategory.updates,
+    };
+    final accent = switch (notification.type) {
+      AppNotification.interventionAssigned => kWarningOrange,
+      AppNotification.reviewAccepted => kSuccessGreen,
+      AppNotification.reviewRejected => kDangerRed,
+      _ => kAccentPurple,
+    };
+    final icon = switch (notification.type) {
+      AppNotification.interventionAssigned => Icons.event_note_rounded,
+      AppNotification.reviewAccepted => Icons.check_circle_outline_rounded,
+      AppNotification.reviewRejected => Icons.warning_amber_rounded,
+      _ => Icons.event_available_rounded,
+    };
+    return NotificationListItem(
+      id: notification.id,
+      title: notification.title,
+      description: notification.body,
+      actionLabel: notification.type == AppNotification.interventionAssigned
+          ? 'View task'
+          : 'View record',
+      timeText: createdAt == null ? 'Just now' : DateFormat('h:mm a').format(createdAt),
+      accent: accent,
+      iconBg: accent.withValues(alpha: 0.13),
+      icon: icon,
+      category: category,
+      section: today ? 'Today' : 'Earlier',
+      unread: !notification.isRead,
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
+    final uid = context.watch<AuthProvider>().userModel?.uid;
     return Scaffold(
       backgroundColor: Colors.white,
       extendBody: true,
@@ -170,19 +147,50 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
       ),
       body: SafeArea(
         bottom: false,
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
+        child: StreamBuilder<List<AppNotification>>(
+          stream: uid == null ? null : NotificationRepository.watchForUser(uid),
+          builder: (context, snapshot) {
+            final notifications = snapshot.data ?? const <AppNotification>[];
+            final visible = _visible(notifications.map(_itemFor).toList());
+            return Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
             const SizedBox(height: 4),
             _FilterTabs(
               selected: _filter,
               onChanged: (v) => setState(() => _filter = v),
             ),
             Expanded(
-              child: ListView(
-                padding: const EdgeInsets.fromLTRB(16, 12, 16, 0),
-                children: [
-                  for (final section in _sections) ...[
+              child: snapshot.hasError
+                  ? Center(
+                      child: Padding(
+                        padding: const EdgeInsets.all(24),
+                        child: Text(
+                          'Could not load notifications.\n${snapshot.error}',
+                          textAlign: TextAlign.center,
+                          style: const TextStyle(color: kMutedGray),
+                        ),
+                      ),
+                    )
+                  : ListView(
+                      padding: const EdgeInsets.fromLTRB(16, 12, 16, 0),
+                      children: [
+                        if (snapshot.connectionState == ConnectionState.waiting)
+                          const Padding(
+                            padding: EdgeInsets.only(top: 32),
+                            child: Center(child: CircularProgressIndicator()),
+                          )
+                        else if (visible.isEmpty)
+                          const Padding(
+                            padding: EdgeInsets.only(top: 32),
+                            child: Center(
+                              child: Text(
+                                'No notifications yet.',
+                                style: TextStyle(color: kMutedGray),
+                              ),
+                            ),
+                          ),
+                        for (final section in _sections(visible)) ...[
                     Padding(
                       padding: const EdgeInsets.only(bottom: 8, top: 4),
                       child: Text(
@@ -194,26 +202,37 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
                         ),
                       ),
                     ),
-                    ..._visible.where((n) => n.section == section).map(
-                          (n) => Padding(
+                    ...visible.where((n) => n.section == section).map(
+                          (item) {
+                            final notification = notifications.firstWhere(
+                              (value) => value.id == item.id,
+                            );
+                            return Padding(
                             padding: const EdgeInsets.only(bottom: 10),
                             child: NotificationCard(
-                              model: n,
-                              onTap: () {},
+                              model: item,
+                              onTap: () {
+                                if (!notification.isRead) {
+                                  NotificationRepository.markRead(notification.id);
+                                }
+                              },
                             ),
-                          ),
+                          );
+                          },
                         ),
                   ],
                   const SizedBox(height: 12),
-                ],
-              ),
+                      ],
+                    ),
             ),
             Padding(
               padding: const EdgeInsets.fromLTRB(16, 8, 16, 12),
               child: Row(
                 children: [
                   TextButton.icon(
-                    onPressed: () {},
+                    onPressed: notifications.isEmpty
+                        ? null
+                        : () => NotificationRepository.clearAll(notifications),
                     icon: const Icon(Icons.delete_outline_rounded,
                         color: kDangerRed, size: 20),
                     label: const Text(
@@ -226,7 +245,9 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
                   ),
                   const Spacer(),
                   TextButton.icon(
-                    onPressed: () {},
+                    onPressed: notifications.every((item) => item.isRead)
+                        ? null
+                        : () => NotificationRepository.markAllRead(notifications),
                     icon: const Icon(Icons.done_all_rounded,
                         color: kSuccessGreen, size: 20),
                     label: const Text(
@@ -241,7 +262,9 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
               ),
             ),
             const SizedBox(height: 72),
-          ],
+              ],
+            );
+          },
         ),
       ),
     );

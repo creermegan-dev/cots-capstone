@@ -1,10 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_map/flutter_map.dart';
 import 'package:latlong2/latlong.dart';
-import 'package:provider/provider.dart';
 
-import 'package:cots_monitor/features/auth/admin_login_screen.dart';
-import 'package:cots_monitor/providers/auth_provider.dart';
+import '../../auth/auth_navigation.dart';
 import '../models/admin_alert_models.dart';
 import '../theme/admin_theme.dart';
 import '../layout/admin_breakpoints.dart';
@@ -33,12 +31,7 @@ class _AdminAlertDetailsScreenState extends State<AdminAlertDetailsScreen> {
   }
 
   Future<void> _logout() async {
-    if (!context.mounted) return;
-    final auth = context.read<AuthProvider>();
-    Navigator.of(context).push<void>(
-      MaterialPageRoute<void>(builder: (_) => const AdminLoginScreen()),
-    );
-    await auth.signOut();
+    await confirmAndSignOut(context);
   }
 
   void _onSidebarSelect(int index) {
@@ -241,7 +234,7 @@ class _AdminAlertDetailsScreenState extends State<AdminAlertDetailsScreen> {
             OutlinedButton.icon(
               onPressed: () {},
               icon: AdminDateTimeTokens.dateChipIcon(),
-              label: const Text(AdminDateTimeTokens.demoDateRangeLabel, style: AdminDateTimeTokens.dateRangeChipTextStyle),
+              label: Text(AdminDateTimeTokens.demoDateRangeLabel, style: AdminDateTimeTokens.dateRangeChipTextStyle),
               style: AdminDateTimeTokens.dateRangeOutlinedButtonStyle(),
             ),
             const SizedBox(width: 10),
@@ -589,7 +582,7 @@ class _AdminAlertDetailsScreenState extends State<AdminAlertDetailsScreen> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              const Text('Action Recommended', style: TextStyle(fontWeight: FontWeight.w900, color: AdminColors.statRed, fontSize: 13)),
+              const Text('Recommended Intervention', style: TextStyle(fontWeight: FontWeight.w900, color: AdminColors.statRed, fontSize: 13)),
               const SizedBox(height: 6),
               Text(d.actionRecommended, style: TextStyle(fontSize: 12.5, height: 1.35, color: AdminColors.headerTitle.withValues(alpha: 0.9))),
             ],

@@ -12,11 +12,13 @@ class AdminMobileDrawer extends StatelessWidget {
     required this.selectedIndex,
     required this.onSelect,
     required this.onLogout,
+    this.badgeFor,
   });
 
   final int selectedIndex;
   final ValueChanged<int> onSelect;
   final VoidCallback onLogout;
+  final int? Function(int navIndex)? badgeFor;
 
   @override
   Widget build(BuildContext context) {
@@ -84,6 +86,7 @@ class AdminMobileDrawer extends StatelessWidget {
                     }
                     if (e is AdminNavItemData) {
                       final sel = selectedIndex == e.index;
+                      final badge = badgeFor?.call(e.index);
                       return Padding(
                         padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 2),
                         child: ListTile(
@@ -99,7 +102,7 @@ class AdminMobileDrawer extends StatelessWidget {
                               color: sel ? AdminColors.navTextActive : AdminColors.navText,
                             ),
                           ),
-                          trailing: e.badge != null && e.badge! > 0
+                          trailing: badge != null && badge > 0
                               ? Container(
                                   padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
                                   decoration: BoxDecoration(
@@ -107,7 +110,7 @@ class AdminMobileDrawer extends StatelessWidget {
                                     borderRadius: BorderRadius.circular(10),
                                   ),
                                   child: Text(
-                                    '${e.badge}',
+                                    '$badge',
                                     style: const TextStyle(
                                       color: Colors.white,
                                       fontSize: 11,

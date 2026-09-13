@@ -30,4 +30,39 @@ class CotsBoundingBox {
   final double x2;
   final double y2;
   final double score;
+
+  int get confidencePercent => (score.clamp(0.0, 1.0) * 100).round();
+
+  Map<String, dynamic> toMap() => {
+        'x1': x1,
+        'y1': y1,
+        'x2': x2,
+        'y2': y2,
+        'score': score,
+      };
+
+  factory CotsBoundingBox.fromMap(Map<String, dynamic> map) {
+    double read(String key) {
+      final v = map[key];
+      if (v is num) return v.toDouble();
+      return double.tryParse('$v') ?? 0;
+    }
+
+    return CotsBoundingBox(
+      x1: read('x1'),
+      y1: read('y1'),
+      x2: read('x2'),
+      y2: read('y2'),
+      score: read('score'),
+    );
+  }
+
+  static List<CotsBoundingBox> listFromDynamic(Object? value) {
+    if (value is! List) return const [];
+    return [
+      for (final item in value)
+        if (item is Map<String, dynamic>) CotsBoundingBox.fromMap(item)
+        else if (item is Map) CotsBoundingBox.fromMap(Map<String, dynamic>.from(item)),
+    ];
+  }
 }

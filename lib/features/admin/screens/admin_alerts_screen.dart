@@ -33,12 +33,13 @@ class _AdminAlertsScreenState extends State<AdminAlertsScreen> {
 
   static const List<AdminDataTableColumn> _tableColumns = [
     AdminDataTableColumn('Alert ID', 112),
-    AdminDataTableColumn('Type', 188),
-    AdminDataTableColumn('Zone', 72, headerAlign: TextAlign.center),
-    AdminDataTableColumn('Message', 300),
-    AdminDataTableColumn('Severity', 100, headerAlign: TextAlign.center),
-    AdminDataTableColumn('Status', 108, headerAlign: TextAlign.center),
-    AdminDataTableColumn('Detected On', 168),
+    AdminDataTableColumn('Alert Title', 188),
+    AdminDataTableColumn('Reef Zone', 88, headerAlign: TextAlign.center),
+    AdminDataTableColumn('Message', 240),
+    AdminDataTableColumn('Moderate/High Risk', 130, headerAlign: TextAlign.center),
+    AdminDataTableColumn('Alert Status', 108, headerAlign: TextAlign.center),
+    AdminDataTableColumn('Date', 168),
+    AdminDataTableColumn('Recommended Intervention', 160),
     AdminDataTableColumn('Actions', 96, headerAlign: TextAlign.right),
   ];
 
@@ -67,7 +68,7 @@ class _AdminAlertsScreenState extends State<AdminAlertsScreen> {
       'ALT-2026-0004',
       AdminAlertType.outbreak,
       'Zone C',
-      'Multiple high-density records detected.',
+      'Multiple high-density COTS records detected across adjacent reef sectors.',
       AdminAlertSeverity.moderate,
       AdminAlertStatus.new_,
       'May 17, 2026 04:20 PM',
@@ -76,27 +77,27 @@ class _AdminAlertsScreenState extends State<AdminAlertsScreen> {
       'ALT-2026-0003',
       AdminAlertType.cotsDetected,
       'Zone D',
-      'Elevated COTS count reported by field scan.',
+      'Elevated COTS count reported by diver GoPro monitoring capture.',
       AdminAlertSeverity.moderate,
       AdminAlertStatus.inProgress,
       'May 16, 2026 11:05 AM',
     ),
     AdminAlertListRow(
       'ALT-2026-0002',
-      AdminAlertType.equipment,
+      AdminAlertType.expertValidation,
       'Zone E',
-      'Sensor calibration reminder — no immediate threat.',
-      AdminAlertSeverity.low,
-      AdminAlertStatus.resolved,
+      'Detection confidence 65% is below the 80% automatic acceptance threshold. Forwarded for expert validation.',
+      AdminAlertSeverity.moderate,
+      AdminAlertStatus.new_,
       'May 15, 2026 02:10 PM',
     ),
     AdminAlertListRow(
       'ALT-2026-0001',
       AdminAlertType.highDensity,
       'Zone F',
-      'Density trending upward; monitoring recommended.',
-      AdminAlertSeverity.low,
-      AdminAlertStatus.new_,
+      'Validated COTS infestation trending upward; schedule removal intervention.',
+      AdminAlertSeverity.moderate,
+      AdminAlertStatus.resolved,
       'May 14, 2026 09:30 AM',
     ),
   ];
@@ -146,7 +147,7 @@ class _AdminAlertsScreenState extends State<AdminAlertsScreen> {
         children: [
           AdminDashboardHeader(
             title: 'Alerts',
-            subtitle: 'Monitor and manage alerts generated from COTS monitoring activities.',
+            subtitle: 'Monitor COTS detections, density outbreaks, and expert-validation alerts from the monitoring workflow.',
             onRefreshTap: _onAlertsRefresh,
           ),
           const SizedBox(height: 18),
@@ -194,10 +195,10 @@ class _AdminAlertsScreenState extends State<AdminAlertsScreen> {
 
   Widget _statCards() {
     final cards = [
-      const _StatSpec('Total Alerts', '6', 'All time', Icons.notifications_active_outlined, AdminColors.statBlue),
-      const _StatSpec('High Alerts', '2', 'Require immediate attention', Icons.trending_up_rounded, AdminColors.statRed),
-      const _StatSpec('Moderate Alerts', '3', 'Needs monitoring', Icons.horizontal_rule_rounded, AdminColors.statYellow),
-      const _StatSpec('Low Alerts', '1', 'Informational', Icons.check_circle_outline_rounded, AdminColors.statGreen),
+      const _StatSpec('Total Alerts', '6', 'COTS monitoring alerts', Icons.notifications_active_outlined, AdminColors.statBlue),
+      const _StatSpec('High Alerts', '2', 'Require immediate action', Icons.trending_up_rounded, AdminColors.statRed),
+      const _StatSpec('Moderate Alerts', '4', 'Needs monitoring / validation', Icons.horizontal_rule_rounded, AdminColors.statYellow),
+      const _StatSpec('Resolved', '1', 'Intervention completed', Icons.check_circle_outline_rounded, AdminColors.statGreen),
     ];
     return LayoutBuilder(
       builder: (context, c) {
@@ -440,6 +441,22 @@ class _AdminAlertsScreenState extends State<AdminAlertsScreen> {
         r.detectedOn,
         style: AdminDateTimeTokens.inlineDateTimeTextStyle(secondary: true),
       ),
+      AdminDataTableCells.text(
+        r.type == AdminAlertType.expertValidation
+            ? 'Expert manual verification'
+            : r.severity == AdminAlertSeverity.high
+                ? 'Immediate removal recommended'
+                : r.severity == AdminAlertSeverity.moderate
+                    ? 'Schedule intervention'
+                    : 'Continue monitoring',
+        maxLines: 2,
+        style: TextStyle(
+          fontSize: 12,
+          height: 1.25,
+          fontWeight: FontWeight.w600,
+          color: AdminColors.headerTitle.withValues(alpha: 0.88),
+        ),
+      ),
       AdminDataTableCells.cell(
         align: TextAlign.right,
         child: Row(
@@ -474,9 +491,24 @@ class _AdminAlertsScreenState extends State<AdminAlertsScreen> {
           ),
           const SizedBox(height: 10),
           Text(
-            'Alerts are automatically generated based on COTS monitoring data and predefined thresholds.',
+            'Alerts are generated from machine learning COTS detections, density thresholds, outbreak patterns, and expert-validation needs in the monitoring workflow.',
             style: TextStyle(fontSize: 13, height: 1.45, color: AdminColors.headerTitle.withValues(alpha: 0.88)),
           ),
+          const SizedBox(height: 20),
+          Divider(height: 1, color: Colors.black.withValues(alpha: 0.08)),
+          const SizedBox(height: 18),
+          const Text(
+            'ALERT TYPES',
+            style: TextStyle(fontSize: 11, fontWeight: FontWeight.w800, letterSpacing: 1.1, color: AdminColors.muted),
+          ),
+          const SizedBox(height: 12),
+          _statusLegendLine('COTS Detected', 'New starfish detections from diver captures.'),
+          const SizedBox(height: 8),
+          _statusLegendLine('High Density', 'Infestation exceeds reef-zone density threshold.'),
+          const SizedBox(height: 8),
+          _statusLegendLine('Outbreak Alert', 'Multiple high-risk detections in nearby zones.'),
+          const SizedBox(height: 8),
+          _statusLegendLine('Expert Validation', 'Confidence below 80% — needs expert review.'),
           const SizedBox(height: 20),
           Divider(height: 1, color: Colors.black.withValues(alpha: 0.08)),
           const SizedBox(height: 18),
@@ -485,11 +517,11 @@ class _AdminAlertsScreenState extends State<AdminAlertsScreen> {
             style: TextStyle(fontSize: 11, fontWeight: FontWeight.w800, letterSpacing: 1.1, color: AdminColors.muted),
           ),
           const SizedBox(height: 12),
-          _legendRow(AdminColors.statRed, 'High', 'Critical conditions requiring immediate action.'),
+          _legendRow(AdminColors.statRed, 'High', 'Critical COTS conditions requiring immediate intervention.'),
           const SizedBox(height: 10),
-          _legendRow(AdminColors.statYellow, 'Moderate', 'Needs monitoring and possible action.'),
+          _legendRow(AdminColors.statYellow, 'Moderate', 'Needs monitoring, validation, or scheduled removal.'),
           const SizedBox(height: 10),
-          _legendRow(AdminColors.statGreen, 'Low', 'Informational alerts for awareness.'),
+          _legendRow(AdminColors.statGreen, 'Low', 'Lower-priority COTS follow-up items.'),
           const SizedBox(height: 20),
           Divider(height: 1, color: Colors.black.withValues(alpha: 0.08)),
           const SizedBox(height: 18),
@@ -498,11 +530,11 @@ class _AdminAlertsScreenState extends State<AdminAlertsScreen> {
             style: TextStyle(fontSize: 11, fontWeight: FontWeight.w800, letterSpacing: 1.1, color: AdminColors.muted),
           ),
           const SizedBox(height: 12),
-          _statusLegendLine('New', 'Newly generated alert.'),
+          _statusLegendLine('New', 'Newly generated COTS alert.'),
           const SizedBox(height: 8),
-          _statusLegendLine('In Progress', 'Action is ongoing.'),
+          _statusLegendLine('In Progress', 'Intervention or validation is ongoing.'),
           const SizedBox(height: 8),
-          _statusLegendLine('Resolved', 'Issue has been addressed.'),
+          _statusLegendLine('Resolved', 'COTS issue has been addressed.'),
         ],
       ),
     );

@@ -1,6 +1,13 @@
 import 'package:fl_chart/fl_chart.dart';
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
 
+import '../../../models/cots_confidence_policy.dart';
+import '../../../providers/admin_record_review_tracker.dart';
+import '../../../providers/auth_provider.dart';
+import '../../../services/scan_record_service.dart';
+import '../../../services/scan_record_repository.dart';
+import '../../../services/notification_repository.dart';
 import '../layout/admin_breakpoints.dart';
 import '../models/admin_record_table_row.dart';
 import '../theme/admin_theme.dart';
@@ -10,7 +17,17 @@ import '../widgets/admin_stat_card.dart';
 import 'admin_record_details_screen.dart';
 
 class AdminRecordsSubmissionsScreen extends StatefulWidget {
-  const AdminRecordsSubmissionsScreen({super.key});
+  const AdminRecordsSubmissionsScreen({
+    super.key,
+    this.viewOnly = false,
+    this.expertContext = false,
+  });
+
+  /// When true, hide approve/reject — admin oversight only.
+  final bool viewOnly;
+
+  /// Expert shell — adjusts copy and reviewer labels.
+  final bool expertContext;
 
   @override
   State<AdminRecordsSubmissionsScreen> createState() =>
@@ -31,36 +48,35 @@ class _AdminRecordsSubmissionsScreenState
 
   static const List<AdminDataTableColumn> _tableColumns = [
     AdminDataTableColumn('#', 44, headerAlign: TextAlign.center),
-    AdminDataTableColumn('Record ID', 124),
-    AdminDataTableColumn('Zone', 84, headerAlign: TextAlign.center),
-    AdminDataTableColumn('Date & Time', 176),
-    AdminDataTableColumn('COTS Count', 92, headerAlign: TextAlign.right),
-    AdminDataTableColumn('Density (COTS/ha)', 112, headerAlign: TextAlign.right),
-    AdminDataTableColumn('Risk Level', 104, headerAlign: TextAlign.center),
-    AdminDataTableColumn('Status', 100, headerAlign: TextAlign.center),
-    AdminDataTableColumn('Submitted By', 148),
-    AdminDataTableColumn('Actions', 124, headerAlign: TextAlign.right),
+    AdminDataTableColumn('Record ID', 108),
+    AdminDataTableColumn('Activity Type', 108, headerAlign: TextAlign.center),
+    AdminDataTableColumn('AI Count', 72, headerAlign: TextAlign.right),
+    AdminDataTableColumn('Removed', 72, headerAlign: TextAlign.right),
+    AdminDataTableColumn('Avg Size', 76, headerAlign: TextAlign.right),
+    AdminDataTableColumn('Capture', 100),
+    AdminDataTableColumn('Zone', 72, headerAlign: TextAlign.center),
+    AdminDataTableColumn('Date captured', 120),
+    AdminDataTableColumn('Date uploaded', 120),
+    AdminDataTableColumn('Conf.', 56, headerAlign: TextAlign.right),
+    AdminDataTableColumn('Status', 92, headerAlign: TextAlign.center),
+    AdminDataTableColumn('Submitted By', 120),
+    AdminDataTableColumn('Actions', 108, headerAlign: TextAlign.right),
   ];
 
-  static const _zones = ['All Zones', 'Zone A', 'Zone B', 'Zone C', 'Zone D'];
-  static const _statuses = ['All Status', 'Verified', 'Needs Review', 'Rejected'];
+  static const _statuses = ['All Status', 'Accepted', 'Under Review', 'Rejected'];
   static const _risks = ['All Risk Levels', 'High', 'Moderate', 'Low'];
 
-  /// Demo rows: status is derived from [confidencePercent] unless [adminConfirmed].
-  final List<AdminRecordTableRow> _rows = _seedRows();
+  /// Optimistic UI until the Firestore stream refreshes.
+  final Map<String, AdminRecordTableRow> _overrides = {};
 
-  static List<AdminRecordTableRow> _seedRows() => [
-        const AdminRecordTableRow(1, 'REC-2026-0156', 'Zone A', 'May 18, 2026 09:15 AM', 67, 78.40, 'High', 'Juan Dela Cruz', 92),
-        const AdminRecordTableRow(2, 'REC-2026-0155', 'Zone B', 'May 18, 2026 08:45 AM', 51, 55.40, 'High', 'Pedro Reyes', 71),
-        const AdminRecordTableRow(3, 'REC-2026-0154', 'Zone C', 'May 17, 2026 04:30 PM', 28, 41.75, 'Moderate', 'Maria Santos', 88),
-        const AdminRecordTableRow(4, 'REC-2026-0153', 'Zone D', 'May 17, 2026 11:20 AM', 46, 72.10, 'High', 'Luis Mendoza', 60),
-        const AdminRecordTableRow(5, 'REC-2026-0152', 'Zone E', 'May 16, 2026 10:10 AM', 10, 8.30, 'Low', 'Ana Garcia', 44),
-        const AdminRecordTableRow(6, 'REC-2026-0151', 'Zone F', 'May 16, 2026 09:10 AM', 15, 22.60, 'Moderate', 'Jose Villanueva', 84),
-        const AdminRecordTableRow(7, 'REC-2026-0150', 'Zone G', 'May 15, 2026 09:25 AM', 3, 6.20, 'Low', 'Mark Antonio', 95),
-        const AdminRecordTableRow(8, 'REC-2026-0149', 'Zone H', 'May 15, 2026 02:15 PM', 4, 4.80, 'Low', 'Rica Bautista', 63),
-        const AdminRecordTableRow(9, 'REC-2026-0148', 'Zone I', 'May 14, 2026 05:50 AM', 37, 60.90, 'High', 'Juan Dela Cruz', 59),
-        const AdminRecordTableRow(10, 'REC-2026-0147', 'Zone J', 'May 14, 2026 01:40 PM', 12, 19.30, 'Moderate', 'Pedro Reyes', 86),
-      ];
+  List<String> _zoneOptions(List<AdminRecordTableRow> rows) {
+    final zones = rows.map((r) => r.zone).toSet().toList()..sort();
+    return ['All Zones', ...zones];
+  }
+
+  List<AdminRecordTableRow> _mergeRows(List<AdminRecordTableRow> rows) {
+    return rows.map((r) => _overrides[r.recordId] ?? r).toList();
+  }
 
   @override
   void initState() {
@@ -83,7 +99,7 @@ class _AdminRecordsSubmissionsScreenState
   void _resetRecordFilters() {
     setState(() {
       _searchCtrl.clear();
-      _zone = _zones.first;
+      _zone = 'All Zones';
       _status = _statuses.first;
       _risk = _risks.first;
       _page = 0;
@@ -96,81 +112,159 @@ class _AdminRecordsSubmissionsScreenState
     ScaffoldMessenger.of(context).showSnackBar(
       const SnackBar(
         behavior: SnackBarBehavior.floating,
-        content: Text('Records refreshed (demo).'),
+        content: Text('Records refreshed from Firestore.'),
       ),
     );
   }
 
   void _openRecordDetails(AdminRecordTableRow row) async {
+    if (!widget.viewOnly) {
+      context.read<AdminRecordReviewTracker>().markOpened(row);
+    }
     final returned = await Navigator.of(context).push<AdminRecordTableRow?>(
       MaterialPageRoute<AdminRecordTableRow?>(
-        builder: (_) => AdminRecordDetailsScreen(row: row),
+        builder: (_) => AdminRecordDetailsScreen(
+          row: row,
+          viewOnly: widget.viewOnly,
+          expertContext: widget.expertContext,
+        ),
       ),
     );
     if (!mounted || returned == null) return;
     setState(() {
-      final i = _rows.indexWhere((r) => r.recordId == returned.recordId);
-      if (i >= 0) _rows[i] = returned;
+      _overrides[returned.recordId] = returned;
     });
   }
 
-  void _confirmSubmission(AdminRecordTableRow row) {
-    setState(() {
-      final i = _rows.indexWhere((r) => r.recordId == row.recordId);
-      if (i >= 0) _rows[i] = _rows[i].copyWith(adminConfirmed: true);
-    });
-    if (!mounted) return;
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        behavior: SnackBarBehavior.floating,
-        content: Text('${row.recordId} marked verified after admin confirmation.'),
-      ),
+  Future<void> _confirmSubmission(AdminRecordTableRow row) async {
+    final decisions = CotsConfidencePolicy.initialDecisionsForItems(
+      row.detectionReviewItems,
+    ).map(
+      (d) => d == PerCotsAdminDecision.pending
+          ? PerCotsAdminDecision.confirmed
+          : d,
+    ).toList();
+    await _persistSubmissionReview(
+      row,
+      confirmed: true,
+      cotsDecisions: decisions,
     );
   }
 
-  void _rejectSubmission(AdminRecordTableRow row) {
-    setState(() {
-      final i = _rows.indexWhere((r) => r.recordId == row.recordId);
-      if (i >= 0) _rows[i] = _rows[i].copyWith(adminRejected: true);
-    });
-    if (!mounted) return;
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        behavior: SnackBarBehavior.floating,
-        content: Text('${row.recordId} marked rejected after admin review.'),
-      ),
+  Future<void> _rejectSubmission(AdminRecordTableRow row) async {
+    final decisions = List<PerCotsAdminDecision>.filled(
+      row.detectionReviewItems.length,
+      PerCotsAdminDecision.rejected,
+    );
+    await _persistSubmissionReview(
+      row,
+      confirmed: false,
+      cotsDecisions: decisions,
     );
   }
 
-  (int verified, int needsReview, int rejected) _statusCounts() {
-    var verified = 0;
-    var needsReview = 0;
+  Future<void> _persistSubmissionReview(
+    AdminRecordTableRow row, {
+    required bool confirmed,
+    required List<PerCotsAdminDecision> cotsDecisions,
+  }) async {
+    final recordId = row.documentId;
+    if (recordId.isEmpty) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          behavior: SnackBarBehavior.floating,
+          content: Text('Cannot save review — missing Firestore record ID.'),
+        ),
+      );
+      return;
+    }
+
+    final auth = context.read<AuthProvider>();
+    final reviewedBy = auth.userModel?.fullName.trim().isNotEmpty == true
+        ? auth.userModel!.fullName.trim()
+        : auth.firebaseUser?.email ??
+            (widget.expertContext ? 'Expert' : 'Admin');
+
+    try {
+      await ScanRecordService.updateAdminVerification(
+        recordId: recordId,
+        recordCollection: row.recordCollection,
+        adminConfirmed: confirmed,
+        adminRejected: !confirmed,
+        reviewedBy: reviewedBy,
+        cotsDecisions: cotsDecisions,
+      );
+      try {
+        await NotificationRepository.createReviewDecision(
+          recipientUid: row.ownerUid,
+          recordId: row.recordId,
+          zone: row.zone,
+          accepted: confirmed,
+        );
+      } catch (_) {
+        // A saved review remains valid even if its notification cannot be sent.
+      }
+      if (!mounted) return;
+      setState(() {
+        _overrides[row.recordId] = row.copyWith(
+          adminConfirmed: confirmed,
+          adminRejected: !confirmed,
+          adminCotsDecisions: cotsDecisions,
+        );
+      });
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          behavior: SnackBarBehavior.floating,
+          content: Text(
+            confirmed
+                ? '${row.recordId} verified — saved to Firestore.'
+                : '${row.recordId} rejected — saved to Firestore.',
+          ),
+        ),
+      );
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          behavior: SnackBarBehavior.floating,
+          content: Text('Could not save expert review: $e'),
+        ),
+      );
+    }
+  }
+
+  (int accepted, int underReview, int rejected) _statusCounts(
+    List<AdminRecordTableRow> rows,
+  ) {
+    var accepted = 0;
+    var underReview = 0;
     var rejected = 0;
-    for (final r in _rows) {
-      switch (r.displayStatus) {
-        case 'Verified':
-          verified++;
+    for (final r in rows) {
+      switch (r.displayStatusLabel) {
+        case 'Accepted':
+          accepted++;
           break;
-        case 'Needs Review':
-          needsReview++;
+        case 'Under Review':
+          underReview++;
           break;
         case 'Rejected':
           rejected++;
           break;
       }
     }
-    return (verified, needsReview, rejected);
+    return (accepted, underReview, rejected);
   }
 
-  List<AdminRecordTableRow> get _filteredRows {
+  List<AdminRecordTableRow> _filteredRows(List<AdminRecordTableRow> rows) {
     final q = _searchCtrl.text.trim().toLowerCase();
-    return _rows.where((r) {
+    return rows.where((r) {
       final byQuery = q.isEmpty ||
           r.recordId.toLowerCase().contains(q) ||
           r.zone.toLowerCase().contains(q) ||
           r.submittedBy.toLowerCase().contains(q);
       final byZone = _zone == 'All Zones' || r.zone == _zone;
-      final byStatus = _status == 'All Status' || r.displayStatus == _status;
+      final byStatus = _status == 'All Status' || r.displayStatusLabel == _status;
       final byRisk = _risk == 'All Risk Levels' || r.risk == _risk;
       return byQuery && byZone && byStatus && byRisk;
     }).toList();
@@ -178,87 +272,142 @@ class _AdminRecordsSubmissionsScreenState
 
   @override
   Widget build(BuildContext context) {
-    final filtered = _filteredRows;
-    final pageCount = (filtered.length / _rowsPerPage).ceil().clamp(1, 999);
-    _page = _page.clamp(0, pageCount - 1);
-    final start = _page * _rowsPerPage;
-    final pageRows = filtered.skip(start).take(_rowsPerPage).toList();
-    final end = pageRows.isEmpty ? 0 : start + pageRows.length;
-
     final pagePad = AdminBreakpoints.pagePadding(MediaQuery.sizeOf(context).width);
 
-    return FadeTransition(
-      opacity: _fade,
-      child: SingleChildScrollView(
-        padding: EdgeInsets.fromLTRB(pagePad.left, 22, pagePad.right, 28),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            AdminDashboardHeader(
-              title: 'Records / Submissions',
-              subtitle: 'View and manage all monitoring records and submissions.',
-              onRefreshTap: _onRecordsHeaderRefresh,
+    return StreamBuilder<List<AdminRecordTableRow>>(
+      stream: ScanRecordRepository.watchAdminTableRows(),
+      builder: (context, snapshot) {
+        if (snapshot.connectionState == ConnectionState.waiting &&
+            !snapshot.hasData) {
+          return const Center(
+            child: Padding(
+              padding: EdgeInsets.all(48),
+              child: CircularProgressIndicator(color: AdminColors.statBlue),
             ),
-            const SizedBox(height: 22),
-            _stats(),
-            const SizedBox(height: 20),
-            _filters(),
-            const SizedBox(height: 14),
-            _table(filtered, pageRows, start, end, pageCount),
-            const SizedBox(height: 14),
-            _bottomCharts(),
-          ],
-        ),
-      ),
+          );
+        }
+
+        if (snapshot.hasError) {
+          return Center(
+            child: Padding(
+              padding: const EdgeInsets.all(32),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  const Icon(Icons.cloud_off_outlined, size: 48, color: AdminColors.muted),
+                  const SizedBox(height: 12),
+                  Text(
+                    'Could not load records',
+                    style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                          fontWeight: FontWeight.w700,
+                          color: AdminColors.headerTitle,
+                        ),
+                  ),
+                  const SizedBox(height: 8),
+                  Text(
+                    '${snapshot.error}',
+                    textAlign: TextAlign.center,
+                    style: const TextStyle(color: AdminColors.muted),
+                  ),
+                ],
+              ),
+            ),
+          );
+        }
+
+        final rows = _mergeRows(snapshot.data ?? []);
+        final zoneOptions = _zoneOptions(rows);
+        if (!zoneOptions.contains(_zone)) {
+          _zone = 'All Zones';
+        }
+
+        final filtered = _filteredRows(rows);
+        final pageCount = (filtered.length / _rowsPerPage).ceil().clamp(1, 999);
+        _page = _page.clamp(0, pageCount - 1);
+        final start = _page * _rowsPerPage;
+        final pageRows = filtered.skip(start).take(_rowsPerPage).toList();
+        final end = pageRows.isEmpty ? 0 : start + pageRows.length;
+
+        return FadeTransition(
+          opacity: _fade,
+          child: SingleChildScrollView(
+            padding: EdgeInsets.fromLTRB(pagePad.left, 22, pagePad.right, 28),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                AdminDashboardHeader(
+                  title: widget.viewOnly
+                      ? 'Records Overview'
+                      : 'Records Verification',
+                  subtitle: widget.viewOnly
+                      ? 'View citizen science submissions and expert verification status. Approval is handled by experts.'
+                      : widget.expertContext
+                          ? 'Review GoPro detections and approve or reject low-confidence submissions.'
+                          : 'Manage GoPro detection records, AI monitoring results, and expert verification in one place.',
+                  onRefreshTap: _onRecordsHeaderRefresh,
+                ),
+                const SizedBox(height: 22),
+                _stats(rows),
+                const SizedBox(height: 20),
+                _filters(zoneOptions),
+                const SizedBox(height: 14),
+                _table(filtered, pageRows, start, end, pageCount),
+                const SizedBox(height: 14),
+                _bottomCharts(rows),
+              ],
+            ),
+          ),
+        );
+      },
     );
   }
 
-  Widget _stats() {
+  Widget _stats(List<AdminRecordTableRow> rows) {
     return LayoutBuilder(
       builder: (context, c) {
         final maxWidth = c.maxWidth;
-        final total = _rows.length;
-        final (nVerified, nReview, nRejected) = _statusCounts();
+        final total = rows.length;
+        final (nAccepted, nReview, nRejected) = _statusCounts(rows);
         double rowPct(int count) => total == 0 ? 0.0 : (100 * count / total);
         final avgDensity =
-            total == 0 ? 0.0 : _rows.map((e) => e.density).reduce((a, b) => a + b) / total;
+            total == 0 ? 0.0 : rows.map((e) => e.density).reduce((a, b) => a + b) / total;
 
         final cards = <Widget>[
           AdminStatCard(
             title: 'Total Records',
             value: '$total',
-            subtitle: 'Loaded submissions (demo)',
+            subtitle: total == 0 ? 'No submissions yet' : 'GoPro & AI monitoring entries',
             icon: Icons.inventory_2_outlined,
             accentColor: AdminColors.statBlue,
             selected: _status == 'All Status',
             onTap: () => setState(() => _status = 'All Status'),
           ),
           AdminStatCard(
-            title: 'Verified Records',
-            value: '$nVerified',
-            subtitle: '${rowPct(nVerified).toStringAsFixed(1)}% · AI ≥85% or admin confirmed',
+            title: 'Accepted',
+            value: '$nAccepted',
+            subtitle: '${rowPct(nAccepted).toStringAsFixed(1)}% · Automatically Accepted ${CotsConfidencePolicy.autoApproveMin}–100%',
             icon: Icons.verified_rounded,
             accentColor: AdminColors.statGreen,
-            selected: _status == 'Verified',
+            selected: _status == 'Accepted',
             onTap: () => setState(() {
-              _status = _status == 'Verified' ? 'All Status' : 'Verified';
+              _status = _status == 'Accepted' ? 'All Status' : 'Accepted';
             }),
           ),
           AdminStatCard(
-            title: 'Needs Review',
+            title: 'Under Review',
             value: '$nReview',
-            subtitle: '${rowPct(nReview).toStringAsFixed(1)}% · 60–84% confidence',
+            subtitle: '${rowPct(nReview).toStringAsFixed(1)}% · Requires Expert Validation ${CotsConfidencePolicy.adminReviewMin}–${CotsConfidencePolicy.autoApproveMin - 1}',
             icon: Icons.warning_amber_rounded,
             accentColor: AdminColors.statYellow,
-            selected: _status == 'Needs Review',
+            selected: _status == 'Under Review',
             onTap: () => setState(() {
-              _status = _status == 'Needs Review' ? 'All Status' : 'Needs Review';
+              _status = _status == 'Under Review' ? 'All Status' : 'Under Review';
             }),
           ),
           AdminStatCard(
-            title: 'Rejected Records',
+            title: 'Rejected',
             value: '$nRejected',
-            subtitle: '${rowPct(nRejected).toStringAsFixed(1)}% · below 60% confidence',
+            subtitle: '${rowPct(nRejected).toStringAsFixed(1)}% · Retake photo 0–${CotsConfidencePolicy.adminReviewMin - 1}',
             icon: Icons.cancel_outlined,
             accentColor: AdminColors.statRed,
             selected: _status == 'Rejected',
@@ -308,7 +457,7 @@ class _AdminRecordsSubmissionsScreenState
     );
   }
 
-  Widget _filters() {
+  Widget _filters(List<String> zoneOptions) {
     return _card(
       child: Wrap(
         spacing: 10,
@@ -328,13 +477,13 @@ class _AdminRecordsSubmissionsScreenState
               ),
             ),
           ),
-          _drop(_zones, _zone, (v) => setState(() => _zone = v!)),
+          _drop(zoneOptions, _zone, (v) => setState(() => _zone = v!)),
           _drop(_statuses, _status, (v) => setState(() => _status = v!)),
           _drop(_risks, _risk, (v) => setState(() => _risk = v!)),
           OutlinedButton.icon(
             onPressed: _resetRecordFilters,
             icon: const Icon(Icons.refresh_rounded, size: 16),
-            label: const Text('Reset'),
+            label: const Text('Reset Filters'),
           ),
         ],
       ),
@@ -420,6 +569,38 @@ class _AdminRecordsSubmissionsScreenState
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
+          Padding(
+            padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
+            child: Row(
+              children: [
+                const Expanded(
+                  child: Text(
+                    'Monitoring Records',
+                    style: TextStyle(
+                      fontSize: 18,
+                      fontWeight: FontWeight.w800,
+                      color: AdminColors.headerTitle,
+                    ),
+                  ),
+                ),
+                OutlinedButton.icon(
+                  onPressed: filtered.isEmpty
+                      ? null
+                      : () {
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            SnackBar(
+                              content: Text(
+                                'Export ready for ${filtered.length} record(s).',
+                              ),
+                            ),
+                          );
+                        },
+                  icon: const Icon(Icons.download_outlined, size: 18),
+                  label: const Text('Export'),
+                ),
+              ],
+            ),
+          ),
           AdminDataTableScrollArea(
             tableWidth: tableW,
             child: Column(
@@ -457,6 +638,9 @@ class _AdminRecordsSubmissionsScreenState
   }
 
   List<TableCell> _recordRowCells(AdminRecordTableRow r) {
+    final removed = r.removedQuantity != null ? '${r.removedQuantity}' : '—';
+    final avgSize =
+        r.averageSizeCm != null ? '${r.averageSizeCm!.toStringAsFixed(0)} cm' : '—';
     return [
       AdminDataTableCells.text('${r.number}', align: TextAlign.center),
       AdminDataTableCells.cell(
@@ -473,24 +657,21 @@ class _AdminRecordsSubmissionsScreenState
           ),
         ),
       ),
+      AdminDataTableCells.text(r.activityType, align: TextAlign.center),
+      AdminDataTableCells.text('${r.displayAiCount}', align: TextAlign.right),
+      AdminDataTableCells.text(removed, align: TextAlign.right),
+      AdminDataTableCells.text(avgSize, align: TextAlign.right),
+      AdminDataTableCells.text(r.captureSource),
       AdminDataTableCells.text(r.zone, align: TextAlign.center),
-      AdminDataTableCells.text(r.dateTime, style: AdminDateTimeTokens.inlineDateTimeTextStyle()),
-      AdminDataTableCells.text('${r.cotsCount}', align: TextAlign.right),
-      AdminDataTableCells.text(
-        r.density.toStringAsFixed(2),
-        align: TextAlign.right,
-        style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 12.5),
-      ),
-      AdminDataTableCells.cell(
-        align: TextAlign.center,
-        child: AdminDataTableBadge(label: r.risk, foreground: _riskColor(r.risk), background: _riskColor(r.risk).withValues(alpha: 0.13)),
-      ),
+      AdminDataTableCells.text(r.dateCaptured, style: AdminDateTimeTokens.inlineDateTimeTextStyle()),
+      AdminDataTableCells.text(r.dateUploaded, style: AdminDateTimeTokens.inlineDateTimeTextStyle()),
+      AdminDataTableCells.text('${r.confidencePercent}%', align: TextAlign.right),
       AdminDataTableCells.cell(
         align: TextAlign.center,
         child: AdminDataTableBadge(
-          label: r.displayStatus,
-          foreground: _statusColor(r.displayStatus),
-          background: _statusColor(r.displayStatus).withValues(alpha: 0.13),
+          label: r.displayStatusLabel,
+          foreground: _statusColor(r.displayStatusLabel),
+          background: _statusColor(r.displayStatusLabel).withValues(alpha: 0.13),
         ),
       ),
       AdminDataTableCells.text(r.submittedBy),
@@ -500,18 +681,18 @@ class _AdminRecordsSubmissionsScreenState
           mainAxisAlignment: MainAxisAlignment.end,
           mainAxisSize: MainAxisSize.min,
           children: [
-            if (r.displayStatus == 'Needs Review') ...[
+            if (!widget.viewOnly && r.displayStatus == 'Needs Review') ...[
               IconButton(
                 padding: EdgeInsets.zero,
                 constraints: const BoxConstraints(minWidth: 36, minHeight: 36),
-                tooltip: 'Reject submission (admin)',
+                tooltip: 'Reject submission',
                 onPressed: () => _rejectSubmission(r),
                 icon: const Icon(Icons.cancel_outlined, size: 20, color: AdminColors.statRed),
               ),
               IconButton(
                 padding: EdgeInsets.zero,
                 constraints: const BoxConstraints(minWidth: 36, minHeight: 36),
-                tooltip: 'Confirm submission (admin)',
+                tooltip: 'Confirm submission',
                 onPressed: () => _confirmSubmission(r),
                 icon: const Icon(Icons.check_circle_outline_rounded, size: 20, color: AdminColors.statGreen),
               ),
@@ -529,21 +710,12 @@ class _AdminRecordsSubmissionsScreenState
     ];
   }
 
-  Color _riskColor(String risk) {
-    switch (risk) {
-      case 'High':
-        return AdminColors.statRed;
-      case 'Moderate':
-        return AdminColors.statYellow;
-      default:
-        return AdminColors.statGreen;
-    }
-  }
-
   Color _statusColor(String status) {
     switch (status) {
+      case 'Accepted':
       case 'Verified':
         return AdminColors.statGreen;
+      case 'Under Review':
       case 'Needs Review':
         return AdminColors.statYellow;
       case 'Rejected':
@@ -553,7 +725,9 @@ class _AdminRecordsSubmissionsScreenState
     }
   }
 
-  Widget _bottomCharts() {
+  Widget _bottomCharts(List<AdminRecordTableRow> rows) {
+    final topZones = _topZonesByDensity(rows);
+
     return LayoutBuilder(
       builder: (context, c) {
         final narrow = c.maxWidth < 720;
@@ -570,15 +744,15 @@ class _AdminRecordsSubmissionsScreenState
                 ),
               ),
               const SizedBox(height: 8),
-              _recordsByStatusChart(),
+              _recordsByStatusChart(rows),
             ],
           ),
         );
         final right = _card(
-          child: const Column(
+          child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text(
+              const Text(
                 'Top Zones by Average Density',
                 style: TextStyle(
                   fontSize: 20,
@@ -586,12 +760,21 @@ class _AdminRecordsSubmissionsScreenState
                   color: AdminColors.headerTitle,
                 ),
               ),
-              SizedBox(height: 12),
-              _Bar('Zone A', 78.40, AdminColors.statRed),
-              _Bar('Zone D', 72.10, Color(0xFFFF7043)),
-              _Bar('Zone I', 60.90, AdminColors.statYellow),
-              _Bar('Zone B', 55.40, Color(0xFFFFCA28)),
-              _Bar('Zone C', 41.75, AdminColors.statGreen),
+              const SizedBox(height: 12),
+              if (topZones.isEmpty)
+                const Text('No zone data yet.', style: TextStyle(color: AdminColors.muted))
+              else
+                for (final z in topZones)
+                  _Bar(
+                    z.$1,
+                    z.$2,
+                    switch (z.$1.hashCode % 4) {
+                      0 => AdminColors.statRed,
+                      1 => const Color(0xFFFF7043),
+                      2 => AdminColors.statYellow,
+                      _ => AdminColors.statGreen,
+                    },
+                  ),
             ],
           ),
         );
@@ -618,14 +801,27 @@ class _AdminRecordsSubmissionsScreenState
     );
   }
 
+  List<(String, double)> _topZonesByDensity(List<AdminRecordTableRow> rows) {
+    final totals = <String, (double sum, int count)>{};
+    for (final r in rows) {
+      final current = totals[r.zone] ?? (0, 0);
+      totals[r.zone] = (current.$1 + r.density, current.$2 + 1);
+    }
+    final averages = totals.entries
+        .map((e) => (e.key, e.value.$1 / e.value.$2))
+        .toList()
+      ..sort((a, b) => b.$2.compareTo(a.$2));
+    return averages.take(5).toList();
+  }
+
   /// Pie is inset so fl_chart does not clip the ring; legend is spaced to the right.
-  Widget _recordsByStatusChart() {
+  Widget _recordsByStatusChart(List<AdminRecordTableRow> rows) {
     const pieSide = 128.0;
     const pieInset = 14.0;
     const ringRadius = 30.0;
     const centerHole = 36.0;
 
-    final (v, n, r) = _statusCounts();
+    final (v, n, r) = _statusCounts(rows);
     final total = v + n + r;
     String legendCountPct(int count) {
       if (total == 0) return '0 (0.0%)';
@@ -701,9 +897,9 @@ class _AdminRecordsSubmissionsScreenState
                   crossAxisAlignment: CrossAxisAlignment.start,
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    _Legend('Verified', legendCountPct(v), AdminColors.statGreen),
+                    _Legend('Accepted', legendCountPct(v), AdminColors.statGreen),
                     const SizedBox(height: 10),
-                    _Legend('Needs Review', legendCountPct(n), AdminColors.statYellow),
+                    _Legend('Under Review', legendCountPct(n), AdminColors.statYellow),
                     const SizedBox(height: 10),
                     _Legend('Rejected', legendCountPct(r), AdminColors.statRed),
                   ],

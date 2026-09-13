@@ -89,12 +89,17 @@ class _AdminAnalyticsScreenState extends State<AdminAnalyticsScreen> {
           if (_showTopBanner) ...[
             const SizedBox(height: 16),
             _infoBanner(
-              message: 'Analytics is based on alert data from your system for the selected period.',
+              message:
+                  'Analytics are generated from monitoring records, AI detections, and validated data for the selected period.',
               onClose: () => setState(() => _showTopBanner = false),
             ),
           ],
           const SizedBox(height: 18),
           _topCards(),
+          const SizedBox(height: 18),
+          _citizenScienceCards(),
+          const SizedBox(height: 18),
+          _sizeDistributionCard(),
           const SizedBox(height: 18),
           LayoutBuilder(
             builder: (context, c) {
@@ -158,7 +163,7 @@ class _AdminAnalyticsScreenState extends State<AdminAnalyticsScreen> {
         final dateBtn = OutlinedButton.icon(
           onPressed: () {},
           icon: AdminDateTimeTokens.dateChipIcon(),
-          label: const Text(AdminDateTimeTokens.demoDateRangeLabel, style: AdminDateTimeTokens.dateRangeChipTextStyle),
+          label: Text(AdminDateTimeTokens.demoDateRangeLabel, style: AdminDateTimeTokens.dateRangeChipTextStyle),
           style: AdminDateTimeTokens.dateRangeOutlinedButtonStyle(),
         );
         final refreshBtn = OutlinedButton.icon(
@@ -191,7 +196,7 @@ class _AdminAnalyticsScreenState extends State<AdminAnalyticsScreen> {
             children: [
               const Text('Analytics', style: titleStyle),
               const SizedBox(height: 5),
-              Text('COTS trends and insights based on detected alerts.', style: subtitleStyle),
+              Text('COTS trends and insights from monitoring and validated detections.', style: subtitleStyle),
               const SizedBox(height: 14),
               Wrap(
                 spacing: 10,
@@ -217,7 +222,7 @@ class _AdminAnalyticsScreenState extends State<AdminAnalyticsScreen> {
                     children: [
                       const Text('Analytics', style: titleStyle),
                       const SizedBox(height: 5),
-                      Text('COTS trends and insights based on detected alerts.', style: subtitleStyle),
+                      Text('COTS trends and insights from monitoring and validated detections.', style: subtitleStyle),
                     ],
                   ),
                 ),
@@ -333,6 +338,139 @@ class _AdminAnalyticsScreenState extends State<AdminAnalyticsScreen> {
               icon: const Icon(Icons.close_rounded, size: 20),
               style: IconButton.styleFrom(foregroundColor: AdminColors.muted),
             ),
+        ],
+      ),
+    );
+  }
+
+  Widget _citizenScienceCards() {
+    return LayoutBuilder(
+      builder: (context, c) {
+        final cards = [
+          _InsightCard(
+            iconBg: AdminColors.statRed.withValues(alpha: 0.12),
+            icon: Icons.delete_sweep_outlined,
+            iconColor: AdminColors.statRed,
+            title: 'Total Removed COTS',
+            value: '142',
+            subtext: 'Citizen removal activities',
+            subtextColor: AdminColors.headerTitle.withValues(alpha: 0.75),
+            footer: 'Removal monitoring this period.',
+            footerIcon: true,
+          ),
+          _InsightCard(
+            iconBg: AdminColors.statYellow.withValues(alpha: 0.12),
+            icon: Icons.bubble_chart_outlined,
+            iconColor: AdminColors.statYellow,
+            title: 'Average COTS per Detection',
+            value: '2.8',
+            subtext: 'Mean count per monitoring record',
+            subtextColor: AdminColors.headerTitle.withValues(alpha: 0.75),
+            footer: 'Based on AI detections this period.',
+            footerIcon: true,
+          ),
+          _InsightCard(
+            iconBg: AdminColors.statGreen.withValues(alpha: 0.12),
+            icon: Icons.folder_copy_outlined,
+            iconColor: AdminColors.statGreen,
+            title: 'Total Monitoring Records',
+            value: '68',
+            subtext: 'Submitted monitoring records',
+            subtextColor: AdminColors.headerTitle.withValues(alpha: 0.75),
+            footer: 'Detection and removal submissions.',
+            footerIcon: true,
+          ),
+        ];
+        if (c.maxWidth < 900) {
+          return Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              for (var i = 0; i < cards.length; i++) ...[
+                if (i > 0) const SizedBox(height: 12),
+                cards[i],
+              ],
+            ],
+          );
+        }
+        return Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            for (var i = 0; i < cards.length; i++) ...[
+              if (i > 0) const SizedBox(width: 12),
+              Expanded(child: cards[i]),
+            ],
+          ],
+        );
+      },
+    );
+  }
+
+  Widget _sizeDistributionCard() {
+    const buckets = ['0–20 cm', '21–35 cm', '36–50 cm', '50+ cm'];
+    const values = [18.0, 42.0, 28.0, 12.0];
+    return _whiteCard(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          const Text(
+            'COTS Size Distribution',
+            style: TextStyle(
+              fontSize: 15,
+              fontWeight: FontWeight.w800,
+              color: AdminColors.headerTitle,
+            ),
+          ),
+          const SizedBox(height: 4),
+          Text(
+            'Removal records with measurement reference (demo).',
+            style: TextStyle(
+              fontSize: 12,
+              color: AdminColors.muted.withValues(alpha: 0.95),
+            ),
+          ),
+          const SizedBox(height: 16),
+          SizedBox(
+            height: 200,
+            child: BarChart(
+              BarChartData(
+                alignment: BarChartAlignment.spaceAround,
+                maxY: 50,
+                gridData: const FlGridData(show: false),
+                borderData: FlBorderData(show: false),
+                titlesData: FlTitlesData(
+                  leftTitles: const AxisTitles(sideTitles: SideTitles(showTitles: false)),
+                  rightTitles: const AxisTitles(sideTitles: SideTitles(showTitles: false)),
+                  topTitles: const AxisTitles(sideTitles: SideTitles(showTitles: false)),
+                  bottomTitles: AxisTitles(
+                    sideTitles: SideTitles(
+                      showTitles: true,
+                      getTitlesWidget: (v, _) => Padding(
+                        padding: const EdgeInsets.only(top: 6),
+                        child: Text(
+                          buckets[_analyticsSafeAxisIndex(v, buckets.length - 1)],
+                          style: const TextStyle(fontSize: 10, fontWeight: FontWeight.w600),
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+                barGroups: [
+                  for (var i = 0; i < values.length; i++)
+                    BarChartGroupData(
+                      x: i,
+                      barRods: [
+                        BarChartRodData(
+                          toY: values[i],
+                          color: AdminColors.statBlue,
+                          width: 28,
+                          borderRadius: const BorderRadius.vertical(top: Radius.circular(6)),
+                        ),
+                      ],
+                    ),
+                ],
+              ),
+            ),
+          ),
         ],
       ),
     );
@@ -568,7 +706,7 @@ class _AdminAnalyticsScreenState extends State<AdminAnalyticsScreen> {
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           const Text(
-            'COTS Distribution by Zone',
+            'Reef Zone Summary',
             style: TextStyle(fontSize: 15, fontWeight: FontWeight.w800, color: AdminColors.headerTitle),
           ),
           const SizedBox(height: 12),

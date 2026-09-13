@@ -7,5 +7,10 @@ service firebase.storage {
       allow read: if request.auth != null && request.auth.uid == userId;
       allow write: if request.auth != null && request.auth.uid == userId;
     }
+    // GoPro scan images — uploaded on submit for admin review.
+    match /scan_records/{userId}/{scanId}/{fileName} {
+      allow read: if true;
+      allow write: if request.auth != null && request.auth.uid == userId;
+    }
   }
 }

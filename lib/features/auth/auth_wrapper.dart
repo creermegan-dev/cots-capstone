@@ -2,16 +2,15 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
 import '../../core/cots_colors.dart';
-import '../../core/root_scaffold_messenger.dart';
 import '../../providers/auth_provider.dart';
+import '../expert/screens/expert_shell_screen.dart';
 import '../admin/screens/admin_shell_screen.dart';
 import '../user/dashboard_screen.dart';
 import '../landing/landing_page.dart';
+import 'auth_navigation.dart';
 
-/// Routes guests to [LoginScreen]; signed-in users with `accountRole` admin to
-/// [AdminShellScreen]; everyone else to [DashboardScreen].
-///
-/// Listens to `FirebaseAuth.instance.authStateChanges()` via [AuthProvider].
+/// Routes guests to [LandingPage]; experts to [ExpertShellScreen]; admins to
+/// [AdminShellScreen]; field users to [DashboardScreen].
 class AuthWrapper extends StatelessWidget {
   const AuthWrapper({super.key});
 
@@ -68,7 +67,9 @@ class AuthWrapper extends StatelessWidget {
                     ),
                     const SizedBox(height: 12),
                     TextButton(
-                      onPressed: auth.isBusy ? null : () => auth.signOut(),
+                      onPressed: auth.isBusy
+                          ? null
+                          : () => confirmAndSignOut(context),
                       child: const Text('Sign out'),
                     ),
                     const Spacer(),
@@ -79,76 +80,16 @@ class AuthWrapper extends StatelessWidget {
           );
         }
 
-        final wantsAdmin = auth.wantsAdminSession;
-
-        // Firestore `accountRole` admin, or dev email override — see [AuthProvider.effectiveIsAdmin].
-        if (auth.effectiveIsAdmin) {
-          if (auth.pendingUserPortalSignIn) {
-            return const _RejectAdminOnUserPortal();
-          }
-          WidgetsBinding.instance.addPostFrameCallback((_) {
-            if (wantsAdmin) auth.clearWantsAdminSession();
-            auth.clearPendingUserPortalSignIn();
-          });
-          return const AdminShellScreen();
+        if (auth.effectiveIsExpert) {
+          return const ExpertShellScreen();
         }
 
-        // Used admin login screen but this account is not an admin.
-        if (wantsAdmin) {
-          WidgetsBinding.instance.addPostFrameCallback((_) {
-            auth.clearWantsAdminSession();
-            final messenger = ScaffoldMessenger.maybeOf(context);
-            messenger?.showSnackBar(
-              const SnackBar(
-                behavior: SnackBarBehavior.floating,
-                backgroundColor: kDangerRed,
-                content: Text(
-                  'This account is not registered as an admin. Use the regular login for field accounts.',
-                ),
-              ),
-            );
-          });
+        if (auth.effectiveIsAdmin) {
+          return const AdminShellScreen();
         }
 
         return const DashboardScreen();
       },
-    );
-  }
-}
-
-/// Signs the user out and explains that admins must use [AdminLoginScreen].
-class _RejectAdminOnUserPortal extends StatefulWidget {
-  const _RejectAdminOnUserPortal();
-
-  @override
-  State<_RejectAdminOnUserPortal> createState() => _RejectAdminOnUserPortalState();
-}
-
-class _RejectAdminOnUserPortalState extends State<_RejectAdminOnUserPortal> {
-  @override
-  void initState() {
-    super.initState();
-    WidgetsBinding.instance.addPostFrameCallback((_) async {
-      if (!mounted) return;
-      await context.read<AuthProvider>().signOut();
-      kRootScaffoldMessengerKey.currentState?.showSnackBar(
-        const SnackBar(
-          behavior: SnackBarBehavior.floating,
-          backgroundColor: kDangerRed,
-          content: Text(
-            'Administrator accounts must use Admin login. Tap Login as admin on the login page.',
-          ),
-        ),
-      );
-    });
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return const Scaffold(
-      body: Center(
-        child: CircularProgressIndicator(color: kPrimaryTeal),
-      ),
     );
   }
 }

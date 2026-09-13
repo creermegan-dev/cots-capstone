@@ -51,14 +51,16 @@ class YoloImagePreprocessor {
     );
     img.compositeImage(canvas, resized, dstX: meta.padX, dstY: meta.padY);
 
-    final tensor = Float32List(inputSize * inputSize * 3);
-    var index = 0;
+    // Planar NCHW: all R, then all G, then all B (matches Ultralytics export).
+    final planeSize = inputSize * inputSize;
+    final tensor = Float32List(planeSize * 3);
     for (var y = 0; y < inputSize; y++) {
       for (var x = 0; x < inputSize; x++) {
         final pixel = canvas.getPixel(x, y);
-        tensor[index++] = pixel.r / 255.0;
-        tensor[index++] = pixel.g / 255.0;
-        tensor[index++] = pixel.b / 255.0;
+        final offset = y * inputSize + x;
+        tensor[offset] = pixel.r / 255.0;
+        tensor[planeSize + offset] = pixel.g / 255.0;
+        tensor[2 * planeSize + offset] = pixel.b / 255.0;
       }
     }
 

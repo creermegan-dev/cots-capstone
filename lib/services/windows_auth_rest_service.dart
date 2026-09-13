@@ -11,12 +11,12 @@ import '../models/user_model.dart';
 /// Avoids [firebase_auth] / [cloud_firestore] native plugins, which can crash the
 /// Flutter Windows engine during login (EventChannel threading bug).
 class WindowsAuthRestService {
-  WindowsAuthRestService({http.Client? client}) : _client = client ?? http.Client();
+  WindowsAuthRestService({http.Client? client})
+      : _client = client ?? http.Client();
 
   final http.Client _client;
 
   static const _options = DefaultFirebaseOptions.windows;
-  static const String _projectId = 'cots-capstone-project';
 
   Future<WindowsAuthSession> signIn({
     required String email,
@@ -63,7 +63,7 @@ class WindowsAuthRestService {
     required String idToken,
   }) async {
     final uri = Uri.parse(
-      'https://firestore.googleapis.com/v1/projects/$_projectId'
+      'https://firestore.googleapis.com/v1/projects/${_options.projectId}'
       '/databases/(default)/documents/users/$uid',
     );
     final response = await _client.get(
@@ -85,7 +85,7 @@ class WindowsAuthRestService {
     required String idToken,
   }) async {
     final uri = Uri.parse(
-      'https://firestore.googleapis.com/v1/projects/$_projectId'
+      'https://firestore.googleapis.com/v1/projects/${_options.projectId}'
       '/databases/(default)/documents/users?documentId=${model.uid}',
     );
     final response = await _client.post(
@@ -103,6 +103,68 @@ class WindowsAuthRestService {
         _messageForHttp('create profile', response),
       );
     }
+  }
+
+  Future<void> updateUserProfile({
+    required String uid,
+    required String idToken,
+    required String fullName,
+    required String phoneNumber,
+    required String role,
+    required String organization,
+    required String assignedArea,
+  }) async {
+    const maskFields = [
+      'fullName',
+      'phoneNumber',
+      'role',
+      'organization',
+      'assignedArea',
+    ];
+    final maskQuery = maskFields
+        .map((f) => 'updateMask.fieldPaths=${Uri.encodeQueryComponent(f)}')
+        .join('&');
+    final uri = Uri.parse(
+      'https://firestore.googleapis.com/v1/projects/${_options.projectId}'
+      '/databases/(default)/documents/users/$uid?$maskQuery',
+    );
+    final response = await _client.patch(
+      uri,
+      headers: {
+        'Authorization': 'Bearer $idToken',
+        'Content-Type': 'application/json',
+      },
+      body: jsonEncode({
+        'fields': {
+          'fullName': {'stringValue': fullName.trim()},
+          'phoneNumber': {'stringValue': phoneNumber.trim()},
+          'role': {'stringValue': role.trim()},
+          'organization': {'stringValue': organization.trim()},
+          'assignedArea': {'stringValue': assignedArea.trim()},
+        },
+      }),
+    );
+    if (response.statusCode < 200 || response.statusCode >= 300) {
+      throw WindowsAuthRestException(
+        _messageForHttp('update profile', response),
+      );
+    }
+  }
+
+  Future<void> changePassword({
+    required String email,
+    required String currentPassword,
+    required String newPassword,
+  }) async {
+    final session = await signIn(email: email, password: currentPassword);
+    await _postIdentity(
+      'accounts:update',
+      {
+        'idToken': session.idToken,
+        'password': newPassword,
+        'returnSecureToken': true,
+      },
+    );
   }
 
   Future<Map<String, dynamic>> _postIdentity(
@@ -162,8 +224,15 @@ class WindowsAuthRestService {
       'role': {'stringValue': model.role},
       'accountRole': {'stringValue': model.accountRole},
       'organization': {'stringValue': model.organization},
+      'assignedArea': {'stringValue': model.assignedArea},
       'profileImage': {'stringValue': model.profileImage},
       'isActive': {'booleanValue': model.isActive},
+      'fieldPersonnelVerified': {
+        'booleanValue': model.fieldPersonnelVerified,
+      },
+      'personnelVerifiedBy': {
+        'stringValue': model.personnelVerifiedBy,
+      },
     };
     if (includeCreatedAt) {
       fields['createdAt'] = {
@@ -175,7 +244,8 @@ class WindowsAuthRestService {
 
   String _messageForHttp(String action, http.Response response) {
     if (kDebugMode) {
-      debugPrint('WindowsAuthRest $action failed: ${response.statusCode} ${response.body}');
+      debugPrint(
+          'WindowsAuthRest $action failed: ${response.statusCode} ${response.body}');
     }
     return 'Could not $action (${response.statusCode}). Check your connection.';
   }
@@ -197,9 +267,22 @@ class WindowsAuthRestService {
       case 'TOO_MANY_ATTEMPTS_TRY_LATER':
         return 'Too many attempts. Try again later.';
       case 'OPERATION_NOT_ALLOWED':
-        return 'Email/password sign-in is disabled in Firebase Console.';
+        return 'Email/password sign-in is disabled in Firebase Console. '
+            'Enable it under Authentication → Sign-in method → Email/Password.';
+      case 'CONFIGURATION_NOT_FOUND':
+        return 'Firebase Authentication is not set up for this project yet. '
+            'Open Firebase Console → Authentication → Get started, then enable '
+            'Email/Password. Project: ${_options.projectId}. '
+            'See FIREBASE_SETUP.md in the repo for steps.';
+      case 'API_KEY_INVALID':
+        return 'Invalid Firebase API key. Re-run flutterfire configure and rebuild the app.';
       default:
-        return message.replaceAll('_', ' ').toLowerCase();
+        if (message.contains('CONFIGURATION_NOT_FOUND')) {
+          return 'Firebase Authentication is not set up for this project yet. '
+              'Open Firebase Console → Authentication → Get started, then enable '
+              'Email/Password.';
+        }
+        return 'Authentication failed: ${message.replaceAll('_', ' ')}.';
     }
   }
 }

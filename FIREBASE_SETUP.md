@@ -76,13 +76,63 @@ Fields written on signup:
 | `email`         | Email                                            |
 | `phoneNumber`   | Phone                                            |
 | `role`          | Position / role from signup dropdown           |
-| `accountRole`   | Application RBAC (`user` by default; reserved for future `admin`) |
-| `organization`  | Optional org text                                |
-| `createdAt`     | Server timestamp                                 |
-| `profileImage`  | Empty string until upload                        |
-| `isActive`      | `true`                                           |
+| `accountRole`   | Application RBAC: `user` (signup), `expert` (verifier), `admin` (dashboard) |
+| `fieldPersonnelVerified` | Admin-controlled eligibility for intervention assignments (defaults to `false`) |
+| `personnelVerifiedBy` | Admin UID that confirmed eligibility |
+| `personnelVerifiedAt` | Verification timestamp |
 
-## 5. Run the app
+Collection: **`intervention_assignments`**, document ID = linked capture ID.
+
+Assignments are created only by an administrator for accepted captures. They
+store the assigned verified user, assigning administrator, zone, due date,
+workflow status, and linked removal evidence. The original capture is retained.
+
+## 5. Provision admin and expert accounts
+
+Self-signup always creates `accountRole: user`. **Admin** and **expert** accounts are created manually:
+
+### Step 1 — Create Auth user (email + password)
+
+1. [Firebase Console → Authentication → Users](https://console.firebase.google.com/)
+2. **Add user**
+3. Enter **email** and **password** (e.g. `expert@cots.local` — use a real email you control)
+4. Copy the new user’s **UID** from the users table
+
+There is no separate “username” — login uses **email + password** (same screen as divers).
+
+### Step 2 — Create Firestore profile
+
+1. [Firebase Console → Firestore → `users`](https://console.firebase.google.com/)
+2. **Add document** with document ID = the Auth **UID**
+3. Fields (minimum):
+
+| Field | Expert example | Admin example |
+|-------|----------------|---------------|
+| `uid` | *(same as doc ID)* | *(same as doc ID)* |
+| `fullName` | `Dr. Reef Expert` | `COTS Admin` |
+| `email` | same as Auth email | same as Auth email |
+| `phoneNumber` | `""` | `""` |
+| `role` | `Marine Biologist` | `Administrator` |
+| **`accountRole`** | **`expert`** | **`admin`** |
+| `organization` | `BFAR` | `COTS Monitor` |
+| `assignedArea` | `""` | `""` |
+| `profileImage` | `""` | `""` |
+| `isActive` | `true` | `true` |
+| `createdAt` | server timestamp | server timestamp |
+
+### Step 3 — Deploy rules (if not done)
+
+```bash
+firebase deploy --only firestore:rules
+```
+
+### Step 4 — Sign in
+
+- **Expert** → Expert Verification UI (records only, can approve/reject)
+- **Admin** → Full admin dashboard (records page is **view-only**)
+- **User** → Diver dashboard
+
+## 6. Run the app
 
 ```bash
 flutter pub get
@@ -91,7 +141,22 @@ flutter run
 
 If Gradle complains about Google Services, confirm `google-services.json` is the file from **your** Firebase project, not the placeholder.
 
-## 6. Troubleshooting
+## 7. Troubleshooting
+
+### `configuration not found` / `CONFIGURATION_NOT_FOUND` on login
+
+This means **Firebase Authentication has not been turned on** for your project yet (common on new projects).
+
+1. Open [Firebase Console → Authentication](https://console.firebase.google.com/project/cots-capstone-project/authentication).
+2. Click **Get started** (if you see it).
+3. Open **Sign-in method** → **Email/Password** → **Enable** → **Save**.
+4. Restart the app and try logging in again.
+
+On Windows, the app uses the Identity Toolkit REST API; login will not work until step 3 is complete.
+
+Optional: In [Google Cloud Console](https://console.cloud.google.com/apis/library/identitytoolkit.googleapis.com?project=cots-capstone-project), ensure **Identity Toolkit API** is enabled.
+
+### Other issues
 
 - **Profile unavailable after login**: Check Firestore rules deployment and device network; use **Retry** on the error screen or view logs.
 - **Email already in use**: Sign in instead of registering again.

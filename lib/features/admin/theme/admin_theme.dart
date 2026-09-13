@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:intl/intl.dart';
 
 /// Admin panel color palette (separate from user-facing [cots_colors]).
 abstract final class AdminColors {
@@ -29,8 +30,22 @@ abstract final class AdminColors {
 abstract final class AdminDateTimeTokens {
   AdminDateTimeTokens._();
 
-  /// Demo label used on every date-range control until wired to a real picker.
-  static const String demoDateRangeLabel = 'May 12 – May 18, 2026';
+  /// Rolling last-7-days label for date-range controls (always current).
+  static String get demoDateRangeLabel => rollingWeekRangeLabel();
+
+  static String rollingWeekRangeLabel({DateTime? end}) {
+    final anchor = end ?? DateTime.now();
+    final start = anchor.subtract(const Duration(days: 6));
+    final sameYear = start.year == anchor.year;
+    if (sameYear) {
+      return '${DateFormat('MMM d').format(start)} – ${DateFormat('MMM d, yyyy').format(anchor)}';
+    }
+    return '${DateFormat('MMM d, yyyy').format(start)} – ${DateFormat('MMM d, yyyy').format(anchor)}';
+  }
+
+  /// Current date/time for admin headers and footers.
+  static String liveDateTimeLabel({DateTime? when}) =>
+      DateFormat('MMM d, yyyy · h:mm:ss a').format(when ?? DateTime.now());
 
   static const Color _outlineBorder = Color(0xFFE2E8F0);
 

@@ -7,6 +7,7 @@ import '../core/firebase_bootstrap.dart';
 import '../models/user_model.dart';
 import '../services/auth_service.dart';
 import '../services/firestore_user_service.dart';
+import '../services/scan_record_repository.dart';
 import '../services/windows_auth_rest_service.dart';
 
 /// Holds auth session, Firestore profile, and async auth operations for the app.
@@ -44,9 +45,6 @@ class AuthProvider extends ChangeNotifier {
   bool _busy = false;
   String? _lastError;
 
-  bool _wantsAdminSession = false;
-  bool _pendingUserPortalSignIn = false;
-
   User? get firebaseUser => _firebaseUser;
   UserModel? get userModel => _userModel;
 
@@ -60,49 +58,27 @@ class AuthProvider extends ChangeNotifier {
     return m.email.trim().toLowerCase() == override.trim().toLowerCase();
   }
 
+  bool get effectiveIsExpert {
+    final m = userModel;
+    if (m == null) return false;
+    return m.isExpert;
+  }
+
   bool get isAuthenticated =>
       deferFirebaseUntilFirstUse ? _windowsSession != null : _firebaseUser != null;
 
   bool get isLoadingProfile => _loadingProfile;
   bool get isBusy => _busy;
   String? get lastError => _lastError;
-  bool get wantsAdminSession => _wantsAdminSession;
-  bool get pendingUserPortalSignIn => _pendingUserPortalSignIn;
-
-  void beginUserPortalSignInAttempt() {
-    _pendingUserPortalSignIn = true;
-  }
-
-  void beginAdminPortalSignInAttempt() {
-    _pendingUserPortalSignIn = false;
-  }
-
-  void clearPendingUserPortalSignIn() {
-    if (!_pendingUserPortalSignIn) return;
-    _pendingUserPortalSignIn = false;
-    notifyListeners();
-  }
-
-  void setWantsAdminSession(bool value) {
-    _wantsAdminSession = value;
-    notifyListeners();
-  }
-
-  void clearWantsAdminSession() {
-    if (!_wantsAdminSession) return;
-    _wantsAdminSession = false;
-    notifyListeners();
-  }
 
   Future<void> _onAuthStateChanged(User? user) async {
     _firebaseUser = user;
     _lastError = null;
+    ScanRecordRepository.setWindowsIdToken(null);
 
     if (user == null) {
       _userModel = null;
       _loadingProfile = false;
-      _wantsAdminSession = false;
-      _pendingUserPortalSignIn = false;
       notifyListeners();
       return;
     }
@@ -120,9 +96,6 @@ class AuthProvider extends ChangeNotifier {
     }
 
     _loadingProfile = false;
-    if (_userModel != null && !effectiveIsAdmin) {
-      _pendingUserPortalSignIn = false;
-    }
     notifyListeners();
   }
 
@@ -130,6 +103,7 @@ class AuthProvider extends ChangeNotifier {
     _windowsSession = session;
     _firebaseUser = null;
     _lastError = null;
+    ScanRecordRepository.setWindowsIdToken(session.idToken);
     _loadingProfile = true;
     notifyListeners();
 
@@ -146,9 +120,6 @@ class AuthProvider extends ChangeNotifier {
     }
 
     _loadingProfile = false;
-    if (_userModel != null && !effectiveIsAdmin) {
-      _pendingUserPortalSignIn = false;
-    }
     notifyListeners();
   }
 
@@ -190,6 +161,94 @@ class AuthProvider extends ChangeNotifier {
     notifyListeners();
   }
 
+  Future<void> updateProfile({
+    required String fullName,
+    required String phoneNumber,
+    required String role,
+    required String organization,
+    required String assignedArea,
+  }) async {
+    final uid = _userModel?.uid ??
+        _firebaseUser?.uid ??
+        _windowsSession?.uid;
+    if (uid == null) {
+      throw StateError('Not signed in.');
+    }
+
+    _setBusy(true);
+    _lastError = null;
+    try {
+      if (deferFirebaseUntilFirstUse) {
+        final session = _windowsSession;
+        if (session == null) {
+          throw StateError('Not signed in.');
+        }
+        await _windowsAuth.updateUserProfile(
+          uid: uid,
+          idToken: session.idToken,
+          fullName: fullName,
+          phoneNumber: phoneNumber,
+          role: role,
+          organization: organization,
+          assignedArea: assignedArea,
+        );
+      } else {
+        await _userService.updateUserProfile(
+          uid: uid,
+          fullName: fullName,
+          phoneNumber: phoneNumber,
+          role: role,
+          organization: organization,
+          assignedArea: assignedArea,
+        );
+      }
+      await refreshProfile();
+    } on WindowsAuthRestException catch (e) {
+      _lastError = e.message;
+      rethrow;
+    } catch (e) {
+      _lastError = AuthService.messageFor(e);
+      rethrow;
+    } finally {
+      _setBusy(false);
+    }
+  }
+
+  Future<void> changePassword({
+    required String currentPassword,
+    required String newPassword,
+  }) async {
+    _setBusy(true);
+    _lastError = null;
+    try {
+      if (deferFirebaseUntilFirstUse) {
+        final session = _windowsSession;
+        final email = _userModel?.email ?? session?.email;
+        if (session == null || email == null || email.isEmpty) {
+          throw StateError('Not signed in.');
+        }
+        await _windowsAuth.changePassword(
+          email: email,
+          currentPassword: currentPassword,
+          newPassword: newPassword,
+        );
+      } else {
+        await _authService.changePassword(
+          currentPassword: currentPassword,
+          newPassword: newPassword,
+        );
+      }
+    } on WindowsAuthRestException catch (e) {
+      _lastError = e.message;
+      rethrow;
+    } catch (e) {
+      _lastError = AuthService.messageFor(e);
+      rethrow;
+    } finally {
+      _setBusy(false);
+    }
+  }
+
   Future<void> signUp({
     required String fullName,
     required String email,
@@ -215,6 +274,7 @@ class AuthProvider extends ChangeNotifier {
           role: positionRole.trim(),
           accountRole: UserModel.defaultAccountRole,
           organization: organization?.trim() ?? '',
+          assignedArea: '',
           createdAt: null,
           profileImage: '',
           isActive: true,
@@ -251,6 +311,7 @@ class AuthProvider extends ChangeNotifier {
         role: positionRole.trim(),
         accountRole: UserModel.defaultAccountRole,
         organization: organization?.trim() ?? '',
+        assignedArea: '',
         createdAt: null,
         profileImage: '',
         isActive: true,
@@ -313,10 +374,9 @@ class AuthProvider extends ChangeNotifier {
     _setBusy(true);
     try {
       if (deferFirebaseUntilFirstUse) {
+        ScanRecordRepository.setWindowsIdToken(null);
         _windowsSession = null;
         _userModel = null;
-        _wantsAdminSession = false;
-        _pendingUserPortalSignIn = false;
         notifyListeners();
         return;
       }

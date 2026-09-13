@@ -17,11 +17,13 @@ class AdminSidebar extends StatelessWidget {
     this.showRailToggle = false,
     this.railCollapsed = false,
     this.onToggleRail,
+    this.badgeFor,
   });
 
   final int selectedIndex;
   final ValueChanged<int> onSelect;
   final VoidCallback onLogout;
+  final int? Function(int navIndex)? badgeFor;
   final double width;
   final bool compact;
   final bool showRailToggle;
@@ -191,10 +193,11 @@ class AdminSidebar extends StatelessWidget {
                         );
                       }
                       if (e is AdminNavItemData) {
+                        final badge = badgeFor?.call(e.index);
                         return AdminSidebarNavTile(
                           icon: e.icon,
                           label: e.label,
-                          badge: e.badge,
+                          badge: badge != null && badge > 0 ? badge : null,
                           selected: selectedIndex == e.index,
                           compact: compact,
                           onTap: () => onSelect(e.index),

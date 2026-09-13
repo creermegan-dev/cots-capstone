@@ -32,6 +32,7 @@ class _AdminMapMonitoringScreenState extends State<AdminMapMonitoringScreen>
   bool _densityHeatmap = false;
   bool _zoneLabels = true;
   bool _satelliteView = true;
+  bool _removalRecordsLayer = false;
   int _mapRefreshGeneration = 0;
 
   @override
@@ -91,6 +92,7 @@ class _AdminMapMonitoringScreenState extends State<AdminMapMonitoringScreen>
       _densityHeatmap = false;
       _zoneLabels = true;
       _satelliteView = true;
+      _removalRecordsLayer = false;
       _viewMode = MapMonitoringViewMode.mapViewing;
     });
   }
@@ -152,7 +154,10 @@ class _AdminMapMonitoringScreenState extends State<AdminMapMonitoringScreen>
                         densityHeatmapEnabled: _densityHeatmap,
                         showLabels: _zoneLabels,
                         useSatelliteTiles: _satelliteView,
+                        showRemovalRecords: _removalRecordsLayer,
                       ),
+                      const SizedBox(height: 18),
+                      const _SelectedCaptureInformationCard(),
                       const SizedBox(height: 18),
                       MapMonitoringAnalyticsPanel(
                         zoneBoundaries: _zoneBoundaries,
@@ -160,6 +165,7 @@ class _AdminMapMonitoringScreenState extends State<AdminMapMonitoringScreen>
                         densityLayers: _viewMode == MapMonitoringViewMode.densityLayers,
                         zoneLabels: _zoneLabels,
                         satelliteView: _satelliteView,
+                        removalRecords: _removalRecordsLayer,
                         onZoneBoundariesChanged: (v) => setState(() => _zoneBoundaries = v),
                         onDensityHeatmapChanged: (v) => setState(() => _densityHeatmap = v),
                         onDensityLayersChanged: (v) => setState(() {
@@ -171,6 +177,7 @@ class _AdminMapMonitoringScreenState extends State<AdminMapMonitoringScreen>
                         }),
                         onZoneLabelsChanged: (v) => setState(() => _zoneLabels = v),
                         onSatelliteViewChanged: (v) => setState(() => _satelliteView = v),
+                        onRemovalRecordsChanged: (v) => setState(() => _removalRecordsLayer = v),
                         onResetLayers: _resetLayers,
                       ),
                     ],
@@ -185,7 +192,10 @@ class _AdminMapMonitoringScreenState extends State<AdminMapMonitoringScreen>
                     densityHeatmapEnabled: _densityHeatmap,
                     showLabels: _zoneLabels,
                     useSatelliteTiles: _satelliteView,
+                    showRemovalRecords: _removalRecordsLayer,
                   ),
+                  const SizedBox(height: 18),
+                  const _SelectedCaptureInformationCard(),
                   const SizedBox(height: 18),
                   MapMonitoringAnalyticsPanel(
                     zoneBoundaries: _zoneBoundaries,
@@ -193,6 +203,7 @@ class _AdminMapMonitoringScreenState extends State<AdminMapMonitoringScreen>
                     densityLayers: _viewMode == MapMonitoringViewMode.densityLayers,
                     zoneLabels: _zoneLabels,
                     satelliteView: _satelliteView,
+                    removalRecords: _removalRecordsLayer,
                     onZoneBoundariesChanged: (v) => setState(() => _zoneBoundaries = v),
                     onDensityHeatmapChanged: (v) => setState(() => _densityHeatmap = v),
                     onDensityLayersChanged: (v) => setState(() {
@@ -204,6 +215,7 @@ class _AdminMapMonitoringScreenState extends State<AdminMapMonitoringScreen>
                     }),
                     onZoneLabelsChanged: (v) => setState(() => _zoneLabels = v),
                     onSatelliteViewChanged: (v) => setState(() => _satelliteView = v),
+                    onRemovalRecordsChanged: (v) => setState(() => _removalRecordsLayer = v),
                     onResetLayers: _resetLayers,
                   ),
                 ],
@@ -215,6 +227,103 @@ class _AdminMapMonitoringScreenState extends State<AdminMapMonitoringScreen>
           );
         },
       ),
+    );
+  }
+}
+
+class _SelectedCaptureInformationCard extends StatelessWidget {
+  const _SelectedCaptureInformationCard();
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.all(18),
+      decoration: BoxDecoration(
+        color: AdminColors.cardWhite,
+        borderRadius: BorderRadius.circular(14),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.05),
+            blurRadius: 12,
+            offset: const Offset(0, 4),
+          ),
+        ],
+        border: Border.all(color: AdminColors.statRed.withValues(alpha: 0.18)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Row(
+            children: [
+              Icon(Icons.place, color: AdminColors.statRed, size: 20),
+              SizedBox(width: 8),
+              Text(
+                'Selected Capture Information',
+                style: TextStyle(
+                  fontSize: 15,
+                  fontWeight: FontWeight.w800,
+                  color: AdminColors.headerTitle,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 12),
+          Wrap(
+            spacing: 18,
+            runSpacing: 10,
+            children: const [
+              _CaptureInfoChip(label: 'Record ID', value: 'REC-OZHX6L6I'),
+              _CaptureInfoChip(label: 'Reef Zone', value: 'Zone A'),
+              _CaptureInfoChip(label: 'Infestation Level', value: 'High'),
+              _CaptureInfoChip(label: 'COTS Count', value: '17'),
+              _CaptureInfoChip(label: 'Confidence Score', value: '58%'),
+              _CaptureInfoChip(label: 'Date', value: 'Jun 1, 2026'),
+            ],
+          ),
+          const SizedBox(height: 10),
+          Text(
+            'Red markers indicate high-infestation captures. Select a marker on the interactive map to update this panel.',
+            style: TextStyle(
+              fontSize: 12,
+              height: 1.4,
+              color: AdminColors.muted.withValues(alpha: 0.95),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _CaptureInfoChip extends StatelessWidget {
+  const _CaptureInfoChip({required this.label, required this.value});
+
+  final String label;
+  final String value;
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          label,
+          style: TextStyle(
+            fontSize: 11,
+            fontWeight: FontWeight.w700,
+            color: AdminColors.muted.withValues(alpha: 0.9),
+          ),
+        ),
+        const SizedBox(height: 2),
+        Text(
+          value,
+          style: const TextStyle(
+            fontSize: 13.5,
+            fontWeight: FontWeight.w800,
+            color: AdminColors.headerTitle,
+          ),
+        ),
+      ],
     );
   }
 }

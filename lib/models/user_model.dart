@@ -13,10 +13,14 @@ class UserModel {
     required this.phoneNumber,
     required this.role,
     required this.organization,
+    required this.assignedArea,
     required this.createdAt,
     required this.profileImage,
     required this.isActive,
     this.accountRole = defaultAccountRole,
+    this.fieldPersonnelVerified = false,
+    this.personnelVerifiedBy = '',
+    this.personnelVerifiedAt,
   });
 
   static const String defaultAccountRole = 'user';
@@ -24,21 +28,38 @@ class UserModel {
   /// Application admin (admin dashboard). Stored in Firestore as `accountRole`.
   static const String adminAccountRole = 'admin';
 
+  /// Expert verifier — reviews low-confidence captures (`accountRole` in Firestore).
+  static const String expertAccountRole = 'expert';
+
   bool get isAdmin =>
       accountRole.trim().toLowerCase() == adminAccountRole.toLowerCase();
+
+  bool get isExpert =>
+      accountRole.trim().toLowerCase() == expertAccountRole.toLowerCase();
 
   final String uid;
   final String fullName;
   final String email;
   final String phoneNumber;
+
   /// Position / role chosen at registration (e.g. Field Monitor).
   final String role;
+
   /// Application-level role for future admin features (`user`, `admin`, …).
   final String accountRole;
   final String organization;
+  final String assignedArea;
   final DateTime? createdAt;
   final String profileImage;
   final bool isActive;
+
+  /// Admin-controlled eligibility for field intervention assignments.
+  final bool fieldPersonnelVerified;
+  final String personnelVerifiedBy;
+  final DateTime? personnelVerifiedAt;
+
+  bool get isVerifiedFieldPersonnel =>
+      fieldPersonnelVerified && isActive && !isAdmin && !isExpert;
 
   factory UserModel.fromFirestore(
     DocumentSnapshot<Map<String, dynamic>> snapshot,
@@ -78,12 +99,12 @@ class UserModel {
       return '';
     }
 
-    bool readBool(String key) {
+    bool readBool(String key, {bool fallback = true}) {
       final v = fields[key];
       if (v is Map && v['booleanValue'] is bool) {
         return v['booleanValue'] as bool;
       }
-      return true;
+      return fallback;
     }
 
     DateTime? readTimestamp(String key) {
@@ -102,9 +123,16 @@ class UserModel {
       'role': readString('role'),
       'accountRole': readString('accountRole'),
       'organization': readString('organization'),
+      'assignedArea': readString('assignedArea'),
       'profileImage': readString('profileImage'),
       'isActive': readBool('isActive'),
       'createdAt': readTimestamp('createdAt'),
+      'fieldPersonnelVerified': readBool(
+        'fieldPersonnelVerified',
+        fallback: false,
+      ),
+      'personnelVerifiedBy': readString('personnelVerifiedBy'),
+      'personnelVerifiedAt': readTimestamp('personnelVerifiedAt'),
     };
     return UserModel.fromMap(map, uid: uid);
   }
@@ -126,9 +154,13 @@ class UserModel {
       role: map['role'] as String? ?? '',
       accountRole: accountRoleFromMap(map),
       organization: map['organization'] as String? ?? '',
+      assignedArea: map['assignedArea'] as String? ?? '',
       createdAt: createdAt,
       profileImage: map['profileImage'] as String? ?? '',
       isActive: map['isActive'] as bool? ?? true,
+      fieldPersonnelVerified: map['fieldPersonnelVerified'] as bool? ?? false,
+      personnelVerifiedBy: map['personnelVerifiedBy'] as String? ?? '',
+      personnelVerifiedAt: _dateTimeFromDynamic(map['personnelVerifiedAt']),
     );
   }
 
@@ -141,9 +173,14 @@ class UserModel {
       'role': role,
       'accountRole': accountRole,
       'organization': organization,
+      'assignedArea': assignedArea,
       if (createdAt != null) 'createdAt': Timestamp.fromDate(createdAt!),
       'profileImage': profileImage,
       'isActive': isActive,
+      'fieldPersonnelVerified': fieldPersonnelVerified,
+      'personnelVerifiedBy': personnelVerifiedBy,
+      if (personnelVerifiedAt != null)
+        'personnelVerifiedAt': Timestamp.fromDate(personnelVerifiedAt!),
     };
   }
 
@@ -163,9 +200,13 @@ class UserModel {
     String? role,
     String? accountRole,
     String? organization,
+    String? assignedArea,
     DateTime? createdAt,
     String? profileImage,
     bool? isActive,
+    bool? fieldPersonnelVerified,
+    String? personnelVerifiedBy,
+    DateTime? personnelVerifiedAt,
   }) {
     return UserModel(
       uid: uid ?? this.uid,
@@ -175,9 +216,21 @@ class UserModel {
       role: role ?? this.role,
       accountRole: accountRole ?? this.accountRole,
       organization: organization ?? this.organization,
+      assignedArea: assignedArea ?? this.assignedArea,
       createdAt: createdAt ?? this.createdAt,
       profileImage: profileImage ?? this.profileImage,
       isActive: isActive ?? this.isActive,
+      fieldPersonnelVerified:
+          fieldPersonnelVerified ?? this.fieldPersonnelVerified,
+      personnelVerifiedBy: personnelVerifiedBy ?? this.personnelVerifiedBy,
+      personnelVerifiedAt: personnelVerifiedAt ?? this.personnelVerifiedAt,
     );
+  }
+
+  static DateTime? _dateTimeFromDynamic(Object? value) {
+    if (value is Timestamp) return value.toDate();
+    if (value is DateTime) return value;
+    if (value is String) return DateTime.tryParse(value);
+    return null;
   }
 }

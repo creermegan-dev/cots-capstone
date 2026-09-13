@@ -1,75 +1,73 @@
 import 'package:cots_monitor/widgets/app_back_icon_button.dart';
+import 'package:firebase_auth/firebase_auth.dart' hide AuthProvider;
 import 'package:flutter/material.dart';
+import 'package:intl/intl.dart';
+import 'package:provider/provider.dart';
 
+import '../../models/activity_type.dart';
+import '../../models/cots_confidence_policy.dart';
+import '../../models/scan_record_model.dart';
+import '../../providers/auth_provider.dart';
+import '../../services/scan_record_repository.dart';
 import 'cots_map_page.dart';
 import 'profile_page.dart';
 import 'user_bottom_nav.dart';
-import 'zone_details_page.dart';
+import 'user_record_details_page.dart';
 
-/// One scan / status row in the records list.
+/// One user submission row in the records list.
 class ScanRecord {
   const ScanRecord({
-    required this.zoneId,
+    required this.recordId,
+    required this.displayId,
+    required this.submittedBy,
+    required this.activityType,
     required this.status,
     required this.cotsDetected,
+    required this.confidencePercent,
     required this.scanSubmittedAt,
-    required this.actionIsScheduled,
-    required this.actionAt,
+    required this.zone,
   });
 
-  final String zoneId;
+  final String recordId;
+  final String displayId;
+  final String submittedBy;
+  final String activityType;
   final String status;
   final int cotsDetected;
+  final int confidencePercent;
   final String scanSubmittedAt;
-  /// `true` → "Scheduled For", `false` → "Updated"
-  final bool actionIsScheduled;
-  final String actionAt;
+  final String zone;
 }
 
-/// Mock records (totals: 24 — Active 9, Scheduled 6, Cleared 9).
-final List<ScanRecord> kAllScanRecords = [
-  const ScanRecord(zoneId: 'ZD-2024-0010', status: 'Active', cotsDetected: 35, scanSubmittedAt: 'May 18, 2024 8:30 AM', actionIsScheduled: false, actionAt: 'May 18, 2024 8:30 AM'),
-  const ScanRecord(zoneId: 'ZD-2024-0007', status: 'Active', cotsDetected: 25, scanSubmittedAt: 'May 18, 2024 7:15 AM', actionIsScheduled: true, actionAt: 'May 20, 2024 10:00 AM'),
-  const ScanRecord(zoneId: 'ZD-2024-0008', status: 'Scheduled', cotsDetected: 12, scanSubmittedAt: 'May 17, 2024 2:00 PM', actionIsScheduled: true, actionAt: 'May 21, 2024 9:00 AM'),
-  const ScanRecord(zoneId: 'ZD-2024-0009', status: 'Cleared', cotsDetected: 0, scanSubmittedAt: 'May 14, 2024 11:00 AM', actionIsScheduled: false, actionAt: 'May 14, 2024 4:00 PM'),
-  const ScanRecord(zoneId: 'ZD-2024-0007', status: 'Active', cotsDetected: 15, scanSubmittedAt: 'May 17, 2024 10:20 AM', actionIsScheduled: false, actionAt: 'May 17, 2024 10:20 AM'),
-  const ScanRecord(zoneId: 'ZD-2024-0010', status: 'Active', cotsDetected: 28, scanSubmittedAt: 'May 16, 2024 3:45 PM', actionIsScheduled: false, actionAt: 'May 16, 2024 3:45 PM'),
-  const ScanRecord(zoneId: 'ZD-2024-0008', status: 'Scheduled', cotsDetected: 8, scanSubmittedAt: 'May 16, 2024 9:05 AM', actionIsScheduled: true, actionAt: 'May 22, 2024 8:00 AM'),
-  const ScanRecord(zoneId: 'ZD-2024-0009', status: 'Cleared', cotsDetected: 2, scanSubmittedAt: 'May 12, 2024 1:20 PM', actionIsScheduled: false, actionAt: 'May 13, 2024 9:00 AM'),
-  const ScanRecord(zoneId: 'ZD-2024-0007', status: 'Active', cotsDetected: 42, scanSubmittedAt: 'May 15, 2024 6:00 AM', actionIsScheduled: false, actionAt: 'May 15, 2024 6:00 AM'),
-  const ScanRecord(zoneId: 'ZD-2024-0010', status: 'Active', cotsDetected: 31, scanSubmittedAt: 'May 15, 2024 4:30 PM', actionIsScheduled: true, actionAt: 'May 19, 2024 7:00 AM'),
-  const ScanRecord(zoneId: 'ZD-2024-0008', status: 'Scheduled', cotsDetected: 6, scanSubmittedAt: 'May 14, 2024 11:30 AM', actionIsScheduled: true, actionAt: 'May 23, 2024 6:30 AM'),
-  const ScanRecord(zoneId: 'ZD-2024-0009', status: 'Cleared', cotsDetected: 0, scanSubmittedAt: 'May 10, 2024 8:00 AM', actionIsScheduled: false, actionAt: 'May 10, 2024 5:00 PM'),
-  const ScanRecord(zoneId: 'ZD-2024-0007', status: 'Active', cotsDetected: 18, scanSubmittedAt: 'May 13, 2024 2:15 PM', actionIsScheduled: false, actionAt: 'May 13, 2024 2:15 PM'),
-  const ScanRecord(zoneId: 'ZD-2024-0010', status: 'Active', cotsDetected: 22, scanSubmittedAt: 'May 12, 2024 7:00 AM', actionIsScheduled: false, actionAt: 'May 12, 2024 7:00 AM'),
-  const ScanRecord(zoneId: 'ZD-2024-0008', status: 'Scheduled', cotsDetected: 10, scanSubmittedAt: 'May 11, 2024 4:00 PM', actionIsScheduled: true, actionAt: 'May 24, 2024 10:00 AM'),
-  const ScanRecord(zoneId: 'ZD-2024-0009', status: 'Cleared', cotsDetected: 1, scanSubmittedAt: 'May 8, 2024 9:40 AM', actionIsScheduled: false, actionAt: 'May 9, 2024 2:00 PM'),
-  const ScanRecord(zoneId: 'ZD-2024-0007', status: 'Cleared', cotsDetected: 2, scanSubmittedAt: 'May 10, 2024 10:00 AM', actionIsScheduled: false, actionAt: 'May 11, 2024 2:00 PM'),
-  const ScanRecord(zoneId: 'ZD-2024-0010', status: 'Active', cotsDetected: 19, scanSubmittedAt: 'May 9, 2024 5:20 PM', actionIsScheduled: false, actionAt: 'May 9, 2024 5:20 PM'),
-  const ScanRecord(zoneId: 'ZD-2024-0008', status: 'Scheduled', cotsDetected: 7, scanSubmittedAt: 'May 8, 2024 8:15 AM', actionIsScheduled: true, actionAt: 'May 25, 2024 7:30 AM'),
-  const ScanRecord(zoneId: 'ZD-2024-0009', status: 'Cleared', cotsDetected: 0, scanSubmittedAt: 'May 6, 2024 3:00 PM', actionIsScheduled: false, actionAt: 'May 7, 2024 10:00 AM'),
-  const ScanRecord(zoneId: 'ZD-2024-0007', status: 'Cleared', cotsDetected: 0, scanSubmittedAt: 'May 5, 2024 1:00 PM', actionIsScheduled: false, actionAt: 'May 6, 2024 9:00 AM'),
-  const ScanRecord(zoneId: 'ZD-2024-0010', status: 'Cleared', cotsDetected: 0, scanSubmittedAt: 'May 4, 2024 9:30 AM', actionIsScheduled: false, actionAt: 'May 5, 2024 3:00 PM'),
-  const ScanRecord(zoneId: 'ZD-2024-0008', status: 'Scheduled', cotsDetected: 5, scanSubmittedAt: 'May 3, 2024 2:45 PM', actionIsScheduled: true, actionAt: 'May 26, 2024 9:00 AM'),
-  const ScanRecord(zoneId: 'ZD-2024-0009', status: 'Cleared', cotsDetected: 3, scanSubmittedAt: 'May 2, 2024 11:00 AM', actionIsScheduled: false, actionAt: 'May 3, 2024 8:00 AM'),
-];
-
-CotsZone? _zoneForId(String id) {
-  try {
-    return kSampleZones.firstWhere((z) => z.id == id);
-  } catch (_) {
-    return null;
-  }
+ScanRecord _scanRecordFromModel(ScanRecordModel model) {
+  final when = model.submittedAt ?? model.dateTaken ?? DateTime.now();
+  final formatted = DateFormat('MMM d, yyyy h:mm a').format(when);
+  return ScanRecord(
+    recordId: model.id,
+    displayId: model.displayRecordId,
+    submittedBy: model.submittedBy,
+    activityType: CotsActivityType.label(model.activityType),
+    status: model.userStatusLabel,
+    cotsDetected: model.aiDetectedCount,
+    confidencePercent: (model.confidence.clamp(0.0, 1.0) * 100).round(),
+    scanSubmittedAt: formatted,
+    zone: model.zone,
+  );
 }
 
 Color _statusColor(String status) {
   switch (status) {
-    case 'Active':
-      return kHigh;
-    case 'Scheduled':
-      return kModerate;
-    case 'Cleared':
+    case 'Accepted':
+    case 'Automatically Accepted':
+    case 'Verified':
       return kLow;
+    case 'Under Review':
+    case 'Requires Expert Validation':
+    case 'Pending Verification':
+      return kModerate;
+    case 'Retake Photo':
+    case 'Rejected':
+      return kHigh;
     default:
       return kNavy;
   }
@@ -93,22 +91,28 @@ class _RecordsPageState extends State<RecordsPage> {
     super.dispose();
   }
 
-  int get _total => kAllScanRecords.length;
-  int get _countActive =>
-      kAllScanRecords.where((r) => r.status == 'Active').length;
-  int get _countScheduled =>
-      kAllScanRecords.where((r) => r.status == 'Scheduled').length;
-  int get _countCleared =>
-      kAllScanRecords.where((r) => r.status == 'Cleared').length;
+  int get _total => _allRecords.length;
+  int get _countAccepted =>
+      _allRecords.where((r) =>
+          r.status == 'Accepted' ||
+          r.status == 'Automatically Accepted').length;
+  int get _countUnderReview =>
+      _allRecords.where((r) =>
+          r.status == 'Under Review' ||
+          r.status == 'Requires Expert Validation').length;
+  int get _countRetake =>
+      _allRecords.where((r) => r.status == 'Retake Photo').length;
+
+  List<ScanRecord> _allRecords = const [];
+  List<ScanRecordModel> _allModels = const [];
 
   List<ScanRecord> get _filtered {
     final q = _search.text.trim().toLowerCase();
-    return kAllScanRecords.where((r) {
+    return _allRecords.where((r) {
       if (_statusFilter != null && r.status != _statusFilter) return false;
       if (q.isEmpty) return true;
-      final z = _zoneForId(r.zoneId);
-      if (z == null) return false;
-      final hay = '${z.label} ${z.name} ${z.location}'.toLowerCase();
+      final hay =
+          '${r.displayId} ${r.submittedBy} ${r.activityType} ${r.zone}'.toLowerCase();
       return hay.contains(q);
     }).toList();
   }
@@ -140,9 +144,9 @@ class _RecordsPageState extends State<RecordsPage> {
                 runSpacing: 8,
                 children: [
                   _filterChip('All', null),
-                  _filterChip('Active', 'Active'),
-                  _filterChip('Scheduled', 'Scheduled'),
-                  _filterChip('Cleared', 'Cleared'),
+                  _filterChip('Automatically Accepted', 'Automatically Accepted'),
+                  _filterChip('Requires Expert Validation', 'Requires Expert Validation'),
+                  _filterChip('Retake Photo', 'Retake Photo'),
                 ],
               ),
             ],
@@ -175,9 +179,8 @@ class _RecordsPageState extends State<RecordsPage> {
 
   @override
   Widget build(BuildContext context) {
-    final filtered = _filtered;
-    final shown = filtered.take(_visibleCount).toList();
-    final hasMore = _visibleCount < filtered.length;
+    final uid = context.watch<AuthProvider>().userModel?.uid ??
+        FirebaseAuth.instance.currentUser?.uid;
 
     return Scaffold(
       backgroundColor: kGray,
@@ -209,7 +212,50 @@ class _RecordsPageState extends State<RecordsPage> {
         recordsPageBuilder: () => const RecordsPage(),
         profilePageBuilder: () => const ProfilePage(),
       ),
-      body: SafeArea(
+      body: uid == null
+          ? const Center(
+              child: Text(
+                'Sign in to view your GoPro submissions.',
+                style: TextStyle(color: kNavy),
+              ),
+            )
+          : StreamBuilder<List<ScanRecordModel>>(
+              stream: ScanRecordRepository.watchForUser(uid),
+              builder: (context, snapshot) {
+                if (snapshot.connectionState == ConnectionState.waiting &&
+                    !snapshot.hasData) {
+                  return const Center(
+                    child: CircularProgressIndicator(color: kGreen),
+                  );
+                }
+                if (snapshot.hasError) {
+                  return Center(
+                    child: Padding(
+                      padding: const EdgeInsets.all(24),
+                      child: Text(
+                        'Could not load records.\n${snapshot.error}',
+                        textAlign: TextAlign.center,
+                        style: const TextStyle(color: kNavy),
+                      ),
+                    ),
+                  );
+                }
+
+                _allModels = snapshot.data ?? [];
+                _allRecords = _allModels.map(_scanRecordFromModel).toList();
+
+                return _buildBody(context);
+              },
+            ),
+    );
+  }
+
+  Widget _buildBody(BuildContext context) {
+    final filtered = _filtered;
+    final shown = filtered.take(_visibleCount).toList();
+    final hasMore = _visibleCount < filtered.length;
+
+    return SafeArea(
         bottom: false,
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -229,7 +275,7 @@ class _RecordsPageState extends State<RecordsPage> {
                   ),
                   const SizedBox(height: 6),
                   Text(
-                    'View all scan submissions and status updates of monitored zones.',
+                    'View your GoPro detection submissions and verification status.',
                     style: TextStyle(
                       fontSize: 13,
                       color: Colors.grey.shade700,
@@ -247,7 +293,7 @@ class _RecordsPageState extends State<RecordsPage> {
                           onChanged: (_) =>
                               setState(() => _visibleCount = 8),
                           decoration: InputDecoration(
-                            hintText: 'Search by zone name or location',
+                            hintText: 'Search by record ID or activity',
                             hintStyle: TextStyle(
                               fontSize: 13,
                               color: Colors.grey.shade500,
@@ -320,18 +366,37 @@ class _RecordsPageState extends State<RecordsPage> {
                     ),
                   ],
                   const SizedBox(height: 14),
-                  ...shown.map((r) => Padding(
+                  if (shown.isEmpty)
+                    Container(
+                      padding: const EdgeInsets.all(20),
+                      decoration: BoxDecoration(
+                        color: Colors.white,
+                        borderRadius: BorderRadius.circular(12),
+                        border: Border.all(color: Colors.grey.shade200),
+                      ),
+                      child: const Text(
+                        'No submissions yet. Tap + to upload a GoPro detection.',
+                        style: TextStyle(color: kNavy, height: 1.4),
+                      ),
+                    )
+                  else
+                    ...shown.map((r) => Padding(
                         padding: const EdgeInsets.only(bottom: 12),
                         child: _RecordCard(
                           record: r,
-                          zone: _zoneForId(r.zoneId),
                           onTap: () {
-                            final z = _zoneForId(r.zoneId);
-                            if (z != null) {
+                            ScanRecordModel? model;
+                            for (final m in _allModels) {
+                              if (m.id == r.recordId) {
+                                model = m;
+                                break;
+                              }
+                            }
+                            if (model != null) {
                               Navigator.of(context).push<void>(
                                 MaterialPageRoute<void>(
                                   builder: (context) =>
-                                      ZoneDetailsPage(zone: z),
+                                      UserRecordDetailsPage(record: model!),
                                 ),
                               );
                             }
@@ -355,7 +420,6 @@ class _RecordsPageState extends State<RecordsPage> {
             ),
           ],
         ),
-      ),
     );
   }
 
@@ -374,9 +438,9 @@ class _RecordsPageState extends State<RecordsPage> {
         Expanded(
           child: _summaryTile(
             icon: Icons.circle,
-            label: 'Active',
-            value: '$_countActive',
-            accent: kHigh,
+            label: 'Auto Accepted',
+            value: '$_countAccepted',
+            accent: kLow,
             iconIsDot: true,
           ),
         ),
@@ -384,8 +448,8 @@ class _RecordsPageState extends State<RecordsPage> {
         Expanded(
           child: _summaryTile(
             icon: Icons.circle,
-            label: 'Scheduled',
-            value: '$_countScheduled',
+            label: 'Expert Review',
+            value: '$_countUnderReview',
             accent: kModerate,
             iconIsDot: true,
           ),
@@ -394,9 +458,9 @@ class _RecordsPageState extends State<RecordsPage> {
         Expanded(
           child: _summaryTile(
             icon: Icons.circle,
-            label: 'Cleared',
-            value: '$_countCleared',
-            accent: kLow,
+            label: 'Retake',
+            value: '$_countRetake',
+            accent: kHigh,
             iconIsDot: true,
           ),
         ),
@@ -478,11 +542,11 @@ class _RecordsPageState extends State<RecordsPage> {
             ),
           ),
           const SizedBox(height: 10),
-          _guideRow(kHigh, 'Active', 'COTS are present in this area.'),
+          _guideRow(kLow, 'Automatically Accepted', 'AI detection confidence is 80%–100%. Automatically accepted as an official monitoring record.'),
           const SizedBox(height: 6),
-          _guideRow(kModerate, 'Scheduled', 'Removal planned but not yet done.'),
+          _guideRow(kModerate, 'Requires Expert Validation', 'AI detection confidence is below 80%. Forwarded to the Expert for manual verification.'),
           const SizedBox(height: 6),
-          _guideRow(kLow, 'Cleared', 'No COTS detected after removal.'),
+          _guideRow(kHigh, 'Retake Photo', 'Confidence too low (0–${CotsConfidencePolicy.adminReviewMin - 1}%) — capture a clearer GoPro image.'),
           const SizedBox(height: 12),
           Row(
             crossAxisAlignment: CrossAxisAlignment.start,
@@ -491,7 +555,7 @@ class _RecordsPageState extends State<RecordsPage> {
               const SizedBox(width: 8),
               Expanded(
                 child: Text(
-                  'Tap any record to view detailed information, status history, and map.',
+                  'Tap any record to view detection results, GPS info, and image preview.',
                   style: TextStyle(
                     fontSize: 12,
                     color: Colors.grey.shade700,
@@ -539,25 +603,14 @@ class _RecordsPageState extends State<RecordsPage> {
 class _RecordCard extends StatelessWidget {
   const _RecordCard({
     required this.record,
-    required this.zone,
     required this.onTap,
   });
 
   final ScanRecord record;
-  final CotsZone? zone;
   final VoidCallback onTap;
-
-  String get _avatarLetter {
-    if (zone == null) return '?';
-    final l = zone!.label;
-    if (l.isEmpty) return '?';
-    return l.substring(l.length - 1);
-  }
 
   @override
   Widget build(BuildContext context) {
-    if (zone == null) return const SizedBox.shrink();
-    final z = zone!;
     final stColor = _statusColor(record.status);
 
     return Material(
@@ -579,13 +632,10 @@ class _RecordCard extends StatelessWidget {
                   color: kGreen,
                   borderRadius: BorderRadius.circular(10),
                 ),
-                child: Text(
-                  _avatarLetter,
-                  style: const TextStyle(
-                    color: Colors.white,
-                    fontWeight: FontWeight.w800,
-                    fontSize: 18,
-                  ),
+                child: const Icon(
+                  Icons.description_outlined,
+                  color: Colors.white,
+                  size: 22,
                 ),
               ),
               const SizedBox(width: 12),
@@ -601,19 +651,29 @@ class _RecordCard extends StatelessWidget {
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
                               Text(
-                                '${z.label} – ${z.name}',
+                                record.displayId,
                                 style: const TextStyle(
                                   fontSize: 14,
-                                  fontWeight: FontWeight.w700,
+                                  fontWeight: FontWeight.w800,
                                   color: kNavy,
+                                  letterSpacing: 0.2,
                                 ),
                               ),
                               const SizedBox(height: 2),
                               Text(
-                                z.location,
+                                'Submitted by ${record.submittedBy}',
                                 style: TextStyle(
                                   fontSize: 12,
                                   color: Colors.grey.shade600,
+                                ),
+                              ),
+                              const SizedBox(height: 2),
+                              Text(
+                                record.activityType,
+                                style: TextStyle(
+                                  fontSize: 11,
+                                  fontWeight: FontWeight.w600,
+                                  color: Colors.grey.shade500,
                                 ),
                               ),
                             ],
@@ -668,16 +728,15 @@ class _RecordCard extends StatelessWidget {
                           ),
                         ),
                         const SizedBox(width: 16),
-                        Icon(Icons.calendar_today_outlined,
+                        Icon(Icons.speed_outlined,
                             size: 14, color: Colors.grey.shade700),
                         const SizedBox(width: 6),
-                        Expanded(
-                          child: Text(
-                            record.scanSubmittedAt,
-                            style: TextStyle(
-                              fontSize: 11,
-                              color: Colors.grey.shade700,
-                            ),
+                        Text(
+                          '${record.confidencePercent}%',
+                          style: const TextStyle(
+                            fontSize: 12,
+                            fontWeight: FontWeight.w600,
+                            color: kNavy,
                           ),
                         ),
                       ],
@@ -685,19 +744,12 @@ class _RecordCard extends StatelessWidget {
                     const SizedBox(height: 6),
                     Row(
                       children: [
-                        Icon(
-                          record.actionIsScheduled
-                              ? Icons.event_outlined
-                              : Icons.update_outlined,
-                          size: 16,
-                          color: Colors.grey.shade700,
-                        ),
+                        Icon(Icons.calendar_today_outlined,
+                            size: 14, color: Colors.grey.shade700),
                         const SizedBox(width: 6),
                         Expanded(
                           child: Text(
-                            record.actionIsScheduled
-                                ? 'Scheduled for ${record.actionAt}'
-                                : 'Updated ${record.actionAt}',
+                            'Uploaded ${record.scanSubmittedAt}',
                             style: TextStyle(
                               fontSize: 11,
                               color: Colors.grey.shade700,
@@ -705,6 +757,20 @@ class _RecordCard extends StatelessWidget {
                             ),
                           ),
                         ),
+                        if (record.zone.isNotEmpty &&
+                            record.zone != 'Unassigned') ...[
+                          Icon(Icons.place_outlined,
+                              size: 14, color: Colors.grey.shade500),
+                          const SizedBox(width: 4),
+                          Text(
+                            record.zone,
+                            style: TextStyle(
+                              fontSize: 11,
+                              color: Colors.grey.shade500,
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
+                        ],
                       ],
                     ),
                   ],

@@ -9,7 +9,7 @@ const List<AdminDataTableColumn> _highRiskTableColumns = [
   AdminDataTableColumn('#', 44, headerAlign: TextAlign.center),
   AdminDataTableColumn('Zone Name', 200),
   AdminDataTableColumn('Avg. Density', 140, headerAlign: TextAlign.right),
-  AdminDataTableColumn('Risk Level', 112, headerAlign: TextAlign.center),
+  AdminDataTableColumn('Infestation Level', 112, headerAlign: TextAlign.center),
   AdminDataTableColumn('Status', 120, headerAlign: TextAlign.center),
   AdminDataTableColumn('Last Monitoring', 172),
 ];

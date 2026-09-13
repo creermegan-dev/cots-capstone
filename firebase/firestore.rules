@@ -3,25 +3,319 @@ rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
 
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function isAdmin() {
+      return isSignedIn()
+        && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.accountRole == 'admin';
+    }
+
+    function isExpert() {
+      return isSignedIn()
+        && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.accountRole == 'expert';
+    }
+
+    function isVerifiedFieldPersonnel() {
+      return isSignedIn()
+        && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.fieldPersonnelVerified == true
+        && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.isActive == true
+        && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.accountRole == 'user';
+    }
+
+    function personnelVerificationUpdateOnly() {
+      return request.resource.data.diff(resource.data).affectedKeys()
+        .hasOnly([
+          'fieldPersonnelVerified',
+          'personnelVerifiedBy',
+          'personnelVerifiedAt',
+        ])
+        && request.resource.data.fieldPersonnelVerified is bool
+        && request.resource.data.personnelVerifiedAt is timestamp
+        && (
+          (
+            request.resource.data.fieldPersonnelVerified == true
+            && request.resource.data.personnelVerifiedBy == request.auth.uid
+          )
+          || (
+            request.resource.data.fieldPersonnelVerified == false
+            && request.resource.data.personnelVerifiedBy == ''
+          )
+        );
+    }
+
+    function selfProfileUpdateOnly() {
+      return request.resource.data.diff(resource.data).affectedKeys()
+        .hasOnly([
+          'fullName',
+          'phoneNumber',
+          'role',
+          'organization',
+          'assignedArea',
+          'profileImage',
+        ]);
+    }
+
+    function expertVerificationUpdateOnly() {
+      return request.resource.data.diff(resource.data).affectedKeys()
+        .hasOnly([
+          'admin_confirmed',
+          'admin_rejected',
+          'admin_reviewed_at',
+          'admin_reviewed_by',
+          'admin_cots_decisions',
+        ]);
+    }
+
+    function isProcessedCaptureCreate() {
+      return request.resource.data.uid == request.auth.uid
+        && request.resource.data.capture_source == 'GoPro Underwater Image'
+        && request.resource.data.citizen_contribution == true
+        && request.resource.data.has_processed_image == true
+        && request.resource.data.keys().hasAll([
+          'ai_detected_count',
+          'confidence',
+          'processed_at',
+          'submitted_at',
+        ]);
+    }
+
+    function ownsCapture(captureId) {
+      return exists(/databases/$(database)/documents/captures/$(captureId))
+        && get(/databases/$(database)/documents/captures/$(captureId)).data.uid == request.auth.uid;
+    }
+
+    function isAssignedToCapture(captureId) {
+      return isVerifiedFieldPersonnel()
+        && exists(/databases/$(database)/documents/intervention_assignments/$(captureId))
+        && get(/databases/$(database)/documents/intervention_assignments/$(captureId)).data.assigned_to_uid == request.auth.uid
+        && get(/databases/$(database)/documents/intervention_assignments/$(captureId)).data.status == 'assigned';
+    }
+
+    function ownsOrIsAssignedToCapture(captureId) {
+      return ownsCapture(captureId) || isAssignedToCapture(captureId);
+    }
+
+    function isAssignableCapture(captureId) {
+      return exists(/databases/$(database)/documents/captures/$(captureId))
+        && get(/databases/$(database)/documents/captures/$(captureId)).data.get('admin_rejected', false) != true
+        && (
+          get(/databases/$(database)/documents/captures/$(captureId)).data.get('admin_confirmed', false) == true
+          || get(/databases/$(database)/documents/captures/$(captureId)).data.confidence >= 0.74
+        );
+    }
+
+    function isVerifiedPersonnelUid(uid) {
+      return exists(/databases/$(database)/documents/users/$(uid))
+        && get(/databases/$(database)/documents/users/$(uid)).data.fieldPersonnelVerified == true
+        && get(/databases/$(database)/documents/users/$(uid)).data.isActive == true
+        && get(/databases/$(database)/documents/users/$(uid)).data.accountRole == 'user';
+    }
+
+    function validAdminAssignment(captureId) {
+      return request.resource.data.capture_id == captureId
+        && request.resource.data.assigned_to_uid is string
+        && request.resource.data.assigned_to_uid.size() > 0
+        && request.resource.data.assigned_by_uid == request.auth.uid
+        && request.resource.data.assigned_at is timestamp
+        && request.resource.data.due_at is timestamp
+        && request.resource.data.due_at >= request.time
+        && request.resource.data.status == 'assigned'
+        && request.resource.data.removal_record_id == ''
+        && isAssignableCapture(captureId)
+        && isVerifiedPersonnelUid(request.resource.data.assigned_to_uid);
+    }
+
+    function hasValidRemovalEvidence(captureId) {
+      return request.resource.data.removal_record_id is string
+        && request.resource.data.removal_record_id.size() > 0
+        && exists(/databases/$(database)/documents/removal_records/$(request.resource.data.removal_record_id))
+        && exists(/databases/$(database)/documents/removal_record_images/$(request.resource.data.removal_record_id))
+        && get(/databases/$(database)/documents/removal_records/$(request.resource.data.removal_record_id)).data.capture_id == captureId
+        && get(/databases/$(database)/documents/removal_records/$(request.resource.data.removal_record_id)).data.uid == request.resource.data.assigned_to_uid
+        && get(/databases/$(database)/documents/removal_record_images/$(request.resource.data.removal_record_id)).data.capture_id == captureId
+        && get(/databases/$(database)/documents/removal_record_images/$(request.resource.data.removal_record_id)).data.uid == request.resource.data.assigned_to_uid;
+    }
+
     // User profiles — document ID must equal Firebase Auth UID.
     match /users/{userId} {
-      allow read: if request.auth != null && request.auth.uid == userId;
+      allow read: if request.auth != null
+        && (request.auth.uid == userId || isAdmin());
 
-      // Signup always creates a field account (`user`). The single app admin is assigned
-      // in Firebase Console (set `accountRole` to `admin` on one `users/{uid}` doc).
       allow create: if request.auth != null
         && request.auth.uid == userId
         && request.resource.data.uid == request.auth.uid
-        && request.resource.data.accountRole == 'user';
+        && request.resource.data.accountRole == 'user'
+        && request.resource.data.get('fieldPersonnelVerified', false) == false;
 
-      // Updates: same user only; client cannot change accountRole (admin promotions via Console / Cloud Functions).
-      allow update: if request.auth != null
-        && request.auth.uid == userId
-        && request.resource.data.accountRole == resource.data.accountRole;
+      allow update: if (request.auth != null
+          && request.auth.uid == userId
+          && request.resource.data.accountRole == resource.data.accountRole
+          && selfProfileUpdateOnly())
+        || (isAdmin() && personnelVerificationUpdateOnly());
 
       allow delete: if request.auth != null && request.auth.uid == userId;
     }
 
-    // Everything else is denied by default until you add explicit rules.
+    // Processed detection captures (AI results only — images in capture_images).
+    match /captures/{captureId} {
+      allow read: if request.auth != null;
+
+      allow create: if request.auth != null && isProcessedCaptureCreate();
+
+      allow update: if isExpert() && expertVerificationUpdateOnly();
+
+      allow delete: if false;
+    }
+
+    // Compressed capture photos saved after AI processing.
+    match /capture_images/{captureId} {
+      allow read: if request.auth != null;
+
+      allow create, update: if request.auth != null
+        && request.resource.data.uid == request.auth.uid
+        && request.resource.data.capture_id == captureId;
+
+      allow delete: if false;
+    }
+
+    // Removal activities linked to captures via capture_id (foreign key).
+    match /removal_records/{removalId} {
+      allow read: if request.auth != null;
+
+      allow create: if request.auth != null
+        && request.resource.data.uid == request.auth.uid
+        && request.resource.data.capture_id is string
+        && request.resource.data.capture_id.size() > 0
+        && ownsOrIsAssignedToCapture(request.resource.data.capture_id)
+        && request.resource.data.has_processed_image == true
+        && request.resource.data.keys().hasAll([
+          'removed_quantity',
+          'processed_at',
+          'submitted_at',
+        ]);
+
+      allow update: if false;
+
+      allow delete: if false;
+    }
+
+    // Compressed removal proof photos saved after processing.
+    match /removal_record_images/{removalId} {
+      allow read: if request.auth != null;
+
+      allow create, update: if request.auth != null
+        && request.resource.data.uid == request.auth.uid
+        && request.resource.data.removal_id == removalId
+        && request.resource.data.capture_id is string
+        && ownsOrIsAssignedToCapture(request.resource.data.capture_id);
+
+      allow delete: if false;
+    }
+
+    // One operational assignment per capture. Detection/removal records remain
+    // immutable and provide the historical record.
+    match /intervention_assignments/{captureId} {
+      allow read: if isAdmin()
+        || isExpert()
+        || (isSignedIn() && resource.data.assigned_to_uid == request.auth.uid);
+
+      allow create: if isAdmin() && validAdminAssignment(captureId);
+
+      allow update: if (
+          isAdmin()
+          && (
+            validAdminAssignment(captureId)
+            || (
+              resource.data.status == 'evidence_submitted'
+              && request.resource.data.status == 'cleared'
+              && request.resource.data.removal_record_id == resource.data.removal_record_id
+              && request.resource.data.diff(resource.data).affectedKeys()
+                .hasOnly(['status'])
+              && hasValidRemovalEvidence(captureId)
+            )
+          )
+        )
+        || (
+          isVerifiedFieldPersonnel()
+          && resource.data.assigned_to_uid == request.auth.uid
+          && request.resource.data.assigned_to_uid == resource.data.assigned_to_uid
+          && request.resource.data.status == 'evidence_submitted'
+          && hasValidRemovalEvidence(captureId)
+          && request.resource.data.diff(resource.data).affectedKeys()
+            .hasOnly([
+              'status',
+              'removal_record_id',
+              'evidence_submitted_at',
+            ])
+        );
+
+      allow delete: if false;
+    }
+
+    // Workflow notifications are private to their recipient. They are created
+    // by the submitting user, an expert reviewer, or an administrator.
+    match /notifications/{notificationId} {
+      allow read: if isSignedIn()
+        && resource.data.recipient_uid == request.auth.uid;
+
+      allow create: if isSignedIn()
+        && request.resource.data.keys().hasOnly([
+          'recipient_uid',
+          'type',
+          'title',
+          'body',
+          'related_record_id',
+          'zone',
+          'due_at',
+          'is_read',
+          'created_at',
+        ])
+        && request.resource.data.is_read == false
+        && (
+          (request.resource.data.type == 'scan_submitted'
+            && request.resource.data.recipient_uid == request.auth.uid)
+          || (isExpert()
+            && request.resource.data.type in ['review_accepted', 'review_rejected'])
+          || (isAdmin()
+            && request.resource.data.type == 'intervention_assigned')
+        );
+
+      allow update: if isSignedIn()
+        && resource.data.recipient_uid == request.auth.uid
+        && request.resource.data.diff(resource.data).affectedKeys()
+          .hasOnly(['is_read'])
+        && request.resource.data.is_read == true;
+
+      allow delete: if isSignedIn()
+        && resource.data.recipient_uid == request.auth.uid;
+    }
+
+    // Legacy citizen science records (read + expert verify).
+    match /scan_records/{recordId} {
+      allow read: if request.auth != null;
+
+      allow create: if request.auth != null
+        && request.resource.data.uid == request.auth.uid
+        && request.resource.data.capture_source == 'GoPro Underwater Image'
+        && request.resource.data.citizen_contribution == true
+        && request.resource.data.activity_type in ['detection_only', 'removal_activity'];
+
+      allow update: if isExpert() && expertVerificationUpdateOnly();
+
+      allow delete: if false;
+    }
+
+    // Legacy compressed scan photos.
+    match /scan_record_images/{recordId} {
+      allow read: if request.auth != null;
+
+      allow create, update: if request.auth != null
+        && request.resource.data.uid == request.auth.uid
+        && request.resource.data.record_id == recordId;
+
+      allow delete: if false;
+    }
   }
 }

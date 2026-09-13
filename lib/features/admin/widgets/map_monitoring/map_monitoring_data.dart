@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:latlong2/latlong.dart';
 
+import '../../../../models/cots_zone.dart';
+import '../../../../models/davao_gulf_geography.dart';
 import '../../theme/admin_theme.dart';
 
 enum MapMonitoringRisk { high, moderate, low }
@@ -22,11 +24,11 @@ extension MapMonitoringRiskX on MapMonitoringRisk {
   String get label {
     switch (this) {
       case MapMonitoringRisk.high:
-        return 'High';
+        return 'High infestation';
       case MapMonitoringRisk.moderate:
-        return 'Moderate';
+        return 'Moderate infestation';
       case MapMonitoringRisk.low:
-        return 'Low';
+        return 'Low infestation';
     }
   }
 }
@@ -42,16 +44,28 @@ class MonitoringZone {
     required this.statusLabel,
     required this.lastMonitoring,
     required this.outbreakStatus,
+    this.fullName,
+    this.zoneCode,
+    this.isMunicipality = false,
+    this.cotsDetected = 0,
+    this.cotsRemoved = 0,
+    this.averageSizeCm,
   });
 
   final String code;
   final String displayName;
+  final String? fullName;
+  final String? zoneCode;
+  final bool isMunicipality;
   final List<LatLng> polygon;
   final MapMonitoringRisk risk;
   final double densityCotsPerHa;
   final String statusLabel;
   final String lastMonitoring;
   final String outbreakStatus;
+  final int cotsDetected;
+  final int cotsRemoved;
+  final double? averageSizeCm;
 
   LatLng get centroid {
     double lat = 0, lng = 0;
@@ -94,156 +108,147 @@ class MapAlertItem {
 
 abstract final class MapMonitoringMock {
   static const String subtitle =
-      'Real-time monitoring of COTS density across all zones.';
-  static const String lastUpdated = 'May 18, 2026 · 09:30 AM';
+      'Davao Gulf coastal zones — tap a zone to view barangay sites.';
+  static const String lastUpdated = 'Live GIS · Davao Gulf';
 
-  static const densityOverview = (
-    high: 4,
-    moderate: 2,
-    low: 5,
-    noData: 1,
-  );
+  static MapMonitoringRisk _riskFromLevel(OutbreakLevel level) {
+    return switch (level) {
+      OutbreakLevel.high => MapMonitoringRisk.high,
+      OutbreakLevel.moderate => MapMonitoringRisk.moderate,
+      OutbreakLevel.low => MapMonitoringRisk.low,
+    };
+  }
 
-  static const summary = (
-    totalZones: 12,
-    activeHighRisk: 4,
-    avgDensity: 32.45,
-    totalCotsDetected: 248,
-  );
+  static MonitoringZone _fromBarangay(GulfCoastalBarangay b) {
+    final card = CotsZone.fromCoastalBarangay(b);
+    final risk = _riskFromLevel(card.level);
+    return MonitoringZone(
+      code: b.siteCode,
+      displayName: b.siteCode,
+      fullName: b.name,
+      zoneCode: b.zoneCode,
+      polygon: b.polygon,
+      risk: risk,
+      densityCotsPerHa: card.density,
+      statusLabel: b.subtitle,
+      lastMonitoring: 'Active monitoring',
+      outbreakStatus: card.status,
+      cotsDetected: card.cotsDetected,
+      cotsRemoved: card.cotsDetected ~/ 3,
+      averageSizeCm: 24 + b.id.hashCode.abs() % 18,
+    );
+  }
 
-  /// Coastal Philippines — mock patrol areas.
-  static final zones = <MonitoringZone>[
-    MonitoringZone(
-      code: 'A',
-      displayName: 'Zone A',
-      risk: MapMonitoringRisk.high,
-      densityCotsPerHa: 78.4,
-      statusLabel: 'Active (Outbreak)',
-      lastMonitoring: 'May 18, 2026 · 09:12',
-      outbreakStatus: 'Active',
-      polygon: const [
-        LatLng(7.14, 125.58),
-        LatLng(7.20, 125.64),
-        LatLng(7.16, 125.74),
-        LatLng(7.08, 125.68),
-      ],
-    ),
-    MonitoringZone(
-      code: 'B',
-      displayName: 'Zone B',
-      risk: MapMonitoringRisk.high,
-      densityCotsPerHa: 55.2,
-      statusLabel: 'Active (Outbreak)',
-      lastMonitoring: 'May 18, 2026 · 08:55',
-      outbreakStatus: 'Active',
-      polygon: const [
-        LatLng(7.22, 125.68),
-        LatLng(7.28, 125.72),
-        LatLng(7.26, 125.82),
-        LatLng(7.18, 125.78),
-      ],
-    ),
-    MonitoringZone(
-      code: 'C',
-      displayName: 'Zone C',
-      risk: MapMonitoringRisk.moderate,
-      densityCotsPerHa: 47.1,
-      statusLabel: 'Scheduled sweep',
-      lastMonitoring: 'May 17, 2026 · 16:40',
-      outbreakStatus: 'Scheduled',
-      polygon: const [
-        LatLng(7.02, 125.62),
-        LatLng(7.08, 125.58),
-        LatLng(7.10, 125.70),
-        LatLng(7.04, 125.74),
-      ],
-    ),
-    MonitoringZone(
-      code: 'D',
-      displayName: 'Zone D',
-      risk: MapMonitoringRisk.low,
-      densityCotsPerHa: 30.2,
-      statusLabel: 'Monitoring',
-      lastMonitoring: 'May 17, 2026 · 14:22',
-      outbreakStatus: 'Stable',
-      polygon: const [
-        LatLng(6.96, 125.70),
-        LatLng(7.02, 125.66),
-        LatLng(7.04, 125.78),
-        LatLng(6.98, 125.82),
-      ],
-    ),
-    MonitoringZone(
-      code: 'E',
-      displayName: 'Zone E',
-      risk: MapMonitoringRisk.low,
-      densityCotsPerHa: 62.0,
-      statusLabel: 'Monitoring',
-      lastMonitoring: 'May 18, 2026 · 07:05',
-      outbreakStatus: 'Stable',
-      polygon: const [
-        LatLng(7.08, 125.82),
-        LatLng(7.14, 125.78),
-        LatLng(7.12, 125.90),
-        LatLng(7.02, 125.88),
-      ],
-    ),
-    MonitoringZone(
-      code: 'F',
-      displayName: 'Zone F',
-      risk: MapMonitoringRisk.moderate,
-      densityCotsPerHa: 22.6,
-      statusLabel: 'Elevated watch',
-      lastMonitoring: 'May 16, 2026 · 11:18',
-      outbreakStatus: 'Watch',
-      polygon: const [
-        LatLng(7.28, 125.52),
-        LatLng(7.34, 125.56),
-        LatLng(7.32, 125.66),
-        LatLng(7.24, 125.62),
-      ],
-    ),
-  ];
+  static MonitoringZone _fromMunicipality(GulfCoastalMunicipality m) {
+    final sites = m.barangays.map(_fromBarangay).toList(growable: false);
+    final avgDensity = sites.isEmpty
+        ? 0.0
+        : sites.map((s) => s.densityCotsPerHa).reduce((a, b) => a + b) /
+            sites.length;
+    final risk = sites.isEmpty
+        ? MapMonitoringRisk.low
+        : sites.map((s) => s.risk).reduce(_maxRisk);
+    final detected = sites.fold<int>(0, (sum, s) => sum + s.cotsDetected);
+    return MonitoringZone(
+      code: m.zoneCode,
+      displayName: m.zoneLabel,
+      fullName: m.name,
+      zoneCode: m.zoneCode,
+      isMunicipality: true,
+      polygon: m.boundary,
+      risk: risk,
+      densityCotsPerHa: avgDensity,
+      statusLabel: '${m.barangayCount} coastal sites',
+      lastMonitoring: m.province,
+      outbreakStatus: 'Zone overview',
+      cotsDetected: detected,
+      cotsRemoved: detected ~/ 3,
+    );
+  }
 
-  static final highRiskRows = <HighRiskTableRow>[
-    const HighRiskTableRow(
-      zoneName: 'Zone A — Northern Reef',
-      avgDensity: 78.4,
-      risk: MapMonitoringRisk.high,
-      status: 'Active (Outbreak)',
-      lastMonitoring: 'May 18, 2026 · 09:12',
-    ),
-    const HighRiskTableRow(
-      zoneName: 'Zone B — East Shoal',
-      avgDensity: 55.2,
-      risk: MapMonitoringRisk.high,
-      status: 'Active (Outbreak)',
-      lastMonitoring: 'May 18, 2026 · 08:55',
-    ),
-    const HighRiskTableRow(
-      zoneName: 'Zone H — Survey pending',
-      avgDensity: 41.8,
-      risk: MapMonitoringRisk.moderate,
-      status: 'Scheduled',
-      lastMonitoring: 'May 17, 2026 · 15:00',
-    ),
-  ];
+  static MapMonitoringRisk _maxRisk(
+    MapMonitoringRisk a,
+    MapMonitoringRisk b,
+  ) {
+    const order = {
+      MapMonitoringRisk.high: 3,
+      MapMonitoringRisk.moderate: 2,
+      MapMonitoringRisk.low: 1,
+    };
+    return (order[a] ?? 0) >= (order[b] ?? 0) ? a : b;
+  }
 
-  static const alerts = <MapAlertItem>[
-    MapAlertItem(
-      zoneName: 'Zone A',
-      message: 'Density spike · 78.4 COTS/ha — exceeds outbreak threshold',
-      timeAgo: '10 min ago',
-    ),
-    MapAlertItem(
-      zoneName: 'Zone B',
-      message: 'New aggregation cluster detected near transect B-4',
-      timeAgo: '42 min ago',
-    ),
-    MapAlertItem(
-      zoneName: 'Zone C',
-      message: 'Sweep team dispatched — ETA 14:30',
-      timeAgo: '2 hr ago',
-    ),
-  ];
+  static List<MonitoringZone> get barangays {
+    return DavaoGulfGeography.allBarangays
+        .map(_fromBarangay)
+        .toList(growable: false);
+  }
+
+  /// Municipality-level zones (Zone A–Q) for map overview.
+  static List<MonitoringZone> get zones {
+    return DavaoGulfGeography.municipalities
+        .map(_fromMunicipality)
+        .toList(growable: false);
+  }
+
+  static List<MonitoringZone> barangaysForZone(String zoneCode) {
+    final municipality = DavaoGulfGeography.municipalityByZoneCode(zoneCode);
+    if (municipality == null) return const [];
+    return municipality.barangays.map(_fromBarangay).toList(growable: false);
+  }
+
+  static int get _highCount =>
+      barangays.where((z) => z.risk == MapMonitoringRisk.high).length;
+  static int get _moderateCount =>
+      barangays.where((z) => z.risk == MapMonitoringRisk.moderate).length;
+  static int get _lowCount =>
+      barangays.where((z) => z.risk == MapMonitoringRisk.low).length;
+
+  static ({int high, int moderate, int low, int noData}) get densityOverview => (
+        high: _highCount,
+        moderate: _moderateCount,
+        low: _lowCount,
+        noData: 0,
+      );
+
+  static ({int totalZones, int activeHighRisk, double avgDensity, int totalCotsDetected})
+      get summary => (
+        totalZones: zones.length,
+        activeHighRisk: _highCount,
+        avgDensity: barangays.isEmpty
+            ? 0
+            : barangays.map((z) => z.densityCotsPerHa).reduce((a, b) => a + b) /
+                barangays.length,
+        totalCotsDetected:
+            barangays.fold<int>(0, (sum, z) => sum + z.cotsDetected),
+      );
+
+  static List<HighRiskTableRow> get highRiskRows {
+    final high = barangays.where((z) => z.risk == MapMonitoringRisk.high).take(3);
+    return high
+        .map(
+          (z) => HighRiskTableRow(
+            zoneName: z.fullName ?? z.displayName,
+            avgDensity: z.densityCotsPerHa,
+            risk: z.risk,
+            status: z.statusLabel,
+            lastMonitoring: z.lastMonitoring,
+          ),
+        )
+        .toList(growable: false);
+  }
+
+  static List<MapAlertItem> get alerts {
+    final high = barangays.where((z) => z.risk == MapMonitoringRisk.high).take(3);
+    return high
+        .map(
+          (z) => MapAlertItem(
+            zoneName: '${z.displayName} · ${z.fullName ?? z.displayName}',
+            message:
+                'Elevated density · ${z.densityCotsPerHa.toStringAsFixed(1)} COTS/ha',
+            timeAgo: 'Recent scan activity',
+          ),
+        )
+        .toList(growable: false);
+  }
 }
