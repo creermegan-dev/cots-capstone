@@ -3,6 +3,7 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
+import 'core/firebase_bootstrap.dart';
 import 'features/admin/admin_routes.dart';
 import 'features/admin/screens/admin_shell_screen.dart';
 import 'features/auth/auth_routes.dart';
@@ -17,13 +18,15 @@ import 'providers/auth_provider.dart';
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
-  try {
-    await Firebase.initializeApp(
-      options: DefaultFirebaseOptions.currentPlatform,
-    );
-  } on UnsupportedError catch (e) {
-    if (kDebugMode) {
-      debugPrint('Firebase not configured for this platform: $e');
+  if (!deferFirebaseUntilFirstUse) {
+    try {
+      await Firebase.initializeApp(
+        options: DefaultFirebaseOptions.currentPlatform,
+      );
+    } on UnsupportedError catch (e) {
+      if (kDebugMode) {
+        debugPrint('Firebase not configured for this platform: $e');
+      }
     }
   }
 
@@ -67,4 +70,3 @@ class CotsMonitorApp extends StatelessWidget {
     );
   }
 }
-
