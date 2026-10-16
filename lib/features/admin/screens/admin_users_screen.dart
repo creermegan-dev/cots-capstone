@@ -4,6 +4,7 @@ import 'package:provider/provider.dart';
 import '../../../models/user_model.dart';
 import '../../../providers/auth_provider.dart';
 import '../../../services/personnel_repository.dart';
+import '../../../services/follow_up_reassignment_repository.dart';
 import '../models/admin_user_models.dart';
 import '../theme/admin_theme.dart';
 import '../widgets/admin_dashboard_header.dart';
@@ -724,6 +725,8 @@ class _PersonnelVerificationPanelState
         verified: verified,
         verifiedBy: admin?.uid ?? '',
       );
+      await FollowUpReassignmentRepository.publishPersonnel(
+          [user.copyWith(fieldPersonnelVerified: verified)]);
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
@@ -782,7 +785,7 @@ class _PersonnelVerificationPanelState
           const SizedBox(height: 6),
           const Text(
             'Confirm only credentials checked with the issuing organization. '
-            'Verified users become available for intervention assignment.',
+            'Verified users become available for intervention and temporary follow-up assignment.',
             style: TextStyle(color: AdminColors.muted, fontSize: 12.5),
           ),
           const SizedBox(height: 12),
@@ -807,6 +810,33 @@ class _PersonnelVerificationPanelState
               }
               return Column(
                 children: [
+                  OutlinedButton.icon(
+                    icon: const Icon(Icons.publish_outlined),
+                    label: const Text('Publish follow-up personnel directory'),
+                    onPressed: _savingUid != null
+                        ? null
+                        : () async {
+                            setState(() => _savingUid = 'directory');
+                            try {
+                              await FollowUpReassignmentRepository
+                                  .publishPersonnel(snapshot.data ?? []);
+                              if (context.mounted) {
+                                ScaffoldMessenger.of(context).showSnackBar(
+                                    const SnackBar(
+                                        content: Text(
+                                            'Follow-up personnel directory published.')));
+                              }
+                            } catch (error) {
+                              if (context.mounted) {
+                                ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+                                    content: Text(
+                                        'Could not publish directory: $error')));
+                              }
+                            } finally {
+                              if (mounted) setState(() => _savingUid = null);
+                            }
+                          },
+                  ),
                   for (var index = 0; index < users.length; index++) ...[
                     if (index > 0) const Divider(height: 18),
                     _personnelRow(users[index]),

@@ -20,6 +20,11 @@ class CaptureModel {
     required this.zone,
     required this.notes,
     required this.submittedAt,
+    this.monitoringAreaId = '',
+    this.followUpSurveyId = '',
+    this.sourceCollection = RecordCollection.captures,
+    this.municipality = '',
+    this.barangay = '',
     this.dateTaken,
     this.latitude,
     this.longitude,
@@ -45,6 +50,11 @@ class CaptureModel {
   final String zone;
   final String notes;
   final DateTime? submittedAt;
+  final String monitoringAreaId;
+  final String followUpSurveyId;
+  final String sourceCollection;
+  final String municipality;
+  final String barangay;
   final DateTime? dateTaken;
   final double? latitude;
   final double? longitude;
@@ -79,11 +89,15 @@ class CaptureModel {
       imageName: data['image_name'] as String? ?? '',
       aiDetectedCount: _asInt(data['ai_detected_count'] ?? data['cots_count']),
       confidence: _asDouble(data['confidence']) ?? 0,
-      captureSource:
-          data['capture_source'] as String? ?? CaptureSource.goProUnderwaterImage,
+      captureSource: data['capture_source'] as String? ??
+          CaptureSource.goProUnderwaterImage,
       zone: data['zone'] as String? ?? 'Unassigned',
       notes: data['notes'] as String? ?? '',
       submittedAt: _asDateTime(data['submitted_at']),
+      monitoringAreaId: data['monitoring_area_id'] as String? ?? '',
+      followUpSurveyId: data['follow_up_survey_id'] as String? ?? '',
+      municipality: data['municipality'] as String? ?? '',
+      barangay: data['barangay'] as String? ?? '',
       dateTaken: _asDateTime(data['date_taken']),
       latitude: lat,
       longitude: lng,
@@ -132,6 +146,10 @@ class CaptureModel {
       zone: _readString(fields, 'zone', fallback: 'Unassigned'),
       notes: _readString(fields, 'notes'),
       submittedAt: _readTimestamp(fields, 'submitted_at'),
+      monitoringAreaId: _readString(fields, 'monitoring_area_id'),
+      followUpSurveyId: _readString(fields, 'follow_up_survey_id'),
+      municipality: _readString(fields, 'municipality'),
+      barangay: _readString(fields, 'barangay'),
       dateTaken: _readTimestamp(fields, 'date_taken'),
       latitude: _readDouble(gps, 'latitude'),
       longitude: _readDouble(gps, 'longitude'),
@@ -174,8 +192,7 @@ class CaptureModel {
         imageHeight: imageHeight > 0 ? imageHeight : 1080,
       );
 
-  String get userStatusLabel =>
-      CotsConfidencePolicy.userStatusLabelFromItems(
+  String get userStatusLabel => CotsConfidencePolicy.userStatusLabelFromItems(
         detectionReviewItems,
         adminConfirmed: adminConfirmed,
         adminRejected: adminRejected,
@@ -193,8 +210,8 @@ class CaptureModel {
       zone,
       fmt.format(when),
       count,
-      _densityEstimate(count),
-      _riskFromCount(count),
+      followUpSurveyId.isNotEmpty ? null : _densityEstimate(count),
+      followUpSurveyId.isNotEmpty ? 'Not validated' : _riskFromCount(count),
       submittedBy,
       confidencePercent,
       activityType: CotsActivityType.label(CotsActivityType.detectionOnly),
@@ -204,7 +221,8 @@ class CaptureModel {
       imageName: imageName,
       notes: notes,
       dateCaptured: dateTaken != null ? fmt.format(dateTaken!) : 'Unknown',
-      dateUploaded: submittedAt != null ? fmt.format(submittedAt!) : fmt.format(when),
+      dateUploaded:
+          submittedAt != null ? fmt.format(submittedAt!) : fmt.format(when),
       latitude: latitude,
       longitude: longitude,
       detectionBoxes: detectionBoxes,
@@ -311,7 +329,8 @@ class CaptureModel {
     return null;
   }
 
-  static List<CotsBoundingBox> _readDetectionBoxes(Map<String, dynamic> fields) {
+  static List<CotsBoundingBox> _readDetectionBoxes(
+      Map<String, dynamic> fields) {
     final raw = fields['detections'];
     if (raw is Map && raw['arrayValue'] is Map) {
       final values = (raw['arrayValue'] as Map)['values'];

@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../../auth/auth_navigation.dart';
 import '../../admin/screens/admin_records_submissions_screen.dart';
 import '../../admin/theme/admin_theme.dart';
+import 'expert_reassignments_screen.dart';
 
 /// Expert-only shell — records verification (approve / reject submissions).
 class ExpertShellScreen extends StatelessWidget {
@@ -16,31 +17,43 @@ class ExpertShellScreen extends StatelessWidget {
   Widget build(BuildContext context) {
     return adminThemedSubtree(
       context,
-      child: Scaffold(
-        backgroundColor: AdminColors.contentBg,
-        appBar: AppBar(
-          scrolledUnderElevation: 0,
-          elevation: 0,
-          backgroundColor: AdminColors.sidebarTop,
-          foregroundColor: Colors.white,
-          title: const Text(
-            'Expert Verification',
-            style: TextStyle(fontWeight: FontWeight.w700, fontSize: 17),
-          ),
-          actions: [
-            IconButton(
-              tooltip: 'Sign out',
-              onPressed: () => _logout(context),
-              icon: const Icon(Icons.logout_rounded),
+      child: DefaultTabController(
+          length: 2,
+          child: Scaffold(
+            backgroundColor: AdminColors.contentBg,
+            appBar: AppBar(
+              scrolledUnderElevation: 0,
+              elevation: 0,
+              backgroundColor: AdminColors.sidebarTop,
+              foregroundColor: Colors.white,
+              title: const Text(
+                'Expert Workspace',
+                style: TextStyle(fontWeight: FontWeight.w700, fontSize: 17),
+              ),
+              actions: [
+                IconButton(
+                  tooltip: 'Sign out',
+                  onPressed: () => _logout(context),
+                  icon: const Icon(Icons.logout_rounded),
+                ),
+                const SizedBox(width: 8),
+              ],
+              bottom: const TabBar(
+                  labelColor: Colors.white,
+                  unselectedLabelColor: Colors.white70,
+                  tabs: [
+                    Tab(text: 'Verification'),
+                    Tab(text: 'Reassignments')
+                  ]),
             ),
-            const SizedBox(width: 8),
-          ],
-        ),
-        body: const AdminRecordsSubmissionsScreen(
-          viewOnly: false,
-          expertContext: true,
-        ),
-      ),
+            body: const TabBarView(children: [
+              AdminRecordsSubmissionsScreen(
+                viewOnly: false,
+                expertContext: true,
+              ),
+              ExpertReassignmentsScreen()
+            ]),
+          )),
     );
   }
 }

@@ -24,6 +24,209 @@ service cloud.firestore {
         && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.accountRole == 'user';
     }
 
+    function isActiveDiver() {
+      let profile = get(/databases/$(database)/documents/users/$(request.auth.uid)).data;
+      return isSignedIn()
+        && profile.accountRole == 'user'
+        && profile.isActive == true;
+    }
+
+    function activeExpert() {
+      return isExpert() && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.isActive == true;
+    }
+    function phNow() { return request.time + duration.value(8, 'h'); }
+    function twoDigits(value) { return value < 10 ? '0' + string(value) : string(value); }
+    function surveyCalendarDay(date) {
+      let ph = date + duration.value(8, 'h');
+      return string(ph.year()) + '-' + twoDigits(ph.month()) + '-' + twoDigits(ph.day());
+    }
+    function reassignmentId(area, year, month) {
+      return area + '_' + string(year) + '_' + string(month);
+    }
+    function responsibleForMonth(area, year, month) {
+      let id = reassignmentId(area, year, month);
+      let d = get(/databases/$(database)/documents/follow_up_month_authorizations/$(id)).data;
+      return d.responsible_uid == request.auth.uid
+        && (request.auth.uid == d.primary_uid
+          || (year == phNow().year() && month == phNow().month()
+            && isVerifiedPersonnelUid(request.auth.uid)));
+    }
+    function currentRequest(d) {
+      return d.year == phNow().year() && d.month == phNow().month();
+    }
+    function workflowEvent(id, revision) {
+      return getAfter(/databases/$(database)/documents/follow_up_reassignment_events/$(id + '_' + string(revision))).data;
+    }
+    function hasWorkflowNotification(id, d, uid) {
+      let key = id + '_' + string(d.revision) + '_' + uid;
+      let n = getAfter(/databases/$(database)/documents/notifications/$(key)).data;
+      return n.type == 'follow_up_reassignment'
+        && n.related_record_id == id && n.event_revision == d.revision
+        && n.recipient_uid == uid && n.is_read == false;
+    }
+    function workflowAudit(id, d) {
+      let event = workflowEvent(id, d.revision);
+      return event.state == d && event.actor_uid == request.auth.uid
+        && event.at == request.time
+        && getAfter(/databases/$(database)/documents/follow_up_month_authorizations/$(id)).data.responsible_uid == d.responsible_uid
+        && hasWorkflowNotification(id, d, 'experts')
+        && hasWorkflowNotification(id, d, d.primary_uid)
+        && (d.replacement_uid == '' || hasWorkflowNotification(id, d, d.replacement_uid));
+    }
+    function validWorkflow(d, id) {
+      let a = get(/databases/$(database)/documents/follow_up_assignments/$(d.area_id)).data;
+      return d.keys().hasOnly(['area_id', 'area_name', 'barangay', 'municipality',
+          'primary_uid', 'primary_name', 'year', 'month', 'responsible_uid',
+          'requester_uid', 'reason', 'status', 'replacement_uid', 'replacement_name',
+          'expert_uid', 'participants', 'revision', 'requested_at', 'updated_at'])
+        && id == reassignmentId(d.area_id, d.year, d.month)
+        && d.primary_uid == a.primary_diver_uid && d.primary_name == a.primary_diver_name
+        && d.area_name == a.area_name && d.barangay == a.barangay && d.municipality == a.municipality
+        && d.reason is string && d.reason.size() > 0 && d.reason.size() <= 2000
+        && d.revision is int && d.updated_at == request.time
+        && currentRequest(d) && workflowAudit(id, d);
+    }
+    function validWorkflowTransition(id) {
+      let d = request.resource.data;
+      let old = resource.data;
+      let action = workflowEvent(id, d.revision).action;
+      return validWorkflow(d, id) && d.revision == old.revision + 1
+        && d.diff(old).affectedKeys().hasOnly(['requester_uid', 'reason', 'status',
+          'replacement_uid', 'replacement_name', 'expert_uid', 'participants',
+          'responsible_uid', 'revision', 'updated_at'])
+        && (
+          (action == 'requested' && isActiveDiver()
+            && request.auth.uid == old.responsible_uid && old.status in ['accepted', 'cancelled']
+            && d.status == 'requested' && d.requester_uid == request.auth.uid
+            && d.responsible_uid == old.responsible_uid && d.participants == old.participants
+            && d.replacement_uid == '' && d.replacement_name == '' && d.expert_uid == '')
+          || (action == 'proposed' && activeExpert()
+            && old.status in ['requested', 'replacement_needed'] && d.status == 'awaiting_acceptance'
+            && d.expert_uid == request.auth.uid && d.replacement_uid != old.responsible_uid
+            && isVerifiedPersonnelUid(d.replacement_uid)
+            && d.replacement_name == get(/databases/$(database)/documents/follow_up_personnel/$(d.replacement_uid)).data.name
+            && d.participants.toSet() == old.participants.toSet().union([d.replacement_uid].toSet())
+            && d.diff(old).affectedKeys().hasOnly(['status', 'expert_uid', 'replacement_uid', 'replacement_name', 'participants', 'revision', 'updated_at']))
+          || (action in ['accepted', 'declined'] && isActiveDiver()
+            && (action == 'declined' || isVerifiedFieldPersonnel())
+            && old.status == 'awaiting_acceptance' && request.auth.uid == old.replacement_uid
+            && d.status == (action == 'accepted' ? 'accepted' : 'replacement_needed')
+            && d.responsible_uid == (action == 'accepted' ? request.auth.uid : old.responsible_uid)
+            && d.diff(old).affectedKeys().hasOnly(['status', 'responsible_uid', 'revision', 'updated_at']))
+          || (action == 'proposal_cancelled' && activeExpert()
+            && old.status == 'awaiting_acceptance' && d.status == 'replacement_needed'
+            && d.diff(old).affectedKeys().hasOnly(['status', 'revision', 'updated_at'])
+            && hasWorkflowNotification(id, d, old.replacement_uid))
+          || (action == 'cancelled' && (activeExpert() || (isActiveDiver() && request.auth.uid == old.responsible_uid))
+            && old.status in ['requested', 'replacement_needed', 'awaiting_acceptance']
+            && d.status == 'cancelled'
+            && d.diff(old).affectedKeys().hasOnly(['status', 'revision', 'updated_at']))
+        );
+    }
+
+    // Experts receive only a name and eligibility flag, never private profiles.
+    match /follow_up_month_authorizations/{id} {
+      allow get: if isSignedIn();
+      allow create: if isSignedIn()
+        && validMonthAuthorization(id)
+        && ((isActiveDiver() && request.auth.uid == request.resource.data.primary_uid
+            && request.resource.data.responsible_uid == request.auth.uid
+            && !exists(/databases/$(database)/documents/follow_up_reassignments/$(id)))
+          || validMonthDecision(id));
+      allow update: if isSignedIn() && validMonthAuthorization(id) && validMonthDecision(id);
+      allow delete: if false;
+    }
+    function validMonthAuthorization(id) {
+      let d = request.resource.data;
+      return d.keys().hasOnly(['area_id', 'year', 'month', 'primary_uid', 'responsible_uid'])
+        && id == reassignmentId(d.area_id, d.year, d.month)
+        && d.year is int && d.year >= 2000 && d.month is int && d.month >= 1 && d.month <= 12
+        && d.primary_uid == get(/databases/$(database)/documents/follow_up_assignments/$(d.area_id)).data.primary_diver_uid;
+    }
+    function validMonthDecision(id) {
+      let r = getAfter(/databases/$(database)/documents/follow_up_reassignments/$(id)).data;
+      return r.responsible_uid == request.resource.data.responsible_uid
+        && r.updated_at == request.time
+        && !exists(/databases/$(database)/documents/follow_up_reassignment_events/$(id + '_' + string(r.revision)))
+        && workflowEvent(id, r.revision).actor_uid == request.auth.uid;
+    }
+    match /follow_up_personnel/{uid} {
+      allow read: if isAdmin() || (activeExpert() && resource.data.eligible == true);
+      allow create, update: if isAdmin()
+        && request.resource.data.keys().hasOnly(['name', 'eligible'])
+        && request.resource.data.name == getAfter(/databases/$(database)/documents/users/$(uid)).data.fullName
+        && request.resource.data.eligible == isVerifiedPersonnelUid(uid);
+      allow delete: if isAdmin();
+    }
+    // Assessments are separate, immutable records; survey observations stay intact.
+    match /follow_up_assessments/{id} {
+      allow read: if isSignedIn();
+      allow create: if activeExpert()
+        && request.resource.data.keys().hasOnly(['area_id', 'survey_id', 'survey_date',
+          'validated_infestation_level', 'infestation_validated_by', 'infestation_validated_at'])
+        && request.resource.data.area_id == get(/databases/$(database)/documents/follow_up_surveys/$(request.resource.data.survey_id)).data.area_id
+        && request.resource.data.survey_date == get(/databases/$(database)/documents/follow_up_surveys/$(request.resource.data.survey_id)).data.survey_date
+        && request.resource.data.validated_infestation_level in ['Low', 'Moderate', 'High']
+        && request.resource.data.infestation_validated_by == request.auth.uid
+        && request.resource.data.infestation_validated_at == request.time;
+      allow update, delete: if false;
+    }
+    match /follow_up_reassignments/{id} {
+      allow get: if activeExpert() || isAdmin() || (isActiveDiver()
+        && (!exists(/databases/$(database)/documents/follow_up_reassignments/$(id))
+          || request.auth.uid in resource.data.participants));
+      allow list: if activeExpert() || isAdmin()
+        || (isActiveDiver() && request.auth.uid in resource.data.participants);
+      allow create: if isActiveDiver() && validWorkflow(request.resource.data, id)
+        && workflowEvent(id, 1).action == 'requested'
+        && request.resource.data.revision == 1
+        && request.resource.data.status == 'requested'
+        && request.resource.data.responsible_uid == request.auth.uid
+        && request.resource.data.primary_uid == request.auth.uid
+        && request.resource.data.requester_uid == request.auth.uid
+        && request.resource.data.participants == [request.auth.uid]
+        && request.resource.data.requested_at == request.time
+        && request.resource.data.replacement_uid == '' && request.resource.data.replacement_name == ''
+        && request.resource.data.expert_uid == '';
+      allow update: if validWorkflowTransition(id);
+      allow delete: if false;
+    }
+    match /follow_up_reassignment_events/{eventId} {
+      allow read: if activeExpert() || isAdmin()
+        || (isActiveDiver() && request.auth.uid in get(/databases/$(database)/documents/follow_up_reassignments/$(resource.data.request_id)).data.participants);
+      allow create: if isSignedIn()
+        && request.resource.data.keys().hasOnly(['request_id', 'revision', 'actor_uid', 'action', 'at', 'state'])
+        && eventId == request.resource.data.request_id + '_' + string(request.resource.data.revision)
+        && request.resource.data.actor_uid == request.auth.uid
+        && request.resource.data.at == request.time
+        && request.resource.data.state.revision == request.resource.data.revision
+        && request.resource.data.state.updated_at == request.time
+        && request.resource.data.state == getAfter(/databases/$(database)/documents/follow_up_reassignments/$(request.resource.data.request_id)).data
+        && (!exists(/databases/$(database)/documents/follow_up_reassignments/$(request.resource.data.request_id))
+          || get(/databases/$(database)/documents/follow_up_reassignments/$(request.resource.data.request_id)).data.revision + 1 == request.resource.data.revision);
+      allow update, delete: if false;
+    }
+
+    function originalDetection() {
+      let collection = request.resource.data.get('initial_collection', 'captures');
+      return get(/databases/$(database)/documents/$(collection)/$(request.resource.data.initial_capture_id)).data;
+    }
+
+    function validSurveyImage(index, surveyId, d, date) {
+      let ids = d.capture_ids;
+      return ids.size() <= index || validSurveyImageData(ids[index], surveyId, d, date);
+    }
+
+    function validSurveyImageData(captureId, surveyId, d, date) {
+      let capture = get(/databases/$(database)/documents/captures/$(captureId)).data;
+      return capture.uid == request.auth.uid
+        && capture.monitoring_area_id == d.area_id
+        && capture.follow_up_survey_id == surveyId
+        && capture.get('follow_up_year', date.year()) == date.year()
+        && capture.get('follow_up_month', date.month()) == date.month()
+        && capture.has_processed_image == true;
+    }
+
     function personnelVerificationUpdateOnly() {
       return request.resource.data.diff(resource.data).affectedKeys()
         .hasOnly([
@@ -162,11 +365,163 @@ service cloud.firestore {
     match /captures/{captureId} {
       allow read: if request.auth != null;
 
-      allow create: if request.auth != null && isProcessedCaptureCreate();
+      allow create: if request.auth != null && isProcessedCaptureCreate()
+        && (!('follow_up_survey_id' in request.resource.data)
+          || (isActiveDiver()
+            && request.resource.data.follow_up_survey_id is string
+            && request.resource.data.follow_up_survey_id.size() > 0
+            && responsibleForMonth(request.resource.data.monitoring_area_id,
+              request.resource.data.get('follow_up_year', phNow().year()),
+              request.resource.data.get('follow_up_month', phNow().month()))));
 
       allow update: if isExpert() && expertVerificationUpdateOnly();
 
       allow delete: if false;
+    }
+
+    // One immutable primary follow-up diver per stable monitoring-area ID.
+    match /follow_up_assignments/{areaId} {
+      // Authenticated get is required to check whether the deterministic
+      // area document already exists before a create-only transaction.
+      allow get: if isSignedIn();
+
+      allow list: if isSignedIn()
+        && (
+          isAdmin()
+          || isExpert()
+          || resource.data.primary_diver_uid == request.auth.uid
+        );
+
+      allow create: if (isActiveDiver() || isExpert())
+        && request.resource.data.keys().hasAll([
+          'area_id',
+          'area_name',
+          'barangay',
+          'municipality',
+          'primary_diver_uid',
+          'primary_diver_name',
+          'initial_capture_id',
+          'initial_date',
+          'initial_detected_count',
+          'created_at',
+        ])
+        && request.resource.data.keys().hasOnly([
+          'area_id',
+          'area_name',
+          'barangay',
+          'municipality',
+          'primary_diver_uid',
+          'primary_diver_name',
+          'initial_capture_id',
+          'initial_date',
+          'initial_detected_count',
+          'initial_collection',
+          'created_at',
+        ])
+        && request.resource.data.area_id == areaId
+        && (request.resource.data.primary_diver_uid == request.auth.uid || isExpert())
+        && request.resource.data.initial_capture_id is string
+        && request.resource.data.get('initial_collection', 'captures') in ['captures', 'scan_records']
+        && originalDetection().uid == request.resource.data.primary_diver_uid
+        && originalDetection().get('admin_rejected', false) == false
+        && originalDetection().get('ai_detected_count', originalDetection().get('cots_count', 0)) == request.resource.data.initial_detected_count
+        && (originalDetection().get('monitoring_area_id', '') == areaId
+          || (originalDetection().get('monitoring_area_id', '') == '' && originalDetection().gps.latitude is number && originalDetection().gps.longitude is number))
+        && request.resource.data.initial_detected_count is int
+        && request.resource.data.initial_detected_count > 0
+        && request.resource.data.initial_date is timestamp;
+
+      allow update, delete: if false;
+    }
+
+    // Each monthly visit is a distinct immutable record owned by its diver.
+    match /follow_up_surveys/{surveyId} {
+      allow get: if isActiveDiver() && !exists(/databases/$(database)/documents/follow_up_surveys/$(surveyId));
+      allow read: if isSignedIn()
+        && (
+          isAdmin()
+          || isExpert()
+          || resource.data.uid == request.auth.uid
+          || get(/databases/$(database)/documents/follow_up_assignments/$(resource.data.area_id)).data.primary_diver_uid == request.auth.uid
+          || get(/databases/$(database)/documents/follow_up_reassignments/$(reassignmentId(resource.data.area_id, phNow().year(), phNow().month()))).data.responsible_uid == request.auth.uid
+        );
+
+      function validCreate() {
+        let d = request.resource.data;
+        let date = d.survey_date + duration.value(8, 'h');
+        return isActiveDiver()
+        && d.keys().hasAll([
+          'area_id',
+          'area_name',
+          'barangay',
+          'municipality',
+          'uid',
+          'submitted_by',
+          'survey_date',
+          'field_observed_count',
+          'field_eliminated_count',
+          'capture_ids',
+          'gps',
+          'elimination_method',
+          'notes',
+          'ai_detected_count',
+          'submitted_at',
+        ])
+        && d.keys().hasOnly([
+          'area_id',
+          'area_name',
+          'barangay',
+          'municipality',
+          'uid',
+          'submitted_by',
+          'survey_date',
+          'field_observed_count',
+          'field_eliminated_count',
+          'capture_ids',
+          'gps',
+          'surveyed_area_square_meters',
+          'survey_calendar_date',
+          'elimination_method',
+          'notes',
+          'ai_detected_count',
+          'submitted_at',
+        ])
+        && d.uid == request.auth.uid
+        && responsibleForMonth(d.area_id,
+          date.year(),
+          date.month())
+        && d.survey_date is timestamp
+        && d.survey_date <= request.time
+        && (!('survey_calendar_date' in d) || d.survey_calendar_date == surveyCalendarDay(d.survey_date))
+        && d.field_observed_count is int
+        && d.field_observed_count >= 0
+        && d.field_eliminated_count is int
+        && d.field_eliminated_count >= 0
+        && d.field_eliminated_count <= d.field_observed_count
+        && d.capture_ids is list
+        && d.capture_ids.size() > 0
+        && d.capture_ids.size() <= 8
+        && d.capture_ids.toSet().size() == d.capture_ids.size()
+        && validSurveyImage(0, surveyId, d, date) && validSurveyImage(1, surveyId, d, date)
+        && validSurveyImage(2, surveyId, d, date) && validSurveyImage(3, surveyId, d, date)
+        && validSurveyImage(4, surveyId, d, date) && validSurveyImage(5, surveyId, d, date)
+        && validSurveyImage(6, surveyId, d, date) && validSurveyImage(7, surveyId, d, date)
+        && d.gps is map
+        && d.ai_detected_count is int
+        && d.ai_detected_count >= 0
+        && (d.field_eliminated_count == 0 || d.elimination_method.size() > 0)
+        && d.submitted_at is timestamp
+        && (
+          !('surveyed_area_square_meters' in d)
+          || (
+            d.surveyed_area_square_meters is number
+            && d.surveyed_area_square_meters > 0
+          )
+        );
+      }
+      allow create: if validCreate();
+
+      allow update, delete: if false;
     }
 
     // Compressed capture photos saved after AI processing.
@@ -175,6 +530,7 @@ service cloud.firestore {
 
       allow create, update: if request.auth != null
         && request.resource.data.uid == request.auth.uid
+        && ownsCapture(captureId)
         && request.resource.data.capture_id == captureId;
 
       allow delete: if false;
@@ -258,7 +614,8 @@ service cloud.firestore {
     // by the submitting user, an expert reviewer, or an administrator.
     match /notifications/{notificationId} {
       allow read: if isSignedIn()
-        && resource.data.recipient_uid == request.auth.uid;
+        && (resource.data.recipient_uid == request.auth.uid
+          || (activeExpert() && resource.data.recipient_uid == 'experts'));
 
       allow create: if isSignedIn()
         && request.resource.data.keys().hasOnly([
@@ -269,12 +626,23 @@ service cloud.firestore {
           'related_record_id',
           'zone',
           'due_at',
+          'event_revision',
           'is_read',
           'created_at',
         ])
         && request.resource.data.is_read == false
         && (
-          (request.resource.data.type == 'scan_submitted'
+          (request.resource.data.type == 'follow_up_reassignment'
+            && request.resource.data.created_at == request.time
+            && request.resource.data.title is string && request.resource.data.title.size() <= 200
+            && request.resource.data.body is string && request.resource.data.body.size() <= 4000
+            && notificationId == request.resource.data.related_record_id + '_' + string(request.resource.data.event_revision) + '_' + request.resource.data.recipient_uid
+            && workflowEvent(request.resource.data.related_record_id, request.resource.data.event_revision).actor_uid == request.auth.uid
+            && workflowEvent(request.resource.data.related_record_id, request.resource.data.event_revision).at == request.time
+            && !exists(/databases/$(database)/documents/follow_up_reassignment_events/$(request.resource.data.related_record_id + '_' + string(request.resource.data.event_revision)))
+            && (request.resource.data.recipient_uid == 'experts'
+              || request.resource.data.recipient_uid in workflowEvent(request.resource.data.related_record_id, request.resource.data.event_revision).state.participants))
+          || (request.resource.data.type == 'scan_submitted'
             && request.resource.data.recipient_uid == request.auth.uid)
           || (isExpert()
             && request.resource.data.type in ['review_accepted', 'review_rejected'])

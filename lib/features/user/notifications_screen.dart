@@ -7,6 +7,7 @@ import '../../core/cots_colors.dart';
 import '../../models/app_notification.dart';
 import '../../providers/auth_provider.dart';
 import '../../services/notification_repository.dart';
+import '../../widgets/follow_up_reassignment_controls.dart';
 import 'cots_map_page.dart';
 import 'profile_page.dart';
 import 'records_page.dart';
@@ -90,10 +91,14 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
       id: notification.id,
       title: notification.title,
       description: notification.body,
-      actionLabel: notification.type == AppNotification.interventionAssigned
-          ? 'View task'
-          : 'View record',
-      timeText: createdAt == null ? 'Just now' : DateFormat('h:mm a').format(createdAt),
+      actionLabel: notification.type == 'follow_up_reassignment'
+          ? 'Review assignment'
+          : notification.type == AppNotification.interventionAssigned
+              ? 'View task'
+              : 'View record',
+      timeText: createdAt == null
+          ? 'Just now'
+          : DateFormat('h:mm a').format(createdAt),
       accent: accent,
       iconBg: accent.withValues(alpha: 0.13),
       icon: icon,
@@ -129,7 +134,8 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
         ),
         actions: [
           IconButton(
-            icon: const Icon(Icons.settings_outlined, color: kTextNavy, size: 24),
+            icon:
+                const Icon(Icons.settings_outlined, color: kTextNavy, size: 24),
             onPressed: () {},
           ),
         ],
@@ -155,113 +161,134 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
             return Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
-            const SizedBox(height: 4),
-            _FilterTabs(
-              selected: _filter,
-              onChanged: (v) => setState(() => _filter = v),
-            ),
-            Expanded(
-              child: snapshot.hasError
-                  ? Center(
-                      child: Padding(
-                        padding: const EdgeInsets.all(24),
-                        child: Text(
-                          'Could not load notifications.\n${snapshot.error}',
-                          textAlign: TextAlign.center,
-                          style: const TextStyle(color: kMutedGray),
-                        ),
-                      ),
-                    )
-                  : ListView(
-                      padding: const EdgeInsets.fromLTRB(16, 12, 16, 0),
-                      children: [
-                        if (snapshot.connectionState == ConnectionState.waiting)
-                          const Padding(
-                            padding: EdgeInsets.only(top: 32),
-                            child: Center(child: CircularProgressIndicator()),
-                          )
-                        else if (visible.isEmpty)
-                          const Padding(
-                            padding: EdgeInsets.only(top: 32),
-                            child: Center(
-                              child: Text(
-                                'No notifications yet.',
-                                style: TextStyle(color: kMutedGray),
-                              ),
+                const SizedBox(height: 4),
+                _FilterTabs(
+                  selected: _filter,
+                  onChanged: (v) => setState(() => _filter = v),
+                ),
+                Expanded(
+                  child: snapshot.hasError
+                      ? Center(
+                          child: Padding(
+                            padding: const EdgeInsets.all(24),
+                            child: Text(
+                              'Could not load notifications.\n${snapshot.error}',
+                              textAlign: TextAlign.center,
+                              style: const TextStyle(color: kMutedGray),
                             ),
                           ),
-                        for (final section in _sections(visible)) ...[
-                    Padding(
-                      padding: const EdgeInsets.only(bottom: 8, top: 4),
-                      child: Text(
-                        section,
-                        style: const TextStyle(
-                          fontSize: 14,
-                          fontWeight: FontWeight.w700,
-                          color: kTextNavy,
+                        )
+                      : ListView(
+                          padding: const EdgeInsets.fromLTRB(16, 12, 16, 0),
+                          children: [
+                            if (snapshot.connectionState ==
+                                ConnectionState.waiting)
+                              const Padding(
+                                padding: EdgeInsets.only(top: 32),
+                                child:
+                                    Center(child: CircularProgressIndicator()),
+                              )
+                            else if (visible.isEmpty)
+                              const Padding(
+                                padding: EdgeInsets.only(top: 32),
+                                child: Center(
+                                  child: Text(
+                                    'No notifications yet.',
+                                    style: TextStyle(color: kMutedGray),
+                                  ),
+                                ),
+                              ),
+                            for (final section in _sections(visible)) ...[
+                              Padding(
+                                padding:
+                                    const EdgeInsets.only(bottom: 8, top: 4),
+                                child: Text(
+                                  section,
+                                  style: const TextStyle(
+                                    fontSize: 14,
+                                    fontWeight: FontWeight.w700,
+                                    color: kTextNavy,
+                                  ),
+                                ),
+                              ),
+                              ...visible.where((n) => n.section == section).map(
+                                (item) {
+                                  final notification = notifications.firstWhere(
+                                    (value) => value.id == item.id,
+                                  );
+                                  return Padding(
+                                    padding: const EdgeInsets.only(bottom: 10),
+                                    child: NotificationCard(
+                                      model: item,
+                                      onTap: () async {
+                                        try {
+                                          if (!notification.isRead) {
+                                            await NotificationRepository
+                                                .markRead(notification.id);
+                                          }
+                                          if (!context.mounted) return;
+                                          if (notification.type ==
+                                              'follow_up_reassignment') {
+                                            await showReassignmentDetails(
+                                                context,
+                                                notification.relatedRecordId);
+                                          }
+                                        } catch (error) {
+                                          if (context.mounted) {
+                                            ScaffoldMessenger.of(context)
+                                                .showSnackBar(SnackBar(
+                                                    content: Text('$error')));
+                                          }
+                                        }
+                                      },
+                                    ),
+                                  );
+                                },
+                              ),
+                            ],
+                            const SizedBox(height: 12),
+                          ],
+                        ),
+                ),
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(16, 8, 16, 12),
+                  child: Row(
+                    children: [
+                      TextButton.icon(
+                        onPressed: notifications.isEmpty
+                            ? null
+                            : () =>
+                                NotificationRepository.clearAll(notifications),
+                        icon: const Icon(Icons.delete_outline_rounded,
+                            color: kDangerRed, size: 20),
+                        label: const Text(
+                          'Clear All',
+                          style: TextStyle(
+                            fontWeight: FontWeight.w600,
+                            color: kDangerRed,
+                          ),
                         ),
                       ),
-                    ),
-                    ...visible.where((n) => n.section == section).map(
-                          (item) {
-                            final notification = notifications.firstWhere(
-                              (value) => value.id == item.id,
-                            );
-                            return Padding(
-                            padding: const EdgeInsets.only(bottom: 10),
-                            child: NotificationCard(
-                              model: item,
-                              onTap: () {
-                                if (!notification.isRead) {
-                                  NotificationRepository.markRead(notification.id);
-                                }
-                              },
-                            ),
-                          );
-                          },
+                      const Spacer(),
+                      TextButton.icon(
+                        onPressed: notifications.every((item) => item.isRead)
+                            ? null
+                            : () => NotificationRepository.markAllRead(
+                                notifications),
+                        icon: const Icon(Icons.done_all_rounded,
+                            color: kSuccessGreen, size: 20),
+                        label: const Text(
+                          'Mark all as read',
+                          style: TextStyle(
+                            fontWeight: FontWeight.w600,
+                            color: kSuccessGreen,
+                          ),
                         ),
-                  ],
-                  const SizedBox(height: 12),
-                      ],
-                    ),
-            ),
-            Padding(
-              padding: const EdgeInsets.fromLTRB(16, 8, 16, 12),
-              child: Row(
-                children: [
-                  TextButton.icon(
-                    onPressed: notifications.isEmpty
-                        ? null
-                        : () => NotificationRepository.clearAll(notifications),
-                    icon: const Icon(Icons.delete_outline_rounded,
-                        color: kDangerRed, size: 20),
-                    label: const Text(
-                      'Clear All',
-                      style: TextStyle(
-                        fontWeight: FontWeight.w600,
-                        color: kDangerRed,
                       ),
-                    ),
+                    ],
                   ),
-                  const Spacer(),
-                  TextButton.icon(
-                    onPressed: notifications.every((item) => item.isRead)
-                        ? null
-                        : () => NotificationRepository.markAllRead(notifications),
-                    icon: const Icon(Icons.done_all_rounded,
-                        color: kSuccessGreen, size: 20),
-                    label: const Text(
-                      'Mark all as read',
-                      style: TextStyle(
-                        fontWeight: FontWeight.w600,
-                        color: kSuccessGreen,
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-            ),
-            const SizedBox(height: 72),
+                ),
+                const SizedBox(height: 72),
               ],
             );
           },
@@ -322,7 +349,8 @@ class NotificationCard extends StatelessWidget {
                             shape: BoxShape.circle,
                           ),
                           alignment: Alignment.center,
-                          child: Icon(model.icon, color: model.accent, size: 24),
+                          child:
+                              Icon(model.icon, color: model.accent, size: 24),
                         ),
                         const SizedBox(width: 12),
                         Expanded(
@@ -381,7 +409,8 @@ class NotificationCard extends StatelessWidget {
                               mainAxisSize: MainAxisSize.min,
                               children: [
                                 ConstrainedBox(
-                                  constraints: const BoxConstraints(maxWidth: 96),
+                                  constraints:
+                                      const BoxConstraints(maxWidth: 96),
                                   child: Text(
                                     model.timeText.split('\n').first,
                                     textAlign: TextAlign.end,

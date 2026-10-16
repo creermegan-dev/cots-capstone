@@ -7,8 +7,11 @@ import '../models/activity_type.dart';
 import '../models/cots_confidence_policy.dart';
 import '../models/cots_detection_result.dart';
 import '../models/record_collection.dart';
+import '../models/follow_up_monitoring_model.dart';
 import 'capture_service.dart';
+import 'capture_repository.dart';
 import 'cots_size_estimator.dart';
+import 'follow_up_monitoring_repository.dart';
 import 'intervention_assignment_repository.dart';
 import 'notification_repository.dart';
 import 'processed_detection_payload.dart';
@@ -22,7 +25,7 @@ abstract final class ScanRecordService {
   static final WindowsScanRecordRestService _windowsLegacyRest =
       WindowsScanRecordRestService();
 
-  static Future<void> submit({
+  static Future<String?> submit({
     required String uid,
     required String submittedBy,
     required String imageName,
@@ -42,6 +45,12 @@ abstract final class ScanRecordService {
     required String? removalMethod,
     required CotsSizeEstimate? sizeEstimate,
     String? linkedCaptureId,
+    bool isFollowUp = false,
+    String? submissionId,
+    String? followUpSurveyId,
+    DateTime? followUpSurveyDate,
+    FollowUpAssignmentModel? followUpAssignment,
+    void Function(String message)? onWarning,
   }) async {
     if (CotsActivityType.isRemoval(activityType)) {
       final captureId = linkedCaptureId?.trim() ?? '';
@@ -80,10 +89,14 @@ abstract final class ScanRecordService {
       } catch (_) {
         // Removal record is already saved; assignment update is optional.
       }
-      return;
+      return null;
     }
 
     final captureId = await CaptureService.submit(
+      submissionId: submissionId,
+      followUpSurveyId: followUpSurveyId,
+      followUpSurveyDate: followUpSurveyDate,
+      followUpAssignment: followUpAssignment,
       uid: uid,
       submittedBy: submittedBy,
       imageName: imageName,
@@ -99,6 +112,26 @@ abstract final class ScanRecordService {
       measurementReferenceVisible: measurementReferenceVisible,
       sizeEstimate: sizeEstimate,
     );
+    final submittedAt = DateTime.now();
+    if (!isFollowUp) {
+      try {
+        await FollowUpMonitoringRepository.considerNewDetection(
+          captureId: captureId,
+          uid: uid,
+          diverName: submittedBy,
+          detection: detection,
+          latitude: latitude,
+          longitude: longitude,
+          dateTaken: dateTaken,
+          submittedAt: submittedAt,
+          imageWidth: imageWidth,
+          imageHeight: imageHeight,
+        );
+      } catch (_) {
+        onWarning?.call(
+            'Detection saved. Follow-up assignment could not be completed; retry from Follow-up.');
+      }
+    }
     await NotificationRepository.createScanSubmitted(
       recipientUid: uid,
       recordId: captureId,
@@ -108,6 +141,7 @@ abstract final class ScanRecordService {
         longitude: longitude,
       ),
     );
+    return captureId;
   }
 
   static List<CotsBoundingBox> detectionBoxesForStorage({
@@ -142,6 +176,12 @@ abstract final class ScanRecordService {
         reviewedBy: reviewedBy,
         cotsDecisions: cotsDecisions,
       );
+      final capture = await CaptureRepository.getById(recordId);
+      if (capture != null) {
+        await FollowUpMonitoringRepository.considerExpertValidatedCapture(
+          capture,
+        );
+      }
       return;
     }
 
@@ -167,6 +207,7 @@ abstract final class ScanRecordService {
         reviewedBy: reviewedBy,
         cotsDecisions: cotsDecisions,
       );
+      await _syncLegacyFollowUp(recordId);
       return;
     }
 
@@ -174,5 +215,17 @@ abstract final class ScanRecordService {
         .collection(RecordCollection.legacyScanRecords)
         .doc(recordId)
         .update(payload);
+    await _syncLegacyFollowUp(recordId);
+  }
+
+  static Future<void> _syncLegacyFollowUp(String recordId) async {
+    final history = await FollowUpMonitoringRepository.loadDetectionHistory();
+    final matches = history.where((capture) =>
+        capture.id == recordId &&
+        capture.sourceCollection == RecordCollection.legacyScanRecords);
+    if (matches.isNotEmpty) {
+      await FollowUpMonitoringRepository.considerExpertValidatedCapture(
+          matches.first);
+    }
   }
 }

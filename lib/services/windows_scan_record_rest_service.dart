@@ -47,15 +47,12 @@ class WindowsScanRecordRestService {
         'from': [
           {'collectionId': 'scan_records'},
         ],
-        'orderBy': [
-          {
-            'field': {'fieldPath': 'submitted_at'},
-            'direction': 'DESCENDING',
-          },
-        ],
       },
     );
-    return _parseQueryResults(body);
+    final records = _parseQueryResults(body);
+    records.sort((a, b) => (b.submittedAt ?? DateTime(1970))
+        .compareTo(a.submittedAt ?? DateTime(1970)));
+    return records;
   }
 
   Future<List<ScanRecordModel>> queryForUser({
@@ -299,11 +296,13 @@ class WindowsScanRecordRestService {
           'admin_confirmed': _bool(adminConfirmed),
           'admin_rejected': _bool(adminRejected),
           'admin_reviewed_by': _string(reviewedBy),
-          'admin_reviewed_at': _timestamp(DateTime.now().toUtc().toIso8601String()),
+          'admin_reviewed_at':
+              _timestamp(DateTime.now().toUtc().toIso8601String()),
           'admin_cots_decisions': {
             'arrayValue': {
               'values': [
-                for (final d in PerCotsAdminDecisionX.listToStorage(cotsDecisions))
+                for (final d
+                    in PerCotsAdminDecisionX.listToStorage(cotsDecisions))
                   _string(d),
               ],
             },

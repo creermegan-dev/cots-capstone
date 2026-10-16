@@ -6,6 +6,7 @@ import 'activity_type.dart';
 import 'capture_model.dart';
 import 'cots_confidence_policy.dart';
 import 'cots_detection_result.dart';
+import 'follow_up_monitoring_model.dart';
 import 'record_collection.dart';
 import 'removal_record_model.dart';
 import '../utils/scan_record_image.dart';
@@ -44,6 +45,9 @@ class ScanRecordModel {
     this.recordCollection = RecordCollection.legacyScanRecords,
     this.linkedCaptureId,
     this.linkedCaptureDisplayId,
+    this.followUpSurvey,
+    this.followUpStatus,
+    this.sourceCapture,
   });
 
   final String id;
@@ -77,6 +81,9 @@ class ScanRecordModel {
   final String recordCollection;
   final String? linkedCaptureId;
   final String? linkedCaptureDisplayId;
+  final FollowUpSurveyModel? followUpSurvey;
+  final FollowUpSurveyStatus? followUpStatus;
+  final CaptureModel? sourceCapture;
 
   /// Parses a Firestore REST API document (`fields` map).
   factory ScanRecordModel.fromRestDocument(Map<String, dynamic> doc) {
@@ -138,6 +145,7 @@ class ScanRecordModel {
 
   factory ScanRecordModel.fromCapture(CaptureModel capture) {
     return ScanRecordModel(
+      sourceCapture: capture,
       id: capture.id,
       uid: capture.uid,
       submittedBy: capture.submittedBy,
@@ -198,6 +206,34 @@ class ScanRecordModel {
     );
   }
 
+  factory ScanRecordModel.fromFollowUpSurvey(
+    FollowUpSurveyModel survey, {
+    FollowUpSurveyStatus? status,
+  }) {
+    return ScanRecordModel(
+      followUpStatus: status,
+      id: survey.id,
+      uid: survey.uid,
+      submittedBy: survey.submittedBy,
+      imageName: '${survey.captureIds.length} GoPro image(s)',
+      imagePath: '',
+      activityType: CotsActivityType.followUpSurvey,
+      aiDetectedCount: survey.aiDetectedCount,
+      confidence: 0,
+      captureSource: CaptureSource.goProUnderwaterImage,
+      zone: survey.areaName.isNotEmpty
+          ? '${survey.areaName} · ${survey.barangay}, ${survey.municipality}'
+          : survey.areaId,
+      notes: survey.notes,
+      submittedAt: survey.submittedAt,
+      dateTaken: survey.surveyDate,
+      latitude: survey.latitude,
+      longitude: survey.longitude,
+      recordCollection: RecordCollection.followUpSurveys,
+      followUpSurvey: survey,
+    );
+  }
+
   factory ScanRecordModel.fromFirestore(
     DocumentSnapshot<Map<String, dynamic>> doc,
   ) {
@@ -219,11 +255,12 @@ class ScanRecordModel {
       imagePath: data['image_path'] as String? ?? '',
       imageUrl: data['image_url'] as String? ?? '',
       storageObjectPath: data['storage_object_path'] as String? ?? '',
-      activityType: data['activity_type'] as String? ?? CotsActivityType.detectionOnly,
+      activityType:
+          data['activity_type'] as String? ?? CotsActivityType.detectionOnly,
       aiDetectedCount: _asInt(data['ai_detected_count'] ?? data['cots_count']),
       confidence: _asDouble(data['confidence']) ?? 0,
-      captureSource:
-          data['capture_source'] as String? ?? CaptureSource.goProUnderwaterImage,
+      captureSource: data['capture_source'] as String? ??
+          CaptureSource.goProUnderwaterImage,
       zone: data['zone'] as String? ?? 'Unassigned',
       notes: data['notes'] as String? ?? '',
       submittedAt: _asDateTime(data['submitted_at']),
@@ -258,8 +295,14 @@ class ScanRecordModel {
       zone,
       fmt.format(when),
       count,
-      _densityEstimate(count),
-      _riskFromCount(count),
+      followUpSurvey != null ||
+              sourceCapture?.followUpSurveyId.isNotEmpty == true
+          ? null
+          : _densityEstimate(count),
+      followUpSurvey != null ||
+              sourceCapture?.followUpSurveyId.isNotEmpty == true
+          ? 'Not validated'
+          : _riskFromCount(count),
       submittedBy,
       confidencePercent,
       activityType: CotsActivityType.label(activityType),
@@ -271,7 +314,8 @@ class ScanRecordModel {
       imageName: imageName,
       notes: notes,
       dateCaptured: dateTaken != null ? fmt.format(dateTaken!) : 'Unknown',
-      dateUploaded: submittedAt != null ? fmt.format(submittedAt!) : fmt.format(when),
+      dateUploaded:
+          submittedAt != null ? fmt.format(submittedAt!) : fmt.format(when),
       latitude: latitude,
       longitude: longitude,
       imagePath: imagePath,
@@ -298,7 +342,9 @@ class ScanRecordModel {
 
   String get displayRecordId => storedDisplayRecordId.isNotEmpty
       ? storedDisplayRecordId
-      : formatDisplayRecordId(id);
+      : recordCollection == RecordCollection.followUpSurveys
+          ? 'FUP-${id.length <= 8 ? id : id.substring(0, 8)}'.toUpperCase()
+          : formatDisplayRecordId(id);
 
   /// User-facing ID stored in Firestore as `display_record_id` (e.g. REC-A1B2C3D4).
   static String formatDisplayRecordId(String documentId) =>
@@ -308,7 +354,8 @@ class ScanRecordModel {
   static String newDocumentId() =>
       FirebaseFirestore.instance.collection('scan_records').doc().id;
 
-  int get confidencePercent => CotsConfidencePolicy.percentFromConfidence(confidence);
+  int get confidencePercent =>
+      CotsConfidencePolicy.percentFromConfidence(confidence);
 
   List<CotsDetectionReviewItem> get detectionReviewItems =>
       CotsConfidencePolicy.buildDetectionItems(
@@ -320,6 +367,10 @@ class ScanRecordModel {
       );
 
   String get userStatusLabel {
+    if (recordCollection == RecordCollection.followUpSurveys) {
+      return followUpSurveyStatusLabel(
+          followUpStatus ?? FollowUpSurveyStatus.submitted);
+    }
     if (CotsActivityType.isRemoval(activityType)) {
       if (adminConfirmed) return 'Verified';
       if (adminRejected) return 'Rejected';
@@ -333,6 +384,9 @@ class ScanRecordModel {
   }
 
   String get userStatusDescription {
+    if (recordCollection == RecordCollection.followUpSurveys) {
+      return 'Monthly follow-up survey saved for ${followUpSurvey?.areaName ?? zone}.';
+    }
     if (CotsActivityType.isRemoval(activityType)) {
       if (adminConfirmed) {
         return 'Removal evidence was verified. This intervention record is closed.';
@@ -351,8 +405,9 @@ class ScanRecordModel {
   }
 
   bool get shouldRetakePhoto =>
+      recordCollection != RecordCollection.followUpSurveys &&
       CotsConfidencePolicy.recordBandFromItems(detectionReviewItems) ==
-      CotsVerificationBand.retakeRequired;
+          CotsVerificationBand.retakeRequired;
 
   String get formattedCoordinates {
     if (latitude == null || longitude == null) return 'Unknown';
@@ -467,7 +522,8 @@ class ScanRecordModel {
     return null;
   }
 
-  static List<CotsBoundingBox> _readDetectionBoxes(Map<String, dynamic> fields) {
+  static List<CotsBoundingBox> _readDetectionBoxes(
+      Map<String, dynamic> fields) {
     final raw = fields['detections'];
     if (raw is Map && raw['arrayValue'] is Map) {
       final values = (raw['arrayValue'] as Map)['values'];

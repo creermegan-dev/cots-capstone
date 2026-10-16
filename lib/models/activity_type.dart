@@ -2,10 +2,12 @@
 abstract final class CotsActivityType {
   static const detectionOnly = 'detection_only';
   static const removalActivity = 'removal_activity';
+  static const followUpSurvey = 'follow_up_survey';
 
   static const labels = {
     detectionOnly: 'Detection Only',
     removalActivity: 'Removal Activity',
+    followUpSurvey: 'Follow-up Survey',
   };
 
   static String label(String value) => labels[value] ?? value;

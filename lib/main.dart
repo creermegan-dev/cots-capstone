@@ -10,6 +10,8 @@ import 'features/auth/auth_routes.dart';
 import 'features/auth/auth_wrapper.dart';
 import 'features/auth/login_screen.dart';
 import 'features/auth/signup_screen.dart';
+import 'features/user/follow_up_page.dart';
+import 'features/user/user_bottom_nav.dart';
 import 'core/root_scaffold_messenger.dart';
 import 'firebase_options.dart';
 import 'providers/admin_record_review_tracker.dart';
@@ -65,6 +67,7 @@ class CotsMonitorApp extends StatelessWidget {
           AuthRoutes.login: (_) => const LoginScreen(),
           AdminRoutes.shell: (_) => const AdminShellScreen(),
           '/landing': (_) => const AuthWrapper(),
+          userFollowUpRoute: (_) => const FollowUpPage(),
         },
       ),
     );

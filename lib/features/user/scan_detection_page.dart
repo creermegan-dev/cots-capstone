@@ -20,11 +20,15 @@ import '../../models/activity_type.dart';
 import '../../models/capture_model.dart';
 import '../../models/cots_confidence_policy.dart';
 import '../../models/cots_detection_result.dart';
+import '../../models/follow_up_monitoring_model.dart';
 import '../../widgets/cots_detection_image_overlay.dart';
 import '../../providers/auth_provider.dart';
 import '../../services/cots_yolo_detector.dart';
 import '../../services/gps_exif_parser.dart';
 import '../../services/capture_repository.dart';
+import '../../services/follow_up_monitoring_repository.dart';
+import '../../services/follow_up_reassignment_repository.dart';
+import '../../models/follow_up_reassignment.dart';
 import '../../services/scan_record_service.dart';
 import '../../services/zone_assignment_service.dart';
 import 'cots_map_page.dart';
@@ -45,10 +49,14 @@ class ScanDetectionPage extends StatefulWidget {
     super.key,
     this.initialActivityType,
     this.initialLinkedCaptureId,
+    this.followUpAssignment,
+    this.previousFollowUpSurvey,
   });
 
   final String? initialActivityType;
   final String? initialLinkedCaptureId;
+  final FollowUpAssignmentModel? followUpAssignment;
+  final FollowUpSurveyModel? previousFollowUpSurvey;
 
   @override
   State<ScanDetectionPage> createState() => _ScanDetectionPageState();
@@ -61,6 +69,11 @@ class _ScanDetectionPageState extends State<ScanDetectionPage> {
   final _depthController = TextEditingController();
   final _removedQtyController = TextEditingController();
   final _envNotesController = TextEditingController();
+  final _fieldObservedController = TextEditingController(text: '0');
+  final _fieldEliminatedController = TextEditingController(text: '0');
+  final _surveyedAreaController = TextEditingController();
+  final _surveyLatitudeController = TextEditingController();
+  final _surveyLongitudeController = TextEditingController();
 
   _DetectionStep _step = _DetectionStep.upload;
   final List<_PendingScanImage> _images = [];
@@ -75,14 +88,18 @@ class _ScanDetectionPageState extends State<ScanDetectionPage> {
   StreamSubscription<List<CaptureModel>>? _captureSub;
   bool _isBusy = false;
   bool _showValidation = false;
+  DateTime _surveyDate = MonitoringMonth.calendar(DateTime.now());
+  String? _followUpRemovalMethod;
+  final String _followUpSurveyId = FollowUpMonitoringRepository.newSurveyId();
   Timer? _liveClockTimer;
 
+  bool get _isFollowUp => widget.followUpAssignment != null;
+  int get _imageLimit => _isFollowUp ? 8 : _maxBatchImages;
   bool get _hasImages => _images.isNotEmpty;
   bool get _isBatch => _images.length > 1;
   _PendingScanImage? get _primary => _hasImages ? _images.first : null;
 
   Uint8List? get _imageBytes => _primary?.bytes;
-  XFile? get _imageFile => _primary?.file;
   String? get _fileName => _primary?.fileName;
   CotsDetectionResult? get _detection => _primary?.detection;
   DateTime? get _dateTaken => _primary?.metadata.dateTaken;
@@ -111,15 +128,18 @@ class _ScanDetectionPageState extends State<ScanDetectionPage> {
     return _gpsFromExif ? 'Image EXIF GPS' : 'Live Device GPS';
   }
 
-  String get _activityTypeLabel => CotsActivityType.isRemoval(_activityType)
-      ? 'Removal Activity'
-      : 'Detection Only';
+  String get _activityTypeLabel => _isFollowUp
+      ? 'Follow-up Survey'
+      : CotsActivityType.isRemoval(_activityType)
+          ? 'Removal Activity'
+          : 'Detection Only';
 
   @override
   void initState() {
     super.initState();
-    _activityType =
-        widget.initialActivityType ?? CotsActivityType.detectionOnly;
+    _activityType = _isFollowUp
+        ? CotsActivityType.detectionOnly
+        : widget.initialActivityType ?? CotsActivityType.detectionOnly;
     _linkedCaptureId = widget.initialLinkedCaptureId;
     _startLiveClock();
     WidgetsBinding.instance.addPostFrameCallback((_) => _initializeCaptures());
@@ -179,6 +199,11 @@ class _ScanDetectionPageState extends State<ScanDetectionPage> {
     _depthController.dispose();
     _removedQtyController.dispose();
     _envNotesController.dispose();
+    _fieldObservedController.dispose();
+    _fieldEliminatedController.dispose();
+    _surveyedAreaController.dispose();
+    _surveyLatitudeController.dispose();
+    _surveyLongitudeController.dispose();
     super.dispose();
   }
 
@@ -206,7 +231,8 @@ class _ScanDetectionPageState extends State<ScanDetectionPage> {
         centerTitle: true,
       ),
       bottomNavigationBar: UserBottomNavBar(
-        active: UserNavDestination.scan,
+        active:
+            _isFollowUp ? UserNavDestination.followUp : UserNavDestination.scan,
         mapPageBuilder: () => const CotsMapPage(),
         recordsPageBuilder: () => const RecordsPage(),
         profilePageBuilder: () => const ProfilePage(),
@@ -237,6 +263,13 @@ class _ScanDetectionPageState extends State<ScanDetectionPage> {
   }
 
   String get _stepTitle {
+    if (_isFollowUp) {
+      return switch (_step) {
+        _DetectionStep.upload => 'Follow-up Survey',
+        _DetectionStep.details => 'Survey Details',
+        _DetectionStep.review => 'Review Follow-up',
+      };
+    }
     return switch (_step) {
       _DetectionStep.upload => 'New Detection',
       _DetectionStep.details => 'Scan / Detection',
@@ -387,10 +420,16 @@ class _ScanDetectionPageState extends State<ScanDetectionPage> {
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
         _sectionHeader(
-          isRemoval ? 'Upload Removal Image' : 'Upload GoPro Image',
-          isRemoval
-              ? 'Upload underwater evidence of COTS removal for this assignment.'
-              : 'Select one or more underwater photos for AI crown-of-thorns detection.',
+          _isFollowUp
+              ? 'Upload GoPro Monitoring Images'
+              : isRemoval
+                  ? 'Upload Removal Image'
+                  : 'Upload GoPro Image',
+          _isFollowUp
+              ? 'Add photos from this visit. Each image will use the existing AI detection workflow.'
+              : isRemoval
+                  ? 'Upload underwater evidence of COTS removal for this assignment.'
+                  : 'Select one or more underwater photos for AI crown-of-thorns detection.',
         ),
         const SizedBox(height: 12),
         _card(
@@ -437,7 +476,7 @@ class _ScanDetectionPageState extends State<ScanDetectionPage> {
                       ),
                       const SizedBox(height: 4),
                       Text(
-                        'JPG, JPEG, or PNG · max 20 MB each · up to $_maxBatchImages photos',
+                        'JPG, JPEG, or PNG · max 20 MB each · up to $_imageLimit photos',
                         textAlign: TextAlign.center,
                         style: const TextStyle(color: kMutedGray, fontSize: 12),
                       ),
@@ -517,92 +556,40 @@ class _ScanDetectionPageState extends State<ScanDetectionPage> {
             ],
           ),
         ),
-        const SizedBox(height: 16),
-        _sectionHeader(
-          'Activity Type',
-          'What did you do during this dive observation?',
-        ),
-        const SizedBox(height: 10),
-        _card(
-          padding: const EdgeInsets.all(12),
-          child: Column(
-            children: [
-              _activityTile(
-                CotsActivityType.detectionOnly,
-                'Detection Only',
-                'Observed COTS but did not remove.',
-                Icons.visibility_outlined,
-              ),
-              const SizedBox(height: 8),
-              _activityTile(
-                CotsActivityType.removalActivity,
-                'Removal Activity',
-                'Removed one or more COTS underwater.',
-                Icons.cleaning_services_outlined,
-              ),
-            ],
+        if (!_isFollowUp) ...[
+          const SizedBox(height: 16),
+          _sectionHeader(
+            'Activity Type',
+            'What did you do during this dive observation?',
           ),
-        ),
-        const SizedBox(height: 16),
-        _card(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              const Text(
-                'Depth',
-                style: TextStyle(
-                  color: kTextNavy,
-                  fontWeight: FontWeight.w700,
-                  fontSize: 14,
+          const SizedBox(height: 10),
+          _card(
+            padding: const EdgeInsets.all(12),
+            child: Column(
+              children: [
+                _activityTile(
+                  CotsActivityType.detectionOnly,
+                  'Detection Only',
+                  'Observed COTS but did not remove.',
+                  Icons.visibility_outlined,
                 ),
-              ),
-              const SizedBox(height: 10),
-              TextFormField(
-                controller: _depthController,
-                keyboardType:
-                    const TextInputType.numberWithOptions(decimal: true),
-                inputFormatters: [
-                  FilteringTextInputFormatter.allow(RegExp(r'^\d*\.?\d{0,2}$')),
-                ],
-                autovalidateMode: _showValidation
-                    ? AutovalidateMode.onUserInteraction
-                    : AutovalidateMode.disabled,
-                validator: (value) {
-                  if (isRemoval) return null;
-                  final raw = (value ?? '').trim();
-                  if (raw.isEmpty) return 'Please enter capture depth.';
-                  final depth = double.tryParse(raw);
-                  if (depth == null) return 'Please enter capture depth.';
-                  if (depth < 0 || depth > 100) {
-                    return 'Depth must be between 0 and 100 m.';
-                  }
-                  return null;
-                },
-                decoration: _inputDecoration('Depth').copyWith(
-                  suffixText: 'm',
+                const SizedBox(height: 8),
+                _activityTile(
+                  CotsActivityType.removalActivity,
+                  'Removal Activity',
+                  'Removed one or more COTS underwater.',
+                  Icons.cleaning_services_outlined,
                 ),
-              ),
-              const SizedBox(height: 18),
-              Text(
-                isRemoval ? 'Remarks' : 'Notes',
-                style: const TextStyle(
-                  color: kTextNavy,
-                  fontWeight: FontWeight.w700,
-                  fontSize: 14,
-                ),
-              ),
-              const SizedBox(height: 10),
-              TextFormField(
-                controller: _notesController,
-                maxLines: 3,
-                decoration: _inputDecoration(
-                  isRemoval ? 'optional remarks' : 'optional field notes',
-                ),
-              ),
-              if (isRemoval) ...[
-                const SizedBox(height: 18),
+              ],
+            ),
+          ),
+          const SizedBox(height: 16),
+          _card(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
                 const Text(
-                  'Date Removed',
+                  'Depth',
                   style: TextStyle(
                     color: kTextNavy,
                     fontWeight: FontWeight.w700,
@@ -610,37 +597,92 @@ class _ScanDetectionPageState extends State<ScanDetectionPage> {
                   ),
                 ),
                 const SizedBox(height: 10),
-                Container(
-                  width: double.infinity,
-                  padding:
-                      const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
-                  decoration: BoxDecoration(
-                    color: Colors.white,
-                    borderRadius: BorderRadius.circular(12),
-                    border: Border.all(color: kBorderGray),
-                  ),
-                  child: Row(
-                    children: [
-                      const Icon(Icons.event_available_outlined,
-                          color: kPrimaryTeal, size: 20),
-                      const SizedBox(width: 10),
-                      Expanded(
-                        child: Text(
-                          _dateCapturedLabel,
-                          style: const TextStyle(
-                            color: kTextNavy,
-                            fontWeight: FontWeight.w600,
-                            fontSize: 14,
-                          ),
-                        ),
-                      ),
-                    ],
+                TextFormField(
+                  controller: _depthController,
+                  keyboardType:
+                      const TextInputType.numberWithOptions(decimal: true),
+                  inputFormatters: [
+                    FilteringTextInputFormatter.allow(
+                        RegExp(r'^\d*\.?\d{0,2}$')),
+                  ],
+                  autovalidateMode: _showValidation
+                      ? AutovalidateMode.onUserInteraction
+                      : AutovalidateMode.disabled,
+                  validator: (value) {
+                    if (isRemoval) return null;
+                    final raw = (value ?? '').trim();
+                    if (raw.isEmpty) return 'Please enter capture depth.';
+                    final depth = double.tryParse(raw);
+                    if (depth == null) return 'Please enter capture depth.';
+                    if (depth < 0 || depth > 100) {
+                      return 'Depth must be between 0 and 100 m.';
+                    }
+                    return null;
+                  },
+                  decoration: _inputDecoration('Depth').copyWith(
+                    suffixText: 'm',
                   ),
                 ),
+                const SizedBox(height: 18),
+                Text(
+                  isRemoval ? 'Remarks' : 'Notes',
+                  style: const TextStyle(
+                    color: kTextNavy,
+                    fontWeight: FontWeight.w700,
+                    fontSize: 14,
+                  ),
+                ),
+                const SizedBox(height: 10),
+                TextFormField(
+                  controller: _notesController,
+                  maxLines: 3,
+                  decoration: _inputDecoration(
+                    isRemoval ? 'optional remarks' : 'optional field notes',
+                  ),
+                ),
+                if (isRemoval) ...[
+                  const SizedBox(height: 18),
+                  const Text(
+                    'Date Removed',
+                    style: TextStyle(
+                      color: kTextNavy,
+                      fontWeight: FontWeight.w700,
+                      fontSize: 14,
+                    ),
+                  ),
+                  const SizedBox(height: 10),
+                  Container(
+                    width: double.infinity,
+                    padding: const EdgeInsets.symmetric(
+                        horizontal: 14, vertical: 14),
+                    decoration: BoxDecoration(
+                      color: Colors.white,
+                      borderRadius: BorderRadius.circular(12),
+                      border: Border.all(color: kBorderGray),
+                    ),
+                    child: Row(
+                      children: [
+                        const Icon(Icons.event_available_outlined,
+                            color: kPrimaryTeal, size: 20),
+                        const SizedBox(width: 10),
+                        Expanded(
+                          child: Text(
+                            _dateCapturedLabel,
+                            style: const TextStyle(
+                              color: kTextNavy,
+                              fontWeight: FontWeight.w600,
+                              fontSize: 14,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
               ],
-            ],
+            ),
           ),
-        ),
+        ],
         const SizedBox(height: 16),
         _buildAutoCaptureCard(dateUploadedLabel: 'Set when you submit'),
         const SizedBox(height: 16),
@@ -650,7 +692,18 @@ class _ScanDetectionPageState extends State<ScanDetectionPage> {
   }
 
   Widget _buildDetailsStep() {
-    if (_isBatch) return _buildBatchDetailsStep();
+    if (_isBatch) {
+      return Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          _buildBatchDetailsStep(),
+          if (_isFollowUp) ...[
+            const SizedBox(height: 14),
+            _buildFollowUpFields(),
+          ],
+        ],
+      );
+    }
 
     final isRemoval = CotsActivityType.isRemoval(_activityType);
     final count = _detection?.count ?? 0;
@@ -700,7 +753,9 @@ class _ScanDetectionPageState extends State<ScanDetectionPage> {
                     ),
                     const SizedBox(height: 8),
                     Text(
-                      'Infestation Level: ${_infestationLevelLabel(count)}',
+                      _isFollowUp
+                          ? 'Infestation level: not yet expert-validated'
+                          : 'Infestation Level: ${_infestationLevelLabel(count)}',
                       style: TextStyle(
                         color: kMutedGray.withValues(alpha: 0.95),
                         fontSize: 12,
@@ -715,7 +770,10 @@ class _ScanDetectionPageState extends State<ScanDetectionPage> {
           ),
         ),
         const SizedBox(height: 16),
-        _assignedZoneCard(_assignedZone),
+        if (_isFollowUp)
+          _buildFollowUpFields()
+        else
+          _assignedZoneCard(_assignedZone),
         if (isRemoval) ...[
           const SizedBox(height: 16),
           _linkedCaptureSelector(),
@@ -798,8 +856,255 @@ class _ScanDetectionPageState extends State<ScanDetectionPage> {
     );
   }
 
+  Widget _buildFollowUpFields() {
+    final assignment = widget.followUpAssignment!;
+    final previous = widget.previousFollowUpSurvey;
+    final dateLabel = DateFormat('MMM d, yyyy').format(_surveyDate);
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        _card(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Text(
+                'Assigned monitoring area',
+                style: TextStyle(
+                  color: kTextNavy,
+                  fontSize: 14,
+                  fontWeight: FontWeight.w800,
+                ),
+              ),
+              const SizedBox(height: 5),
+              Text(
+                '${assignment.areaName} · ${assignment.barangay}, '
+                '${assignment.municipality}',
+                style: const TextStyle(color: kMutedGray, height: 1.35),
+              ),
+              const Divider(height: 22),
+              Text(
+                previous == null
+                    ? 'No previous follow-up survey has been recorded.'
+                    : 'Previous visit: '
+                        '${DateFormat('MMM d, yyyy').format(previous.surveyDate)} · '
+                        'Field observed ${previous.fieldObservedCount}, '
+                        'eliminated ${previous.fieldEliminatedCount}, '
+                        'AI detections ${previous.aiDetectedCount}.',
+                style: const TextStyle(
+                  color: kTextNavy,
+                  height: 1.35,
+                  fontSize: 12,
+                ),
+              ),
+            ],
+          ),
+        ),
+        const SizedBox(height: 12),
+        _card(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              const Text(
+                'Actual monitoring date',
+                style: TextStyle(
+                  color: kTextNavy,
+                  fontSize: 14,
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+              const SizedBox(height: 8),
+              OutlinedButton.icon(
+                onPressed: _isBusy ? null : _chooseSurveyDate,
+                icon: const Icon(Icons.calendar_month_outlined),
+                label: Text(dateLabel),
+                style: OutlinedButton.styleFrom(
+                  foregroundColor: kPrimaryTeal,
+                  minimumSize: const Size.fromHeight(48),
+                  alignment: Alignment.centerLeft,
+                ),
+              ),
+              const SizedBox(height: 16),
+              TextFormField(
+                controller: _fieldObservedController,
+                keyboardType: TextInputType.number,
+                inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+                autovalidateMode: _showValidation
+                    ? AutovalidateMode.onUserInteraction
+                    : AutovalidateMode.disabled,
+                validator: (value) {
+                  final count = int.tryParse((value ?? '').trim());
+                  return count == null || count < 0
+                      ? 'Enter a non-negative field-observed count.'
+                      : null;
+                },
+                decoration: _inputDecoration('Field-observed COTS'),
+              ),
+              const SizedBox(height: 12),
+              TextFormField(
+                controller: _fieldEliminatedController,
+                keyboardType: TextInputType.number,
+                inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+                autovalidateMode: _showValidation
+                    ? AutovalidateMode.onUserInteraction
+                    : AutovalidateMode.disabled,
+                validator: (value) {
+                  final count = int.tryParse((value ?? '').trim());
+                  final observed =
+                      int.tryParse(_fieldObservedController.text.trim());
+                  if (count == null || count < 0) {
+                    return 'Enter a non-negative eliminated count.';
+                  }
+                  if (observed != null && count > observed) {
+                    return 'Eliminated count cannot exceed field-observed COTS.';
+                  }
+                  return null;
+                },
+                decoration: _inputDecoration('Actually eliminated'),
+              ),
+              if ((int.tryParse(_fieldEliminatedController.text.trim()) ?? 0) >
+                  0) ...[
+                const SizedBox(height: 12),
+                DropdownButtonFormField<String>(
+                  initialValue: _followUpRemovalMethod,
+                  decoration: _inputDecoration('Elimination method'),
+                  items: RemovalMethod.options
+                      .map((method) => DropdownMenuItem(
+                            value: method,
+                            child: Text(method),
+                          ))
+                      .toList(),
+                  onChanged: (value) =>
+                      setState(() => _followUpRemovalMethod = value),
+                  validator: (value) {
+                    if (!_showValidation ||
+                        (int.tryParse(
+                                  _fieldEliminatedController.text.trim(),
+                                ) ??
+                                0) ==
+                            0) {
+                      return null;
+                    }
+                    return value == null || value.isEmpty
+                        ? 'Select the method used.'
+                        : null;
+                  },
+                ),
+              ],
+              const SizedBox(height: 16),
+              const Text(
+                'GPS reference location (optional)',
+                style: TextStyle(
+                  color: kTextNavy,
+                  fontSize: 14,
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+              const SizedBox(height: 8),
+              TextFormField(
+                controller: _surveyLatitudeController,
+                keyboardType: const TextInputType.numberWithOptions(
+                    decimal: true, signed: true),
+                autovalidateMode: _showValidation
+                    ? AutovalidateMode.onUserInteraction
+                    : AutovalidateMode.disabled,
+                validator: (_) => _surveyCoordinatesError(),
+                decoration: _inputDecoration('Latitude'),
+              ),
+              const SizedBox(height: 10),
+              TextFormField(
+                controller: _surveyLongitudeController,
+                keyboardType: const TextInputType.numberWithOptions(
+                    decimal: true, signed: true),
+                autovalidateMode: _showValidation
+                    ? AutovalidateMode.onUserInteraction
+                    : AutovalidateMode.disabled,
+                validator: (_) => _surveyCoordinatesError(),
+                decoration: _inputDecoration('Longitude'),
+              ),
+              const SizedBox(height: 16),
+              TextFormField(
+                controller: _surveyedAreaController,
+                keyboardType:
+                    const TextInputType.numberWithOptions(decimal: true),
+                inputFormatters: [
+                  FilteringTextInputFormatter.allow(RegExp(r'^\d*\.?\d{0,2}$')),
+                ],
+                autovalidateMode: _showValidation
+                    ? AutovalidateMode.onUserInteraction
+                    : AutovalidateMode.disabled,
+                validator: (value) {
+                  final raw = (value ?? '').trim();
+                  if (raw.isEmpty) return null;
+                  final area = double.tryParse(raw);
+                  if (area == null || !area.isFinite || area <= 0) {
+                    return 'Enter a positive surveyed area or leave it blank.';
+                  }
+                  return null;
+                },
+                decoration: _inputDecoration(
+                  'Surveyed reef area (optional)',
+                ).copyWith(suffixText: 'm²'),
+              ),
+              const SizedBox(height: 16),
+              TextFormField(
+                controller: _notesController,
+                maxLines: 3,
+                decoration: _inputDecoration('Field notes (optional)'),
+              ),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+
+  String? _surveyCoordinatesError() {
+    final latitudeText = _surveyLatitudeController.text.trim();
+    final longitudeText = _surveyLongitudeController.text.trim();
+    if (latitudeText.isEmpty && longitudeText.isEmpty) return null;
+    if (latitudeText.isEmpty || longitudeText.isEmpty) {
+      return 'Enter both coordinates or leave both blank.';
+    }
+    final latitude = double.tryParse(latitudeText);
+    final longitude = double.tryParse(longitudeText);
+    if (latitude == null ||
+        longitude == null ||
+        !latitude.isFinite ||
+        !longitude.isFinite ||
+        latitude < -90 ||
+        latitude > 90 ||
+        longitude < -180 ||
+        longitude > 180) {
+      return 'Enter valid latitude and longitude coordinates.';
+    }
+    return null;
+  }
+
+  Future<void> _chooseSurveyDate() async {
+    final now = MonitoringMonth.calendar(DateTime.now());
+    final picked = await showDatePicker(
+      context: context,
+      initialDate: _surveyDate.isAfter(now) ? now : _surveyDate,
+      firstDate: DateTime(2000),
+      lastDate: now,
+    );
+    if (picked != null && mounted) setState(() => _surveyDate = picked);
+  }
+
   Widget _buildReviewStep() {
-    if (_isBatch) return _buildBatchReviewStep();
+    if (_isBatch) {
+      return Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          _buildBatchReviewStep(),
+          if (_isFollowUp) ...[
+            const SizedBox(height: 14),
+            _buildFollowUpReviewCard(),
+          ],
+        ],
+      );
+    }
 
     final isRemoval = CotsActivityType.isRemoval(_activityType);
     final removed = int.tryParse(_removedQtyController.text.trim());
@@ -811,30 +1116,39 @@ class _ScanDetectionPageState extends State<ScanDetectionPage> {
     final band = items.isNotEmpty
         ? CotsConfidencePolicy.recordBandFromItems(items)
         : CotsConfidencePolicy.bandFromPercent(pct);
-    final statusLabel = switch (band) {
-      CotsVerificationBand.aiAutoApproved => 'Automatically Accepted',
-      CotsVerificationBand.adminReview => 'Requires Expert Validation',
-      CotsVerificationBand.retakeRequired => 'Retake Photo',
-    };
-    final statusDesc = switch (band) {
-      CotsVerificationBand.retakeRequired => items.isNotEmpty
-          ? CotsConfidencePolicy.userStatusDescriptionFromItems(items)
-          : CotsConfidencePolicy.userStatusDescription(pct),
-      CotsVerificationBand.adminReview =>
-        'The AI detection confidence is $pct%, which is below the automatic acceptance threshold. This record has been forwarded to the Expert for manual verification before it becomes an official monitoring record.',
-      CotsVerificationBand.aiAutoApproved =>
-        'The AI detection confidence is $pct%. This detection has been Automatically Accepted (80%–100% threshold).',
-    };
-    final statusColor = switch (band) {
-      CotsVerificationBand.aiAutoApproved => kSuccessGreen,
-      CotsVerificationBand.adminReview => kWarningOrange,
-      CotsVerificationBand.retakeRequired => kDangerRed,
-    };
-    final statusIcon = switch (band) {
-      CotsVerificationBand.aiAutoApproved => Icons.check_circle_rounded,
-      CotsVerificationBand.adminReview => Icons.hourglass_top_rounded,
-      CotsVerificationBand.retakeRequired => Icons.refresh_rounded,
-    };
+    final zeroCotsSurvey = _isFollowUp && _detection != null && count == 0;
+    final statusLabel = zeroCotsSurvey
+        ? 'No AI detections'
+        : switch (band) {
+            CotsVerificationBand.aiAutoApproved => 'Automatically Accepted',
+            CotsVerificationBand.adminReview => 'Requires Expert Validation',
+            CotsVerificationBand.retakeRequired => 'Retake Photo',
+          };
+    final statusDesc = zeroCotsSurvey
+        ? 'AI processing completed with no COTS detected in this image. Field observations are recorded separately. This result does not establish reef clearance.'
+        : switch (band) {
+            CotsVerificationBand.retakeRequired => items.isNotEmpty
+                ? CotsConfidencePolicy.userStatusDescriptionFromItems(items)
+                : CotsConfidencePolicy.userStatusDescription(pct),
+            CotsVerificationBand.adminReview =>
+              'The AI detection confidence is $pct%, which is below the automatic acceptance threshold. This record has been forwarded to the Expert for manual verification before it becomes an official monitoring record.',
+            CotsVerificationBand.aiAutoApproved =>
+              'The AI detection confidence is $pct%. This detection has been Automatically Accepted (80%–100% threshold).',
+          };
+    final statusColor = zeroCotsSurvey
+        ? kPrimaryTeal
+        : switch (band) {
+            CotsVerificationBand.aiAutoApproved => kSuccessGreen,
+            CotsVerificationBand.adminReview => kWarningOrange,
+            CotsVerificationBand.retakeRequired => kDangerRed,
+          };
+    final statusIcon = zeroCotsSurvey
+        ? Icons.fact_check_outlined
+        : switch (band) {
+            CotsVerificationBand.aiAutoApproved => Icons.check_circle_rounded,
+            CotsVerificationBand.adminReview => Icons.hourglass_top_rounded,
+            CotsVerificationBand.retakeRequired => Icons.refresh_rounded,
+          };
     final uploadPreview =
         DateFormat('MMM dd, yyyy h:mm a').format(DateTime.now());
 
@@ -920,7 +1234,9 @@ class _ScanDetectionPageState extends State<ScanDetectionPage> {
                       size: 16, color: statusColor),
                   const SizedBox(width: 6),
                   Text(
-                    'Infestation Level: ${_infestationLevelLabel(count)}',
+                    _isFollowUp
+                        ? 'Infestation level: not yet expert-validated'
+                        : 'Infestation Level: ${_infestationLevelLabel(count)}',
                     style: TextStyle(
                       color: statusColor,
                       fontWeight: FontWeight.w800,
@@ -981,7 +1297,10 @@ class _ScanDetectionPageState extends State<ScanDetectionPage> {
           ),
         ),
         const SizedBox(height: 16),
-        _assignedZoneCard(_assignedZone),
+        if (_isFollowUp)
+          _buildFollowUpReviewCard()
+        else
+          _assignedZoneCard(_assignedZone),
         const SizedBox(height: 16),
         _buildAutoCaptureCard(dateUploadedLabel: uploadPreview),
         const SizedBox(height: 16),
@@ -1043,6 +1362,63 @@ class _ScanDetectionPageState extends State<ScanDetectionPage> {
           ),
         ),
       ],
+    );
+  }
+
+  Widget _buildFollowUpReviewCard() {
+    final latitude = double.tryParse(_surveyLatitudeController.text.trim());
+    final longitude = double.tryParse(_surveyLongitudeController.text.trim());
+    final surveyedArea = double.tryParse(_surveyedAreaController.text.trim());
+
+    return _card(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          _sectionCardTitle('Follow-up Survey'),
+          const SizedBox(height: 12),
+          _reviewMetaRow(
+            icon: Icons.calendar_month_outlined,
+            label: 'Monitoring date',
+            value: DateFormat('MMM d, yyyy').format(_surveyDate),
+          ),
+          _reviewMetaRow(
+            icon: Icons.visibility_outlined,
+            label: 'Field-observed COTS',
+            value: _fieldObservedController.text.trim(),
+          ),
+          _reviewMetaRow(
+            icon: Icons.cleaning_services_outlined,
+            label: 'Actually eliminated',
+            value: _fieldEliminatedController.text.trim(),
+          ),
+          _reviewMetaRow(
+            icon: Icons.auto_awesome_outlined,
+            label: 'AI image detections (not unique individuals)',
+            value: '$_totalCotsDetected',
+          ),
+          _reviewMetaRow(
+            icon: Icons.location_on_outlined,
+            label: 'GPS reference',
+            value: latitude == null || longitude == null
+                ? 'Not provided'
+                : '${latitude.toStringAsFixed(6)}, '
+                    '${longitude.toStringAsFixed(6)}',
+          ),
+          _reviewMetaRow(
+            icon: Icons.square_foot_outlined,
+            label: 'Surveyed area',
+            value: surveyedArea == null
+                ? 'Not provided'
+                : '${surveyedArea.toStringAsFixed(2)} m²',
+          ),
+          if ((int.tryParse(_fieldEliminatedController.text.trim()) ?? 0) > 0)
+            _reviewMetaRow(
+              icon: Icons.build_outlined,
+              label: 'Elimination method',
+              value: _followUpRemovalMethod ?? 'Not selected',
+            ),
+        ],
+      ),
     );
   }
 
@@ -1238,9 +1614,8 @@ class _ScanDetectionPageState extends State<ScanDetectionPage> {
                   switch (_step) {
                     _DetectionStep.upload => 'Next → Details',
                     _DetectionStep.details => 'Review',
-                    _DetectionStep.review => _isBatch
-                        ? 'Submit ${_images.length} Records'
-                        : 'Submit',
+                    _DetectionStep.review =>
+                      _isBatch ? 'Submit ${_images.length} Records' : 'Submit',
                   },
                   style: const TextStyle(
                       fontSize: 16, fontWeight: FontWeight.w700),
@@ -1334,6 +1709,25 @@ class _ScanDetectionPageState extends State<ScanDetectionPage> {
   }
 
   Future<void> _goToReview() async {
+    if (_isFollowUp) {
+      setState(() => _showValidation = true);
+      if (!(_formKey.currentState?.validate() ?? false)) return;
+      final observed = int.tryParse(_fieldObservedController.text.trim());
+      final eliminated = int.tryParse(_fieldEliminatedController.text.trim());
+      if (observed == null ||
+          eliminated == null ||
+          eliminated > observed ||
+          _surveyCoordinatesError() != null) {
+        return;
+      }
+      if (eliminated > 0 &&
+          (_followUpRemovalMethod == null || _followUpRemovalMethod!.isEmpty)) {
+        return;
+      }
+      setState(() => _step = _DetectionStep.review);
+      return;
+    }
+
     final isRemoval = CotsActivityType.isRemoval(_activityType);
     if (isRemoval) {
       if (_linkedCaptureId == null || _linkedCaptureId!.isEmpty) {
@@ -1353,9 +1747,10 @@ class _ScanDetectionPageState extends State<ScanDetectionPage> {
   }
 
   Future<void> _submitRecord() async {
+    if (_isBusy) return;
     final auth = context.read<AuthProvider>();
     final user = auth.userModel;
-    final uid = user?.uid ?? FirebaseAuth.instance.currentUser?.uid;
+    final uid = user?.uid;
     if (uid == null || user == null) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('Sign in to submit a record.')),
@@ -1364,16 +1759,51 @@ class _ScanDetectionPageState extends State<ScanDetectionPage> {
     }
 
     final ready = _images.where((img) => img.detection != null).toList();
+    if (_isFollowUp && (!user.isActive || user.isAdmin || user.isExpert)) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+            content: Text('Only the assigned diver can submit this survey.')),
+      );
+      return;
+    }
     if (ready.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('No analyzed images ready to submit.')),
       );
       return;
     }
+    if (_isFollowUp) {
+      final conflict = ready.any((image) {
+        final area = ZoneAssignmentService.resolveMonitoringArea(
+            latitude: image.metadata.latitude,
+            longitude: image.metadata.longitude);
+        return area != null &&
+            area.barangay.id != widget.followUpAssignment!.areaId;
+      });
+      if (conflict || ready.length > 8) {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+            content: Text(conflict
+                ? 'An image GPS location belongs to another monitoring zone. Remove it before submitting.'
+                : 'Submit at most 8 images per survey.')));
+        return;
+      }
+    }
 
     setState(() => _isBusy = true);
     var submitted = 0;
+    final captureIds = <String>[];
+    final submissionWarnings = <String>[];
     try {
+      if (_isFollowUp) {
+        if (!await FollowUpReassignmentRepository.isResponsible(
+            widget.followUpAssignment!, uid, _surveyDate)) {
+          throw StateError(
+              'Only the authorized diver for this calendar month can submit.');
+        }
+        if (!mounted) return;
+        await FollowUpReassignmentRepository.ensureMonthAuthorization(
+            widget.followUpAssignment!, uid, _surveyDate);
+      }
       final depth = double.tryParse(_depthController.text.trim());
       final isRemoval = CotsActivityType.isRemoval(_activityType);
       final removedSingle = isRemoval && !_isBatch
@@ -1387,6 +1817,11 @@ class _ScanDetectionPageState extends State<ScanDetectionPage> {
 
       for (var i = 0; i < ready.length; i++) {
         final img = ready[i];
+        if (!isRemoval && img.savedCaptureId != null) {
+          if (_isFollowUp) captureIds.add(img.savedCaptureId!);
+          submitted++;
+          continue;
+        }
         if (!mounted) return;
         setState(() {
           _detectionProgress = 'Submitting ${i + 1} of ${ready.length}…';
@@ -1395,7 +1830,12 @@ class _ScanDetectionPageState extends State<ScanDetectionPage> {
             ? (_isBatch ? img.detection!.count : removedSingle)
             : null;
 
-        await ScanRecordService.submit(
+        final captureId = await ScanRecordService.submit(
+          onWarning: submissionWarnings.add,
+          submissionId: isRemoval ? null : img.submissionId,
+          followUpSurveyId: _isFollowUp ? _followUpSurveyId : null,
+          followUpSurveyDate: _isFollowUp ? _surveyDate : null,
+          followUpAssignment: widget.followUpAssignment,
           uid: uid,
           submittedBy: user.fullName,
           imageName: img.fileName,
@@ -1415,8 +1855,36 @@ class _ScanDetectionPageState extends State<ScanDetectionPage> {
           removalMethod: _removalMethod,
           sizeEstimate: null,
           linkedCaptureId: _linkedCaptureId,
+          isFollowUp: _isFollowUp,
         );
+        if (_isFollowUp && captureId != null) captureIds.add(captureId);
+        if (!isRemoval) img.savedCaptureId = captureId;
         submitted++;
+      }
+
+      if (_isFollowUp) {
+        final assignment = widget.followUpAssignment!;
+        await FollowUpMonitoringRepository.submitSurvey(
+          surveyId: _followUpSurveyId,
+          areaId: assignment.areaId,
+          areaName: assignment.areaName,
+          barangay: assignment.barangay,
+          municipality: assignment.municipality,
+          uid: uid,
+          submittedBy: user.fullName,
+          surveyDate: _surveyDate,
+          fieldObservedCount: int.parse(_fieldObservedController.text.trim()),
+          fieldEliminatedCount:
+              int.parse(_fieldEliminatedController.text.trim()),
+          captureIds: captureIds,
+          aiDetectedCount: _totalCotsDetected,
+          latitude: double.tryParse(_surveyLatitudeController.text.trim()),
+          longitude: double.tryParse(_surveyLongitudeController.text.trim()),
+          surveyedAreaSquareMeters:
+              double.tryParse(_surveyedAreaController.text.trim()),
+          eliminationMethod: _followUpRemovalMethod ?? '',
+          notes: _notesController.text.trim(),
+        );
       }
 
       if (!mounted) return;
@@ -1424,9 +1892,13 @@ class _ScanDetectionPageState extends State<ScanDetectionPage> {
         SnackBar(
           backgroundColor: kPrimaryTeal,
           content: Text(
-            submitted == 1
-                ? 'Citizen science record submitted successfully.'
-                : '$submitted citizen science records submitted successfully.',
+            _isFollowUp
+                ? 'Follow-up survey and $submitted image record(s) saved.'
+                : submissionWarnings.isNotEmpty
+                    ? submissionWarnings.first
+                    : submitted == 1
+                        ? 'Citizen science record submitted successfully.'
+                        : '$submitted citizen science records submitted successfully.',
           ),
         ),
       );
@@ -1437,7 +1909,8 @@ class _ScanDetectionPageState extends State<ScanDetectionPage> {
         SnackBar(
           content: Text(
             submitted > 0
-                ? 'Submitted $submitted record(s), then failed: $e'
+                ? 'Submitted $submitted image record(s), then failed to save '
+                    '${_isFollowUp ? 'the follow-up survey' : 'the record'}: $e'
                 : 'Submit failed: $e',
           ),
         ),
@@ -1462,19 +1935,19 @@ class _ScanDetectionPageState extends State<ScanDetectionPage> {
   }
 
   Future<void> _pickImages({bool addMore = false}) async {
-    final remaining = _maxBatchImages - _images.length;
+    final remaining = _imageLimit - _images.length;
     if (remaining <= 0) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-            content: Text(
-                'You can upload up to $_maxBatchImages photos per batch.')),
+            content:
+                Text('You can upload up to $_imageLimit photos per batch.')),
       );
       return;
     }
 
     final picked = await _picker.pickMultiImage(
       imageQuality: 92,
-      limit: addMore ? remaining : _maxBatchImages,
+      limit: addMore ? remaining : _imageLimit,
     );
     if (picked.isEmpty) return;
 
@@ -1486,7 +1959,7 @@ class _ScanDetectionPageState extends State<ScanDetectionPage> {
 
     var skipped = 0;
     for (final file in picked) {
-      if (_images.length >= _maxBatchImages) break;
+      if (_images.length >= _imageLimit) break;
 
       final ext = _extension(file.name);
       if (!_allowedExtensions.contains(ext)) {
@@ -1808,8 +2281,8 @@ class _ScanDetectionPageState extends State<ScanDetectionPage> {
 
     try {
       final exif = await readExifFromBytes(bytes);
-      final make = exif['Image Make']?.printable?.trim();
-      final model = exif['Image Model']?.printable?.trim();
+      final make = exif['Image Make']?.printable.trim();
+      final model = exif['Image Model']?.printable.trim();
       if ((make != null && make.isNotEmpty) ||
           (model != null && model.isNotEmpty)) {
         deviceLabel = [make, model]
@@ -2104,7 +2577,9 @@ class _ScanDetectionPageState extends State<ScanDetectionPage> {
             children: [
               Expanded(
                 child: Text(
-                  hasGps ? coords : 'GPS unavailable — enable location or use a photo with EXIF GPS.',
+                  hasGps
+                      ? coords
+                      : 'GPS unavailable — enable location or use a photo with EXIF GPS.',
                   style: TextStyle(
                     color: hasGps ? kTextNavy : kMutedGray,
                     fontSize: 13.5,
@@ -2458,11 +2933,11 @@ class _PendingScanImage {
     required this.bytes,
     required this.fileName,
     required this.metadata,
-    this.detection,
-    this.detectionError,
   });
 
   final XFile file;
+  final String submissionId = FollowUpMonitoringRepository.newSurveyId();
+  String? savedCaptureId;
   final Uint8List bytes;
   final String fileName;
   final _ScanImageMetadata metadata;
