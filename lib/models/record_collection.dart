@@ -4,6 +4,7 @@ abstract final class RecordCollection {
   static const captureImages = 'capture_images';
   static const removalRecords = 'removal_records';
   static const removalRecordImages = 'removal_record_images';
+  static const followUpSurveys = 'follow_up_surveys';
   static const interventionAssignments = 'intervention_assignments';
   static const notifications = 'notifications';
 

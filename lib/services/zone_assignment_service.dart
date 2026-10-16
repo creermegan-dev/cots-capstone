@@ -20,12 +20,20 @@ abstract final class ZoneAssignmentService {
     );
   }
 
+  static GulfZoneAssignment? resolveMonitoringArea({
+    double? latitude,
+    double? longitude,
+  }) {
+    return DavaoGulfGeography.assignWithinMonitoringArea(
+      latitude: latitude,
+      longitude: longitude,
+    );
+  }
+
   static String formatCoordinates(double? lat, double? lng) {
     if (lat == null || lng == null) return '--';
-    final latStr =
-        '${lat.abs().toStringAsFixed(6)}° ${lat >= 0 ? 'N' : 'S'}';
-    final lngStr =
-        '${lng.abs().toStringAsFixed(6)}° ${lng >= 0 ? 'E' : 'W'}';
+    final latStr = '${lat.abs().toStringAsFixed(6)}° ${lat >= 0 ? 'N' : 'S'}';
+    final lngStr = '${lng.abs().toStringAsFixed(6)}° ${lng >= 0 ? 'E' : 'W'}';
     return '$latStr, $lngStr';
   }
 }

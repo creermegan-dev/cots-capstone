@@ -34,13 +34,23 @@ class WindowsCaptureRestService {
     required String notes,
     required double? depth,
     required String zone,
+    String monitoringAreaId = '',
     String municipality = '',
     String barangay = '',
+    String? submissionId,
+    String? followUpSurveyId,
+    DateTime? followUpSurveyDate,
   }) async {
     final now = DateTime.now().toUtc().toIso8601String();
-    final documentId = CaptureModel.newDocumentId();
+    final documentId = submissionId ?? CaptureModel.newDocumentId();
     final fields = <String, dynamic>{
       'uid': _string(uid),
+      if (followUpSurveyId != null)
+        'follow_up_survey_id': _string(followUpSurveyId),
+      if (followUpSurveyDate != null) ...{
+        'follow_up_year': _int(followUpSurveyDate.year),
+        'follow_up_month': _int(followUpSurveyDate.month),
+      },
       'submitted_by': _string(submittedBy),
       'image_name': _string(imageName),
       'has_processed_image': _bool(true),
@@ -51,6 +61,8 @@ class WindowsCaptureRestService {
       'citizen_contribution': _bool(true),
       'notes': _string(notes),
       'zone': _string(zone),
+      if (monitoringAreaId.isNotEmpty)
+        'monitoring_area_id': _string(monitoringAreaId),
       'municipality': _string(municipality),
       'barangay': _string(barangay),
       'gps': {
@@ -125,6 +137,38 @@ class WindowsCaptureRestService {
       },
       body: jsonEncode({'fields': fields}),
     );
+    if (response.statusCode == 409 && submissionId != null) {
+      final existing = await _client.get(
+          Uri.parse(
+            'https://firestore.googleapis.com/v1/projects/${_options.projectId}'
+            '/databases/(default)/documents/${RecordCollection.captures}/${Uri.encodeComponent(documentId)}',
+          ),
+          headers: {'Authorization': 'Bearer $idToken'});
+      if (existing.statusCode != 200) {
+        throw StateError('Could not verify the saved capture.');
+      }
+      final saved = jsonDecode(existing.body) as Map<String, dynamic>;
+      final savedFields = saved['fields'] as Map<String, dynamic>;
+      final capture = CaptureModel.fromRestDocument(saved);
+      if (capture.uid != uid ||
+          capture.monitoringAreaId != monitoringAreaId ||
+          capture.followUpSurveyId != (followUpSurveyId ?? '') ||
+          (followUpSurveyDate != null &&
+              ((savedFields['follow_up_year'] != null &&
+                      savedFields['follow_up_year']['integerValue']
+                              .toString() !=
+                          '${followUpSurveyDate.year}') ||
+                  (savedFields['follow_up_month'] != null &&
+                      savedFields['follow_up_month']['integerValue']
+                              .toString() !=
+                          '${followUpSurveyDate.month}'))) ||
+          capture.aiDetectedCount != detection.count ||
+          capture.imageName != imageName) {
+        throw StateError(
+            'The saved capture differs from this retry. Its original data was preserved.');
+      }
+      return documentId;
+    }
     if (response.statusCode < 200 || response.statusCode >= 300) {
       throw WindowsAuthRestException(
         'Could not submit capture (${response.statusCode}).',
@@ -140,15 +184,12 @@ class WindowsCaptureRestService {
         'from': [
           {'collectionId': RecordCollection.captures},
         ],
-        'orderBy': [
-          {
-            'field': {'fieldPath': 'submitted_at'},
-            'direction': 'DESCENDING',
-          },
-        ],
       },
     );
-    return _parseQueryResults(body);
+    final records = _parseQueryResults(body);
+    records.sort((a, b) => (b.submittedAt ?? DateTime(1970))
+        .compareTo(a.submittedAt ?? DateTime(1970)));
+    return records;
   }
 
   Future<List<CaptureModel>> queryForUser({
@@ -233,11 +274,13 @@ class WindowsCaptureRestService {
           'admin_confirmed': _bool(adminConfirmed),
           'admin_rejected': _bool(adminRejected),
           'admin_reviewed_by': _string(reviewedBy),
-          'admin_reviewed_at': _timestamp(DateTime.now().toUtc().toIso8601String()),
+          'admin_reviewed_at':
+              _timestamp(DateTime.now().toUtc().toIso8601String()),
           'admin_cots_decisions': {
             'arrayValue': {
               'values': [
-                for (final d in PerCotsAdminDecisionX.listToStorage(cotsDecisions))
+                for (final d
+                    in PerCotsAdminDecisionX.listToStorage(cotsDecisions))
                   _string(d),
               ],
             },
@@ -292,7 +335,7 @@ class WindowsCaptureRestService {
   Map<String, dynamic> _string(String value) => {'stringValue': value};
   Map<String, dynamic> _int(int value) => {'integerValue': '$value'};
   Map<String, dynamic> _double(num? value) =>
-      {'doubleValue': value?.toDouble() ?? 0.0};
+      value == null ? {'nullValue': null} : {'doubleValue': value.toDouble()};
   Map<String, dynamic> _bool(bool value) => {'booleanValue': value};
   Map<String, dynamic> _timestamp(String iso) => {'timestampValue': iso};
 }

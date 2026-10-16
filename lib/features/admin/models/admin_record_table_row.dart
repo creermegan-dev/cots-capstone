@@ -51,7 +51,8 @@ class AdminRecordTableRow {
   final String zone;
   final String dateTime;
   final int cotsCount;
-  final double density;
+  /// Null when an image/visit has no reliable surveyed area or unique count.
+  final double? density;
   final String risk;
   final String submittedBy;
   final int confidencePercent;

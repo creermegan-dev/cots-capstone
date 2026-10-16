@@ -24,12 +24,14 @@ abstract final class CaptureRepository {
       }
       return _windowsRest.watchAll(idToken: token);
     }
-    return _collection
-        .orderBy('submitted_at', descending: true)
-        .snapshots()
-        .map(
-          (snap) => snap.docs.map(CaptureModel.fromFirestore).toList(),
-        );
+    return _collection.snapshots().map(
+      (snap) {
+        final captures = snap.docs.map(CaptureModel.fromFirestore).toList();
+        captures.sort((a, b) => (b.submittedAt ?? DateTime(1970))
+            .compareTo(a.submittedAt ?? DateTime(1970)));
+        return captures;
+      },
+    );
   }
 
   static Stream<List<CaptureModel>> watchForUser(String uid) {

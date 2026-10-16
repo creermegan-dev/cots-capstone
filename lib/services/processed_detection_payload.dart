@@ -22,6 +22,7 @@ abstract final class ProcessedDetectionPayload {
     required bool? measurementReferenceVisible,
     required CotsSizeEstimate? sizeEstimate,
     required String zone,
+    String monitoringAreaId = '',
     String municipality = '',
     String barangay = '',
   }) {
@@ -37,6 +38,7 @@ abstract final class ProcessedDetectionPayload {
       'citizen_contribution': true,
       'notes': notes,
       'zone': zone,
+      if (monitoringAreaId.isNotEmpty) 'monitoring_area_id': monitoringAreaId,
       'municipality': municipality,
       'barangay': barangay,
       'gps': {'latitude': latitude, 'longitude': longitude},

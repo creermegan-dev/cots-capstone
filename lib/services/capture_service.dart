@@ -7,6 +7,7 @@ import '../models/capture_model.dart';
 import '../models/cots_confidence_policy.dart';
 import '../models/cots_detection_result.dart';
 import '../models/record_collection.dart';
+import '../models/follow_up_monitoring_model.dart';
 import 'capture_image_store.dart';
 import 'cots_size_estimator.dart';
 import 'processed_detection_payload.dart';
@@ -35,12 +36,21 @@ abstract final class CaptureService {
     required double? depth,
     required bool? measurementReferenceVisible,
     required CotsSizeEstimate? sizeEstimate,
+    String? submissionId,
+    String? followUpSurveyId,
+    DateTime? followUpSurveyDate,
+    FollowUpAssignmentModel? followUpAssignment,
   }) async {
     final assignment = ZoneAssignmentService.resolveArea(
       latitude: latitude,
       longitude: longitude,
     );
-    final zone = assignment?.zoneLabel ?? 'Unassigned';
+    final monitoringArea = ZoneAssignmentService.resolveMonitoringArea(
+      latitude: latitude,
+      longitude: longitude,
+    );
+    final zone =
+        followUpAssignment?.areaName ?? assignment?.zoneLabel ?? 'Unassigned';
 
     final data = ProcessedDetectionPayload.captureFields(
       uid: uid,
@@ -57,16 +67,30 @@ abstract final class CaptureService {
       measurementReferenceVisible: measurementReferenceVisible,
       sizeEstimate: sizeEstimate,
       zone: zone,
-      municipality: assignment?.municipality.name ?? '',
-      barangay: assignment?.barangay.name ?? '',
+      monitoringAreaId:
+          followUpAssignment?.areaId ?? monitoringArea?.barangay.id ?? '',
+      municipality: followUpAssignment?.municipality ??
+          assignment?.municipality.name ??
+          '',
+      barangay: followUpAssignment?.barangay ?? assignment?.barangay.name ?? '',
     );
 
+    if (followUpSurveyId != null) {
+      data['follow_up_survey_id'] = followUpSurveyId;
+      if (followUpSurveyDate != null) {
+        data['follow_up_year'] = followUpSurveyDate.year;
+        data['follow_up_month'] = followUpSurveyDate.month;
+      }
+    }
     if (deferFirebaseUntilFirstUse) {
       final idToken = ScanRecordRepository.windowsIdToken;
       if (idToken == null) {
         throw StateError('Not signed in — cannot submit capture.');
       }
       final captureId = await _windowsRest.createCapture(
+        submissionId: submissionId,
+        followUpSurveyId: followUpSurveyId,
+        followUpSurveyDate: followUpSurveyDate,
         idToken: idToken,
         uid: uid,
         submittedBy: submittedBy,
@@ -80,8 +104,13 @@ abstract final class CaptureService {
         notes: notes,
         depth: depth,
         zone: zone,
-        municipality: assignment?.municipality.name ?? '',
-        barangay: assignment?.barangay.name ?? '',
+        monitoringAreaId:
+            followUpAssignment?.areaId ?? monitoringArea?.barangay.id ?? '',
+        municipality: followUpAssignment?.municipality ??
+            assignment?.municipality.name ??
+            '',
+        barangay:
+            followUpAssignment?.barangay ?? assignment?.barangay.name ?? '',
       );
       await CaptureImageStore.save(
         captureId: captureId,
@@ -92,13 +121,36 @@ abstract final class CaptureService {
     }
 
     await ensureFirebaseInitialized();
-    final docRef =
-        FirebaseFirestore.instance.collection(RecordCollection.captures).doc();
+    final docRef = FirebaseFirestore.instance
+        .collection(RecordCollection.captures)
+        .doc(submissionId);
     final payload = Map<String, dynamic>.from(data)
-      ..['display_record_id'] =
-          CaptureModel.formatDisplayRecordId(docRef.id);
+      ..['display_record_id'] = CaptureModel.formatDisplayRecordId(docRef.id);
 
-    await docRef.set(payload);
+    await FirebaseFirestore.instance.runTransaction((transaction) async {
+      final existing = await transaction.get(docRef);
+      if (!existing.exists) {
+        transaction.set(docRef, payload);
+      } else if (existing.data()?['uid'] != uid ||
+          existing.data()?['ai_detected_count'] != detection.count ||
+          existing.data()?['image_name'] != imageName ||
+          (existing.data()?['follow_up_survey_id'] ?? '') !=
+              (followUpSurveyId ?? '') ||
+          (followUpSurveyDate != null &&
+              ((existing.data()?['follow_up_year'] ??
+                          followUpSurveyDate.year) !=
+                      followUpSurveyDate.year ||
+                  (existing.data()?['follow_up_month'] ??
+                          followUpSurveyDate.month) !=
+                      followUpSurveyDate.month)) ||
+          (existing.data()?['monitoring_area_id'] ?? '') !=
+              (followUpAssignment?.areaId ??
+                  monitoringArea?.barangay.id ??
+                  '')) {
+        throw StateError(
+            'The saved capture differs from this retry. Its original data was preserved.');
+      }
+    });
     await CaptureImageStore.save(
       captureId: docRef.id,
       uid: uid,

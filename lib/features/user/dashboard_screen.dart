@@ -378,6 +378,13 @@ class _DiverSidebarMenu extends StatelessWidget {
                 ),
                 _sideItem(
                   context,
+                  icon: Icons.replay_circle_filled_outlined,
+                  label: 'Follow-up',
+                  onTap: () =>
+                      Navigator.of(context).pushNamed(userFollowUpRoute),
+                ),
+                _sideItem(
+                  context,
                   icon: Icons.folder_outlined,
                   label: 'Records',
                   onTap: () => Navigator.of(context).push(

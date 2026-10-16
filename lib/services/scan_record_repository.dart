@@ -5,9 +5,12 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import '../core/firebase_bootstrap.dart';
 import '../features/admin/models/admin_record_table_row.dart';
 import '../models/record_collection.dart';
+import '../models/capture_model.dart';
 import '../models/removal_record_model.dart';
 import '../models/scan_record_model.dart';
+import '../models/follow_up_monitoring_model.dart';
 import 'capture_repository.dart';
+import 'follow_up_monitoring_repository.dart';
 import 'removal_record_repository.dart';
 import 'windows_capture_rest_service.dart';
 import 'windows_removal_record_rest_service.dart';
@@ -44,10 +47,7 @@ abstract final class ScanRecordRepository {
     }
 
     return _mergeRecordStreams(
-      legacy: _legacyCollection
-          .orderBy('submitted_at', descending: true)
-          .snapshots()
-          .map(
+      legacy: _legacyCollection.snapshots().map(
             (snap) => snap.docs.map(ScanRecordModel.fromFirestore).toList(),
           ),
       captures: CaptureRepository.watchAll().map(
@@ -56,6 +56,7 @@ abstract final class ScanRecordRepository {
       removals: RemovalRecordRepository.watchAll().map(
         (list) => list.map(ScanRecordModel.fromRemovalRecord).toList(),
       ),
+      followUps: Stream.value(const <ScanRecordModel>[]),
     );
   }
 
@@ -83,6 +84,9 @@ abstract final class ScanRecordRepository {
       ),
       removals: RemovalRecordRepository.watchForUser(uid).map(
         (list) => list.map(ScanRecordModel.fromRemovalRecord).toList(),
+      ),
+      followUps: FollowUpMonitoringRepository.watchSurveysForDiver(uid).map(
+        (list) => list.map(ScanRecordModel.fromFollowUpSurvey).toList(),
       ),
     );
   }
@@ -140,11 +144,17 @@ abstract final class ScanRecordRepository {
             uid: uid,
             captureLinks: captureLinks,
           );
+    final followUps = uid == null
+        ? const <ScanRecordModel>[]
+        : (await FollowUpMonitoringRepository.querySurveysForDiver(uid))
+            .map(ScanRecordModel.fromFollowUpSurvey)
+            .toList();
 
     return _mergeLists(
       legacy: legacy,
       captures: captures.map(ScanRecordModel.fromCapture).toList(),
       removals: removals.map(ScanRecordModel.fromRemovalRecord).toList(),
+      followUps: followUps,
     );
   }
 
@@ -152,39 +162,53 @@ abstract final class ScanRecordRepository {
     required Stream<List<ScanRecordModel>> legacy,
     required Stream<List<ScanRecordModel>> captures,
     required Stream<List<ScanRecordModel>> removals,
+    required Stream<List<ScanRecordModel>> followUps,
   }) {
     final controller = StreamController<List<ScanRecordModel>>();
     List<ScanRecordModel> legacyList = const [];
     List<ScanRecordModel> captureList = const [];
     List<ScanRecordModel> removalList = const [];
+    List<ScanRecordModel> followUpList = const [];
+    final ready = <String>{};
 
     void emit() {
+      if (ready.length != 4 || controller.isClosed) return;
       controller.add(
         _mergeLists(
           legacy: legacyList,
           captures: captureList,
           removals: removalList,
+          followUps: followUpList,
         ),
       );
     }
 
     final legacySub = legacy.listen((value) {
+      ready.add('legacy');
       legacyList = value;
       emit();
-    });
+    }, onError: controller.addError);
     final captureSub = captures.listen((value) {
+      ready.add('captures');
       captureList = value;
       emit();
-    });
+    }, onError: controller.addError);
     final removalSub = removals.listen((value) {
+      ready.add('removals');
       removalList = value;
       emit();
-    });
+    }, onError: controller.addError);
+    final followUpSub = followUps.listen((value) {
+      ready.add('surveys');
+      followUpList = value;
+      emit();
+    }, onError: controller.addError);
 
     controller.onCancel = () async {
       await legacySub.cancel();
       await captureSub.cancel();
       await removalSub.cancel();
+      await followUpSub.cancel();
     };
 
     return controller.stream;
@@ -194,8 +218,18 @@ abstract final class ScanRecordRepository {
     required List<ScanRecordModel> legacy,
     required List<ScanRecordModel> captures,
     required List<ScanRecordModel> removals,
+    List<ScanRecordModel> followUps = const [],
   }) {
     final merged = <ScanRecordModel>[
+      ...followUps.map((record) => ScanRecordModel.fromFollowUpSurvey(
+            record.followUpSurvey!,
+            status: followUpSurveyStatus(
+                record.followUpSurvey!,
+                captures
+                    .map((record) => record.sourceCapture)
+                    .whereType<CaptureModel>()
+                    .toList()),
+          )),
       ...captures,
       ...removals,
       ...legacy,

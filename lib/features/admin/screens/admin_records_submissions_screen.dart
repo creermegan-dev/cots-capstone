@@ -369,8 +369,8 @@ class _AdminRecordsSubmissionsScreenState
         final total = rows.length;
         final (nAccepted, nReview, nRejected) = _statusCounts(rows);
         double rowPct(int count) => total == 0 ? 0.0 : (100 * count / total);
-        final avgDensity =
-            total == 0 ? 0.0 : rows.map((e) => e.density).reduce((a, b) => a + b) / total;
+        final knownDensities = rows.map((row) => row.density).whereType<double>().toList();
+        final avgDensity = knownDensities.isEmpty ? null : knownDensities.reduce((a, b) => a + b) / knownDensities.length;
 
         final cards = <Widget>[
           AdminStatCard(
@@ -417,7 +417,7 @@ class _AdminRecordsSubmissionsScreenState
           ),
           AdminStatCard(
             title: 'Average Density',
-            value: avgDensity.toStringAsFixed(2),
+            value: avgDensity?.toStringAsFixed(2) ?? 'Not available',
             subtitle: 'COTS/ha (this list)',
             icon: Icons.query_stats_rounded,
             accentColor: AdminColors.statPurple,
@@ -804,8 +804,10 @@ class _AdminRecordsSubmissionsScreenState
   List<(String, double)> _topZonesByDensity(List<AdminRecordTableRow> rows) {
     final totals = <String, (double sum, int count)>{};
     for (final r in rows) {
+      final density = r.density;
+      if (density == null) continue;
       final current = totals[r.zone] ?? (0, 0);
-      totals[r.zone] = (current.$1 + r.density, current.$2 + 1);
+      totals[r.zone] = (current.$1 + density, current.$2 + 1);
     }
     final averages = totals.entries
         .map((e) => (e.key, e.value.$1 / e.value.$2))

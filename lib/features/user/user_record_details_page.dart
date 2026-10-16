@@ -4,15 +4,24 @@ import 'package:intl/intl.dart';
 
 import '../../models/activity_type.dart';
 import '../../models/cots_confidence_policy.dart';
+import '../../models/follow_up_monitoring_model.dart';
 import '../../models/scan_record_model.dart';
+import '../../models/capture_model.dart';
+import '../../services/capture_repository.dart';
 import '../../widgets/cots_detection_image_overlay.dart';
 import 'cots_map_page.dart';
 
 /// Full detail view for a single GoPro submission (user-facing).
 class UserRecordDetailsPage extends StatelessWidget {
-  const UserRecordDetailsPage({super.key, required this.record});
+  const UserRecordDetailsPage(
+      {super.key,
+      required this.record,
+      this.watchSurvey = true,
+      this.linkedCaptures = const []});
 
   final ScanRecordModel record;
+  final bool watchSurvey;
+  final List<CaptureModel> linkedCaptures;
 
   static final _dateFmt = DateFormat('MMM d, yyyy h:mm a');
 
@@ -23,8 +32,9 @@ class UserRecordDetailsPage extends StatelessWidget {
       ? _dateFmt.format(record.submittedAt!)
       : _dateCaptured;
 
-  String get _userRemarks =>
-      record.notes.trim().isEmpty ? 'No remarks submitted.' : record.notes.trim();
+  String get _userRemarks => record.notes.trim().isEmpty
+      ? 'No remarks submitted.'
+      : record.notes.trim();
 
   Color _statusColor(String status) {
     switch (status) {
@@ -57,6 +67,32 @@ class UserRecordDetailsPage extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final survey = record.followUpSurvey;
+    if (watchSurvey && survey != null) {
+      return StreamBuilder<List<CaptureModel>>(
+        stream: CaptureRepository.watchForUser(survey.uid),
+        builder: (context, snapshot) {
+          if (snapshot.hasError) {
+            return Scaffold(
+                appBar: AppBar(title: const Text('Survey details')),
+                body: const Center(
+                    child: Text('Could not load linked validation results.')));
+          }
+          if (!snapshot.hasData) {
+            return const Scaffold(
+                body: Center(child: CircularProgressIndicator()));
+          }
+          return UserRecordDetailsPage(
+            record: ScanRecordModel.fromFollowUpSurvey(survey,
+                status: followUpSurveyStatus(survey, snapshot.data!)),
+            watchSurvey: false,
+            linkedCaptures: snapshot.data!
+                .where((capture) => survey.captureIds.contains(capture.id))
+                .toList(),
+          );
+        },
+      );
+    }
     final status = record.userStatusLabel;
     final statusColor = _statusColor(status);
     final confidencePct = (record.confidence.clamp(0.0, 1.0) * 100).round();
@@ -103,15 +139,22 @@ class UserRecordDetailsPage extends StatelessWidget {
             ],
             _summaryHeader(status, statusColor),
             const SizedBox(height: 14),
-            _detectionResultsCard(record.aiDetectedCount, confidencePct),
-            const SizedBox(height: 14),
-            _confidencePolicyCard(),
+            if (record.followUpSurvey case final survey?) ...[
+              _followUpSurveyCard(survey),
+            ] else ...[
+              _detectionResultsCard(record.aiDetectedCount, confidencePct),
+              const SizedBox(height: 14),
+              _confidencePolicyCard(),
+            ],
             const SizedBox(height: 14),
             _informationCard(),
             const SizedBox(height: 14),
           ];
           final rightCol = [
-            _imageCard(),
+            if (record.followUpSurvey case final survey?)
+              _followUpCaptureReferences(context, survey)
+            else
+              _imageCard(),
           ];
 
           return SingleChildScrollView(
@@ -119,7 +162,11 @@ class UserRecordDetailsPage extends StatelessWidget {
             child: narrow
                 ? Column(
                     crossAxisAlignment: CrossAxisAlignment.stretch,
-                    children: [...leftCol, const SizedBox(height: 14), ...rightCol],
+                    children: [
+                      ...leftCol,
+                      const SizedBox(height: 14),
+                      ...rightCol
+                    ],
                   )
                 : Row(
                     crossAxisAlignment: CrossAxisAlignment.start,
@@ -132,6 +179,137 @@ class UserRecordDetailsPage extends StatelessWidget {
           );
         },
       ),
+    );
+  }
+
+  Widget _followUpSurveyCard(FollowUpSurveyModel survey) {
+    return _titledCard(
+      icon: Icons.event_repeat_outlined,
+      title: 'Follow-up Monitoring Results',
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          _metricBox(
+            'Field-observed COTS',
+            '${survey.fieldObservedCount} individuals',
+            const Color(0xFF1565C0),
+          ),
+          const SizedBox(height: 10),
+          Text(record.userStatusLabel,
+              style: const TextStyle(fontWeight: FontWeight.w700)),
+          const SizedBox(height: 10),
+          _metricBox(
+            'Field-reported eliminated',
+            '${survey.fieldEliminatedCount} individuals',
+            kGreen,
+          ),
+          const SizedBox(height: 12),
+          for (final capture in linkedCaptures)
+            Padding(
+              padding: const EdgeInsets.only(bottom: 8),
+              child: Text(
+                  '${capture.displayRecordId}: Expert-confirmed image detections: '
+                  '${capture.adminCotsDecisions.isNotEmpty ? capture.adminCotsDecisions.where((decision) => decision == PerCotsAdminDecision.confirmed).length : capture.adminConfirmed ? capture.aiDetectedCount : 'Not yet validated'}. '
+                  'These are image detections, not a unique survey count.'),
+            ),
+          Text(
+            'AI image detections: ${survey.aiDetectedCount} across '
+            '${survey.captureIds.length} image record(s). Counts across '
+            'images are not treated as unique individuals.',
+            style: TextStyle(
+              fontSize: 12,
+              color: Colors.grey.shade700,
+              height: 1.4,
+            ),
+          ),
+          const SizedBox(height: 12),
+          _kv(
+            'Monitoring area',
+            '${survey.areaName} · ${survey.barangay}, ${survey.municipality}',
+          ),
+          _kv(
+            'Actual monitoring date',
+            _dateFmt.format(survey.surveyDate),
+          ),
+          _kv(
+            'GPS reference',
+            survey.latitude == null || survey.longitude == null
+                ? 'Not provided'
+                : '${survey.latitude!.toStringAsFixed(6)}, '
+                    '${survey.longitude!.toStringAsFixed(6)}',
+          ),
+          _kv(
+            'Surveyed reef area',
+            survey.surveyedAreaSquareMeters == null
+                ? 'Not provided; infestation density not calculated'
+                : '${survey.surveyedAreaSquareMeters!.toStringAsFixed(2)} m²',
+          ),
+          if (survey.fieldEliminatedCount > 0)
+            _kv('Elimination method', survey.eliminationMethod),
+          if (survey.notes.trim().isNotEmpty)
+            _kv('Field notes', survey.notes.trim()),
+        ],
+      ),
+    );
+  }
+
+  Widget _followUpCaptureReferences(
+      BuildContext context, FollowUpSurveyModel survey) {
+    return _titledCard(
+      icon: Icons.photo_library_outlined,
+      title: 'GoPro Image Records',
+      child: survey.captureIds.isEmpty
+          ? const Text('No linked image records.')
+          : Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  '${survey.captureIds.length} saved image record(s). '
+                  'Each image remains available as its own record.',
+                  style: TextStyle(
+                    color: Colors.grey.shade700,
+                    height: 1.4,
+                  ),
+                ),
+                const SizedBox(height: 10),
+                Wrap(
+                  spacing: 6,
+                  runSpacing: 6,
+                  children: [
+                    for (final id in survey.captureIds)
+                      ActionChip(
+                        onPressed: () async {
+                          try {
+                            final capture = await CaptureRepository.getById(id);
+                            if (!context.mounted) return;
+                            if (capture == null) {
+                              throw StateError('Image record unavailable.');
+                            }
+                            await Navigator.of(context).push<void>(
+                                MaterialPageRoute(
+                                    builder: (_) => UserRecordDetailsPage(
+                                        record: ScanRecordModel.fromCapture(
+                                            capture))));
+                          } catch (_) {
+                            if (context.mounted) {
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                  const SnackBar(
+                                      content: Text(
+                                          'Could not open image record. Please retry.')));
+                            }
+                          }
+                        },
+                        label: Text(
+                          id.length > 14 ? '${id.substring(0, 14)}…' : id,
+                          style: const TextStyle(fontSize: 11),
+                        ),
+                        visualDensity: VisualDensity.compact,
+                        materialTapTargetSize: MaterialTapTargetSize.padded,
+                      ),
+                  ],
+                ),
+              ],
+            ),
     );
   }
 
@@ -300,13 +478,19 @@ class UserRecordDetailsPage extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          _policyLine(kLow, 'Automatically Accepted (${CotsConfidencePolicy.autoApproveMin}–100%)',
+          _policyLine(
+              kLow,
+              'Automatically Accepted (${CotsConfidencePolicy.autoApproveMin}–100%)',
               'Each COTS at ${CotsConfidencePolicy.autoApproveMin}%+ is accepted automatically.'),
           const SizedBox(height: 8),
-          _policyLine(kModerate, 'Requires Expert Validation (${CotsConfidencePolicy.adminReviewMin}–${CotsConfidencePolicy.autoApproveMin - 1})',
+          _policyLine(
+              kModerate,
+              'Requires Expert Validation (${CotsConfidencePolicy.adminReviewMin}–${CotsConfidencePolicy.autoApproveMin - 1})',
               'Any individual COTS below ${CotsConfidencePolicy.autoApproveMin}% needs expert verification — even if others in the same photo are higher.'),
           const SizedBox(height: 8),
-          _policyLine(kHigh, 'Retake Photo (0–${CotsConfidencePolicy.adminReviewMin - 1})',
+          _policyLine(
+              kHigh,
+              'Retake Photo (0–${CotsConfidencePolicy.adminReviewMin - 1})',
               'Too low confidence — upload a clearer GoPro shot.'),
         ],
       ),
@@ -328,8 +512,14 @@ class UserRecordDetailsPage extends StatelessWidget {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text(title, style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 12, color: kNavy)),
-              Text(body, style: TextStyle(fontSize: 11.5, color: Colors.grey.shade700, height: 1.35)),
+              Text(title,
+                  style: const TextStyle(
+                      fontWeight: FontWeight.w800, fontSize: 12, color: kNavy)),
+              Text(body,
+                  style: TextStyle(
+                      fontSize: 11.5,
+                      color: Colors.grey.shade700,
+                      height: 1.35)),
             ],
           ),
         ),
@@ -365,7 +555,8 @@ class UserRecordDetailsPage extends StatelessWidget {
               ),
               const SizedBox(width: 8),
               Container(
-                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
                 decoration: BoxDecoration(
                   color: kLow.withValues(alpha: 0.14),
                   borderRadius: BorderRadius.circular(20),
@@ -415,8 +606,14 @@ class UserRecordDetailsPage extends StatelessWidget {
             spacing: 12,
             runSpacing: 6,
             children: const [
-              _LegendDot(color: Color(0xFF1565C0), label: 'AI auto-approved (${CotsConfidencePolicy.autoApproveMin}%+)'),
-              _LegendDot(color: kModerate, label: 'Needs review (${CotsConfidencePolicy.adminReviewMin}–${CotsConfidencePolicy.autoApproveMin - 1}%)'),
+              _LegendDot(
+                  color: Color(0xFF1565C0),
+                  label:
+                      'AI auto-approved (${CotsConfidencePolicy.autoApproveMin}%+)'),
+              _LegendDot(
+                  color: kModerate,
+                  label:
+                      'Needs review (${CotsConfidencePolicy.adminReviewMin}–${CotsConfidencePolicy.autoApproveMin - 1}%)'),
               _LegendDot(color: kHigh, label: 'Low confidence / retake'),
             ],
           ),

@@ -182,6 +182,37 @@ abstract final class DavaoGulfGeography {
     );
   }
 
+  /// Resolves a monitoring area only when the coordinate is inside exactly one
+  /// mapped site polygon. Unlike [assign], this never uses a nearest-area fallback.
+  static GulfZoneAssignment? assignWithinMonitoringArea({
+    double? latitude,
+    double? longitude,
+  }) {
+    if (latitude == null || longitude == null ||
+        !latitude.isFinite || !longitude.isFinite ||
+        latitude < -90 || latitude > 90 || longitude < -180 || longitude > 180) {
+      return null;
+    }
+    final point = LatLng(latitude, longitude);
+    final matches = <(GulfCoastalMunicipality, GulfCoastalBarangay)>[];
+
+    for (final municipality in municipalities) {
+      for (final barangay in municipality.barangays) {
+        if (_pointInPolygon(point, barangay.polygon)) {
+          matches.add((municipality, barangay));
+        }
+      }
+    }
+
+    if (matches.length != 1) return null;
+    final (municipality, barangay) = matches.single;
+    return GulfZoneAssignment(
+      municipality: municipality,
+      barangay: barangay,
+      zoneLabel: '${barangay.zoneLabel} · ${barangay.siteCode}',
+    );
+  }
+
   static GulfCoastalBarangay? barangayById(String id) {
     for (final b in allBarangays) {
       if (b.id == id) return b;
