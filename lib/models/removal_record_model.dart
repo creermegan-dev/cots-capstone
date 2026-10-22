@@ -33,7 +33,9 @@ class RemovalRecordModel {
   final String uid;
   final String submittedBy;
   final String imageName;
-  final int removedQuantity;
+
+  /// Null when the diver recorded a method without reporting a quantity.
+  final int? removedQuantity;
   final String removalMethod;
   final String zone;
   final String notes;
@@ -66,7 +68,9 @@ class RemovalRecordModel {
       uid: data['uid'] as String? ?? '',
       submittedBy: data['submitted_by'] as String? ?? 'Unknown',
       imageName: data['image_name'] as String? ?? '',
-      removedQuantity: _asInt(data['removed_quantity']),
+      removedQuantity: data['removed_quantity'] == null
+          ? null
+          : _asInt(data['removed_quantity']),
       removalMethod: data['removal_method'] as String? ?? '',
       zone: data['zone'] as String? ?? 'Unassigned',
       notes: data['notes'] as String? ?? '',
@@ -110,7 +114,11 @@ class RemovalRecordModel {
       uid: _readString(fields, 'uid'),
       submittedBy: _readString(fields, 'submitted_by', fallback: 'Unknown'),
       imageName: _readString(fields, 'image_name'),
-      removedQuantity: _readInt(fields, 'removed_quantity'),
+      removedQuantity: fields['removed_quantity'] is Map &&
+              (fields['removed_quantity']['integerValue'] != null ||
+                  fields['removed_quantity']['doubleValue'] != null)
+          ? _readInt(fields, 'removed_quantity')
+          : null,
       removalMethod: _readString(fields, 'removal_method'),
       zone: _readString(fields, 'zone', fallback: 'Unassigned'),
       notes: _readString(fields, 'notes'),
@@ -145,16 +153,17 @@ class RemovalRecordModel {
   AdminRecordTableRow toAdminTableRow(int index) {
     final when = submittedAt ?? dateTaken ?? DateTime.now();
     final fmt = DateFormat('MMM d, yyyy h:mm a');
-    final aiCount = linkedCaptureAiCount ?? aiVerifiedCount ?? removedQuantity;
+    final aiCount =
+        linkedCaptureAiCount ?? aiVerifiedCount ?? removedQuantity ?? 0;
 
     return AdminRecordTableRow(
       index,
       displayRecordId,
       zone,
       fmt.format(when),
-      removedQuantity,
-      _densityEstimate(removedQuantity),
-      _riskFromCount(removedQuantity),
+      removedQuantity ?? aiCount,
+      removedQuantity == null ? null : _densityEstimate(removedQuantity!),
+      _riskFromCount(removedQuantity ?? aiCount),
       submittedBy,
       aiConfidence != null ? (aiConfidence! * 100).round() : 0,
       activityType: CotsActivityType.label(CotsActivityType.removalActivity),
@@ -165,7 +174,8 @@ class RemovalRecordModel {
       imageName: imageName,
       notes: notes,
       dateCaptured: dateTaken != null ? fmt.format(dateTaken!) : 'Unknown',
-      dateUploaded: submittedAt != null ? fmt.format(submittedAt!) : fmt.format(when),
+      dateUploaded:
+          submittedAt != null ? fmt.format(submittedAt!) : fmt.format(when),
       latitude: latitude,
       longitude: longitude,
       recordCollection: RecordCollection.removalRecords,

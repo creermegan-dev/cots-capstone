@@ -121,14 +121,15 @@ class CotsDetectionImageOverlay extends StatelessWidget {
         ? decisions![index]
         : PerCotsAdminDecision.pending;
 
-    final color = boxColorOverride ?? _boxColor(item.confidencePercent, decision);
+    final color =
+        boxColorOverride ?? _boxColor(item.confidencePercent, decision);
     final selected = selectedIndex == index;
 
     return Positioned(
       left: left,
       top: top,
-      width: width.clamp(24, displayWidth),
-      height: height.clamp(24, displayHeight),
+      width: width.clamp(0, displayWidth - left),
+      height: height.clamp(0, displayHeight - top),
       child: GestureDetector(
         onTap: interactive && onBoxTap != null ? () => onBoxTap!(index) : null,
         child: Container(
@@ -152,7 +153,7 @@ class CotsDetectionImageOverlay extends StatelessWidget {
                   children: [
                     Positioned(
                       left: 0,
-                      top: -22,
+                      top: top < 22 ? 0 : -22,
                       child: Container(
                         padding: const EdgeInsets.symmetric(
                           horizontal: 6,

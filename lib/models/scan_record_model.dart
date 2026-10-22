@@ -143,7 +143,8 @@ class ScanRecordModel {
     );
   }
 
-  factory ScanRecordModel.fromCapture(CaptureModel capture) {
+  factory ScanRecordModel.fromCapture(CaptureModel capture,
+      {int? removedQuantity, bool hasRemovalRecord = false}) {
     return ScanRecordModel(
       sourceCapture: capture,
       id: capture.id,
@@ -151,7 +152,10 @@ class ScanRecordModel {
       submittedBy: capture.submittedBy,
       imageName: capture.imageName,
       imagePath: '',
-      activityType: CotsActivityType.detectionOnly,
+      activityType: removedQuantity == null && !hasRemovalRecord
+          ? CotsActivityType.detectionOnly
+          : CotsActivityType.removalActivity,
+      removedQuantity: removedQuantity,
       aiDetectedCount: capture.aiDetectedCount,
       confidence: capture.confidence,
       captureSource: capture.captureSource,
@@ -371,7 +375,8 @@ class ScanRecordModel {
       return followUpSurveyStatusLabel(
           followUpStatus ?? FollowUpSurveyStatus.submitted);
     }
-    if (CotsActivityType.isRemoval(activityType)) {
+    if (CotsActivityType.isRemoval(activityType) &&
+        recordCollection != RecordCollection.captures) {
       if (adminConfirmed) return 'Verified';
       if (adminRejected) return 'Rejected';
       return 'Pending Verification';
@@ -387,7 +392,8 @@ class ScanRecordModel {
     if (recordCollection == RecordCollection.followUpSurveys) {
       return 'Monthly follow-up survey saved for ${followUpSurvey?.areaName ?? zone}.';
     }
-    if (CotsActivityType.isRemoval(activityType)) {
+    if (CotsActivityType.isRemoval(activityType) &&
+        recordCollection != RecordCollection.captures) {
       if (adminConfirmed) {
         return 'Removal evidence was verified. This intervention record is closed.';
       }

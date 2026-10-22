@@ -53,19 +53,46 @@ abstract final class ScanRecordService {
     void Function(String message)? onWarning,
   }) async {
     if (CotsActivityType.isRemoval(activityType)) {
-      final captureId = linkedCaptureId?.trim() ?? '';
-      if (captureId.isEmpty) {
+      var captureId = linkedCaptureId?.trim() ?? '';
+      final isNewEncounter = captureId.isEmpty;
+      if ((confirmedRemovedQuantity != null && confirmedRemovedQuantity < 0) ||
+          removalMethod == null ||
+          removalMethod.trim().isEmpty) {
         throw ArgumentError(
-          'Removal records must be linked to a capture (capture_id).',
+            'Select a removal method and use a valid quantity if provided.');
+      }
+      if (isNewEncounter) {
+        if (submissionId == null || submissionId.isEmpty) {
+          throw ArgumentError(
+              'A stable submission ID is required for a new encounter.');
+        }
+        // Create this encounter's own capture, never ask the diver for an older record.
+        captureId = await CaptureService.submit(
+          submissionId: submissionId,
+          uid: uid,
+          submittedBy: submittedBy,
+          imageName: imageName,
+          imageBytes: imageBytes,
+          detection: detection,
+          latitude: latitude,
+          longitude: longitude,
+          dateTaken: dateTaken,
+          imageWidth: imageWidth,
+          imageHeight: imageHeight,
+          notes: notes,
+          depth: depth,
+          measurementReferenceVisible: measurementReferenceVisible,
+          sizeEstimate: sizeEstimate,
         );
       }
       final removalId = await RemovalRecordService.submit(
+        submissionId: submissionId == null ? null : '${submissionId}_removal',
         captureId: captureId,
         uid: uid,
         submittedBy: submittedBy,
         imageName: imageName,
         imageBytes: imageBytes,
-        removedQuantity: confirmedRemovedQuantity ?? detection.count,
+        removedQuantity: confirmedRemovedQuantity,
         removalMethod: removalMethod,
         notes: notes,
         depth: depth,
@@ -89,7 +116,26 @@ abstract final class ScanRecordService {
       } catch (_) {
         // Removal record is already saved; assignment update is optional.
       }
-      return null;
+      if (isNewEncounter) {
+        try {
+          await FollowUpMonitoringRepository.considerNewDetection(
+            captureId: captureId,
+            uid: uid,
+            diverName: submittedBy,
+            detection: detection,
+            latitude: latitude,
+            longitude: longitude,
+            dateTaken: dateTaken,
+            submittedAt: DateTime.now(),
+            imageWidth: imageWidth,
+            imageHeight: imageHeight,
+          );
+        } catch (_) {
+          onWarning?.call(
+              'Record saved. Follow-up monitoring could not be updated.');
+        }
+      }
+      return captureId;
     }
 
     final captureId = await CaptureService.submit(

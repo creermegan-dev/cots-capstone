@@ -22,7 +22,7 @@ class WindowsRemovalRecordRestService {
     required String uid,
     required String submittedBy,
     required String imageName,
-    required int removedQuantity,
+    required int? removedQuantity,
     required String? removalMethod,
     required String notes,
     required double? depth,
@@ -32,18 +32,20 @@ class WindowsRemovalRecordRestService {
     required String zone,
     String municipality = '',
     String barangay = '',
+    String? submissionId,
     int? aiVerifiedCount,
     double? aiConfidence,
   }) async {
     final now = DateTime.now().toUtc().toIso8601String();
-    final documentId = RemovalRecordModel.newDocumentId();
+    final documentId = submissionId ?? RemovalRecordModel.newDocumentId();
     final fields = <String, dynamic>{
       'capture_id': _string(captureId),
       'uid': _string(uid),
       'submitted_by': _string(submittedBy),
       'image_name': _string(imageName),
       'has_processed_image': _bool(true),
-      'removed_quantity': _int(removedQuantity),
+      'removed_quantity':
+          removedQuantity == null ? {'nullValue': null} : _int(removedQuantity),
       'removal_method': _string(removalMethod ?? ''),
       'notes': _string(notes),
       'zone': _string(zone),
@@ -91,6 +93,29 @@ class WindowsRemovalRecordRestService {
       },
       body: jsonEncode({'fields': fields}),
     );
+    if (response.statusCode == 409 && submissionId != null) {
+      final existing = await _client.get(
+        Uri.parse(
+            'https://firestore.googleapis.com/v1/projects/${_options.projectId}'
+            '/databases/(default)/documents/${RecordCollection.removalRecords}/${Uri.encodeComponent(documentId)}'),
+        headers: {'Authorization': 'Bearer $idToken'},
+      );
+      if (existing.statusCode != 200) {
+        throw StateError('Could not verify the saved removal.');
+      }
+      final saved = RemovalRecordModel.fromRestDocument(
+          jsonDecode(existing.body) as Map<String, dynamic>);
+      if (saved.uid != uid ||
+          saved.captureId != captureId ||
+          saved.imageName != imageName ||
+          saved.removedQuantity != removedQuantity ||
+          saved.removalMethod != (removalMethod ?? '') ||
+          saved.notes != notes) {
+        throw StateError(
+            'The saved removal differs from this retry. Its original data was preserved.');
+      }
+      return documentId;
+    }
     if (response.statusCode < 200 || response.statusCode >= 300) {
       throw WindowsAuthRestException(
         'Could not submit removal record (${response.statusCode}).',

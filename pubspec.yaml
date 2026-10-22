@@ -45,3 +45,4 @@ flutter:
   assets:
     - assets/images/cots_logo.png
     - assets/models/yolov8_best.onnx
+    - assets/models/yolo26_best.onnx

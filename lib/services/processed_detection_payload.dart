@@ -42,8 +42,7 @@ abstract final class ProcessedDetectionPayload {
       'municipality': municipality,
       'barangay': barangay,
       'gps': {'latitude': latitude, 'longitude': longitude},
-      'date_taken':
-          dateTaken != null ? Timestamp.fromDate(dateTaken) : null,
+      'date_taken': dateTaken != null ? Timestamp.fromDate(dateTaken) : null,
       'resolution': {'width': imageWidth, 'height': imageHeight},
       'depth': depth,
       'capture_depth': depth,
@@ -81,7 +80,7 @@ abstract final class ProcessedDetectionPayload {
     required String uid,
     required String submittedBy,
     required String imageName,
-    required int removedQuantity,
+    required int? removedQuantity,
     required String? removalMethod,
     required String notes,
     required double? depth,
@@ -107,8 +106,7 @@ abstract final class ProcessedDetectionPayload {
       'municipality': municipality,
       'barangay': barangay,
       'gps': {'latitude': latitude, 'longitude': longitude},
-      'date_taken':
-          dateTaken != null ? Timestamp.fromDate(dateTaken) : null,
+      'date_taken': dateTaken != null ? Timestamp.fromDate(dateTaken) : null,
       'depth': depth,
       'capture_depth': depth,
       'capture_depth_unit': depth != null ? 'meters' : null,

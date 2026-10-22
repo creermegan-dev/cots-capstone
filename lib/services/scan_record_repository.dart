@@ -230,12 +230,39 @@ abstract final class ScanRecordRepository {
                     .whereType<CaptureModel>()
                     .toList()),
           )),
-      ...captures,
-      ...removals,
+      ...mergeCaptureRemovalRecords(captures, removals),
       ...legacy,
     ];
     merged.sort(_submittedDesc);
     return merged;
+  }
+
+  /// A new encounter has one capture and its deterministic removal companion.
+  /// Present them as one submission; keep historical separate removals intact.
+  static List<ScanRecordModel> mergeCaptureRemovalRecords(
+      List<ScanRecordModel> captures, List<ScanRecordModel> removals) {
+    final companions = <String, ScanRecordModel>{};
+    final byId = {for (final removal in removals) removal.id: removal};
+    for (final capture in captures) {
+      final removal = byId['${capture.id}_removal'];
+      if (removal != null &&
+          removal.linkedCaptureId == capture.id &&
+          removal.uid == capture.uid &&
+          capture.sourceCapture != null) {
+        companions[capture.id] = removal;
+      }
+    }
+    final pairedIds = companions.values.map((r) => r.id).toSet();
+    return [
+      for (final capture in captures)
+        if (companions.containsKey(capture.id))
+          ScanRecordModel.fromCapture(capture.sourceCapture!,
+              hasRemovalRecord: true,
+              removedQuantity: companions[capture.id]!.removedQuantity)
+        else
+          capture,
+      ...removals.where((r) => !pairedIds.contains(r.id)),
+    ];
   }
 
   static int _submittedDesc(ScanRecordModel a, ScanRecordModel b) {
