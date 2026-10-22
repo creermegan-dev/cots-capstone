@@ -2,12 +2,14 @@ import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 
 import '../../../models/scan_record_model.dart';
+import '../../../models/monitoring_analytics.dart';
 import '../../../services/scan_record_repository.dart';
 import '../theme/admin_theme.dart';
 import 'admin_data_table.dart';
 
 class RecentSubmissionsTableCard extends StatefulWidget {
-  const RecentSubmissionsTableCard({super.key});
+  const RecentSubmissionsTableCard({super.key, this.recordsStream});
+  final Stream<List<ScanRecordModel>>? recordsStream;
 
   /// Fixed viewport height for dashboard embedding inside [SingleChildScrollView].
   static const double _tableViewportHeight = 360;
@@ -18,7 +20,8 @@ class RecentSubmissionsTableCard extends StatefulWidget {
     AdminDataTableColumn('Diver/User', 180),
     AdminDataTableColumn('Reef Zone', 100, headerAlign: TextAlign.center),
     AdminDataTableColumn('COTS Detected', 100, headerAlign: TextAlign.right),
-    AdminDataTableColumn('Validation Status', 140, headerAlign: TextAlign.center),
+    AdminDataTableColumn('Validation Status', 140,
+        headerAlign: TextAlign.center),
     AdminDataTableColumn('Actions', 100, headerAlign: TextAlign.right),
   ];
 
@@ -27,8 +30,28 @@ class RecentSubmissionsTableCard extends StatefulWidget {
       _RecentSubmissionsTableCardState();
 }
 
-class _RecentSubmissionsTableCardState extends State<RecentSubmissionsTableCard> {
+class _RecentSubmissionsTableCardState
+    extends State<RecentSubmissionsTableCard> {
   final ScrollController _horizontalScroll = ScrollController();
+  late Stream<List<ScanRecordModel>> _records;
+
+  @override
+  void initState() {
+    super.initState();
+    _records = widget.recordsStream ??
+        ScanRecordRepository.watchAll().map((records) =>
+            records.where(MonitoringAnalytics.isCapture).take(5).toList());
+  }
+
+  @override
+  void didUpdateWidget(RecentSubmissionsTableCard oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.recordsStream != widget.recordsStream) {
+      _records = widget.recordsStream ??
+          ScanRecordRepository.watchAll().map((records) =>
+              records.where(MonitoringAnalytics.isCapture).take(5).toList());
+    }
+  }
 
   @override
   void dispose() {
@@ -38,8 +61,10 @@ class _RecentSubmissionsTableCardState extends State<RecentSubmissionsTableCard>
 
   @override
   Widget build(BuildContext context) {
-    final tableW = AdminDataTableColumn.totalWidth(RecentSubmissionsTableCard._columns);
-    final colMap = AdminDataTableColumn.widthsMap(RecentSubmissionsTableCard._columns);
+    final tableW =
+        AdminDataTableColumn.totalWidth(RecentSubmissionsTableCard._columns);
+    final colMap =
+        AdminDataTableColumn.widthsMap(RecentSubmissionsTableCard._columns);
 
     return Container(
       padding: const EdgeInsets.all(20),
@@ -78,20 +103,21 @@ class _RecentSubmissionsTableCardState extends State<RecentSubmissionsTableCard>
           ),
           const SizedBox(height: 8),
           StreamBuilder<List<ScanRecordModel>>(
-            stream: ScanRecordRepository.watchRecent(limit: 5),
+            stream: _records,
             builder: (context, snapshot) {
               if (snapshot.connectionState == ConnectionState.waiting &&
                   !snapshot.hasData) {
                 return const SizedBox(
                   height: RecentSubmissionsTableCard._tableViewportHeight,
                   child: Center(
-                    child: CircularProgressIndicator(color: AdminColors.statBlue),
+                    child:
+                        CircularProgressIndicator(color: AdminColors.statBlue),
                   ),
                 );
               }
 
               if (snapshot.hasError) {
-                return SizedBox(
+                return const SizedBox(
                   height: RecentSubmissionsTableCard._tableViewportHeight,
                   child: Center(
                     child: Text(
@@ -126,11 +152,13 @@ class _RecentSubmissionsTableCardState extends State<RecentSubmissionsTableCard>
                         controller: _horizontalScroll,
                         scrollDirection: Axis.horizontal,
                         child: SizedBox(
-                          width: c.maxWidth < tableW + 40 ? tableW + 40 : c.maxWidth - 40,
+                          width: c.maxWidth < tableW + 40
+                              ? tableW + 40
+                              : c.maxWidth - 40,
                           child: Column(
                             crossAxisAlignment: CrossAxisAlignment.stretch,
                             children: [
-                              AdminDataTableHeader(
+                              const AdminDataTableHeader(
                                 columns: RecentSubmissionsTableCard._columns,
                               ),
                               for (var i = 0; i < records.length; i++)
@@ -154,19 +182,23 @@ class _RecentSubmissionsTableCardState extends State<RecentSubmissionsTableCard>
   }
 
   List<TableCell> _rowCells(ScanRecordModel record, int index) {
-    final when = record.submittedAt ?? record.dateTaken ?? DateTime.now();
-    final dt = DateFormat('MMM d, yyyy · HH:mm').format(when);
+    final when = record.submittedAt ?? record.dateTaken;
+    final dt = when == null
+        ? 'Unknown'
+        : DateFormat('MMM d, yyyy · HH:mm').format(when);
     final status = _validationStatus(record);
 
     return [
       AdminDataTableCells.text('$index', align: TextAlign.center),
-      AdminDataTableCells.text(dt, style: AdminDateTimeTokens.inlineDateTimeTextStyle()),
+      AdminDataTableCells.text(dt,
+          style: AdminDateTimeTokens.inlineDateTimeTextStyle()),
       AdminDataTableCells.text(record.submittedBy),
       AdminDataTableCells.text(
         record.zone.isEmpty ? '—' : record.zone,
         align: TextAlign.center,
       ),
-      AdminDataTableCells.text('${record.aiDetectedCount}', align: TextAlign.right),
+      AdminDataTableCells.text('${record.aiDetectedCount}',
+          align: TextAlign.right),
       AdminDataTableCells.cell(
         align: TextAlign.center,
         child: _statusBadge(status),
@@ -191,16 +223,14 @@ class _RecentSubmissionsTableCardState extends State<RecentSubmissionsTableCard>
   }
 
   static _Status _validationStatus(ScanRecordModel record) {
+    if (record.aiDetectedCount == 0) return _Status.noDetections;
     if (record.adminConfirmed ||
         record.userStatusLabel == 'Accepted' ||
         record.userStatusLabel == 'Automatically Accepted') {
       return _Status.validated;
     }
     if (record.adminRejected || record.userStatusLabel == 'Retake Photo') {
-      return _Status.cleared;
-    }
-    if (record.aiDetectedCount >= 15) {
-      return _Status.intervention;
+      return _Status.rejected;
     }
     return _Status.pending;
   }
@@ -220,19 +250,19 @@ class _RecentSubmissionsTableCardState extends State<RecentSubmissionsTableCard>
         fg = AdminColors.statBlue;
         label = 'Validated';
         break;
-      case _Status.intervention:
+      case _Status.rejected:
         bg = AdminColors.statRed.withValues(alpha: 0.12);
         fg = AdminColors.statRed;
-        label = 'Intervention Required';
+        label = 'Rejected / Retake';
         break;
-      case _Status.cleared:
-        bg = AdminColors.statGreen.withValues(alpha: 0.12);
-        fg = AdminColors.statGreen;
-        label = 'Cleared';
+      case _Status.noDetections:
+        bg = AdminColors.muted.withValues(alpha: 0.12);
+        fg = AdminColors.muted;
+        label = 'No detections';
         break;
     }
     return AdminDataTableBadge(label: label, foreground: fg, background: bg);
   }
 }
 
-enum _Status { pending, validated, intervention, cleared }
+enum _Status { pending, validated, rejected, noDetections }
