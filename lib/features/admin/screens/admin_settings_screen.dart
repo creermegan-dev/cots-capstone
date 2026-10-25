@@ -1,30 +1,35 @@
-import 'package:flutter/material.dart';
+import 'dart:async';
 
+import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
+
+import '../../../models/admin_preferences.dart';
+import '../../../providers/auth_provider.dart';
+import '../../../services/admin_preferences_repository.dart';
+import '../../../widgets/cots_loading_skeleton.dart';
 import '../layout/admin_breakpoints.dart';
 import '../theme/admin_theme.dart';
 import 'admin_shell_screen.dart';
 
 /// Settings workspace: 2×2 card grid, top bar, and footer. Sidebar is provided by [AdminShellScreen].
 class AdminSettingsScreen extends StatefulWidget {
-  const AdminSettingsScreen({super.key});
+  const AdminSettingsScreen({super.key, this.preferencesStore});
+
+  final AdminPreferencesStore? preferencesStore;
 
   @override
   State<AdminSettingsScreen> createState() => _AdminSettingsScreenState();
 }
 
 class _AdminSettingsScreenState extends State<AdminSettingsScreen> {
-  final _fullNameCtrl = TextEditingController(text: 'Admin User');
-  final _emailCtrl = TextEditingController(text: 'admin@cotsmonitoring.com');
+  late final AdminPreferencesStore _preferencesStore;
+  final _fullNameCtrl = TextEditingController();
+  final _emailCtrl = TextEditingController();
   final _roleCtrl = TextEditingController(text: 'Administrator');
 
   final _currentPasswordCtrl = TextEditingController();
   final _newPasswordCtrl = TextEditingController();
   final _confirmPasswordCtrl = TextEditingController();
-
-  String _language = 'English';
-  bool _useDarkTheme = false;
-  String _dateFormat = 'May 18, 2026 (MM DD, YYYY)';
-  String _timeFormat = '12-Hour (AM/PM)';
 
   bool _emailNotifications = true;
   bool _highRiskAlerts = true;
@@ -33,18 +38,41 @@ class _AdminSettingsScreenState extends State<AdminSettingsScreen> {
   bool _twoFactorAuth = false;
   bool _loginAlerts = true;
   bool _sessionTimeout = true;
+  bool _profileInitialized = false;
+  bool _savingProfile = false;
+  bool _changingPassword = false;
+  bool _preferencesLoadStarted = false;
+  bool _loadingPreferences = false;
+  bool _savingPreferences = false;
+  String? _preferencesError;
+  String? _preferencesUid;
 
-  final _highThresholdCtrl = TextEditingController(text: '15');
-  final _moderateThresholdCtrl = TextEditingController(text: '5');
-  final _lowThresholdCtrl = TextEditingController(text: '1');
+  @override
+  void initState() {
+    super.initState();
+    _preferencesStore = widget.preferencesStore ?? AdminPreferencesRepository();
+  }
 
-  static const _languages = ['English', 'Filipino', 'Cebuano'];
-  static const _dateFormats = [
-    'May 18, 2026 (MM DD, YYYY)',
-    '18/05/2026 (DD/MM/YYYY)',
-    '2026-05-18 (YYYY-MM-DD)',
-  ];
-  static const _timeFormats = ['12-Hour (AM/PM)', '24-Hour'];
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    if (_profileInitialized) return;
+    final profile = context.read<AuthProvider>().userModel;
+    if (profile == null) return;
+    _profileInitialized = true;
+    _fullNameCtrl.text = profile.fullName;
+    _emailCtrl.text = profile.email;
+    _roleCtrl.text = profile.isAdmin
+        ? 'Administrator'
+        : profile.isExpert
+            ? 'Expert'
+            : profile.role;
+    _preferencesUid = profile.uid;
+    if (!_preferencesLoadStarted) {
+      _preferencesLoadStarted = true;
+      unawaited(_loadPreferences());
+    }
+  }
 
   @override
   void dispose() {
@@ -54,9 +82,6 @@ class _AdminSettingsScreenState extends State<AdminSettingsScreen> {
     _currentPasswordCtrl.dispose();
     _newPasswordCtrl.dispose();
     _confirmPasswordCtrl.dispose();
-    _highThresholdCtrl.dispose();
-    _moderateThresholdCtrl.dispose();
-    _lowThresholdCtrl.dispose();
     super.dispose();
   }
 
@@ -67,9 +92,133 @@ class _AdminSettingsScreenState extends State<AdminSettingsScreen> {
     );
   }
 
-  void _onSettingsRefresh() {
-    _snack('Settings refreshed.');
-    setState(() {});
+  Future<void> _loadPreferences() async {
+    final uid = _preferencesUid;
+    if (uid == null || uid.isEmpty) return;
+    setState(() {
+      _loadingPreferences = true;
+      _preferencesError = null;
+    });
+    try {
+      final preferences = await _preferencesStore.load(uid);
+      if (!mounted) return;
+      setState(() {
+        _emailNotifications = preferences.emailNotifications;
+        _highRiskAlerts = preferences.highRiskAlerts;
+        _systemUpdates = preferences.systemUpdates;
+        _weeklyReports = preferences.weeklyReports;
+        _twoFactorAuth = preferences.twoFactorAuth;
+        _loginAlerts = preferences.loginAlerts;
+        _sessionTimeout = preferences.sessionTimeout;
+      });
+    } catch (_) {
+      if (!mounted) return;
+      setState(() {
+        _preferencesError =
+            'Could not load saved preferences. Check your connection and Firestore rules.';
+      });
+    } finally {
+      if (mounted) setState(() => _loadingPreferences = false);
+    }
+  }
+
+  Future<void> _onSettingsRefresh() async {
+    await context.read<AuthProvider>().refreshProfile();
+    if (!mounted) return;
+    await _loadPreferences();
+    if (mounted && _preferencesError == null) {
+      _snack('Settings refreshed.');
+    }
+  }
+
+  Future<void> _savePreferences() async {
+    final uid = _preferencesUid;
+    if (uid == null || uid.isEmpty) {
+      _snack('Sign in again to save preferences.');
+      return;
+    }
+    setState(() {
+      _savingPreferences = true;
+      _preferencesError = null;
+    });
+    try {
+      await _preferencesStore.save(AdminPreferences(
+        uid: uid,
+        emailNotifications: _emailNotifications,
+        highRiskAlerts: _highRiskAlerts,
+        systemUpdates: _systemUpdates,
+        weeklyReports: _weeklyReports,
+        twoFactorAuth: _twoFactorAuth,
+        loginAlerts: _loginAlerts,
+        sessionTimeout: _sessionTimeout,
+      ));
+      _snack('Preferences saved.');
+    } catch (_) {
+      if (!mounted) return;
+      setState(() {
+        _preferencesError =
+            'Could not save preferences. Check your connection and Firestore rules.';
+      });
+      _snack(_preferencesError!);
+    } finally {
+      if (mounted) setState(() => _savingPreferences = false);
+    }
+  }
+
+  Future<void> _saveProfile() async {
+    final name = _fullNameCtrl.text.trim();
+    if (name.length < 2) {
+      _snack('Enter a valid full name.');
+      return;
+    }
+    final auth = context.read<AuthProvider>();
+    final profile = auth.userModel;
+    if (profile == null) return;
+    setState(() => _savingProfile = true);
+    try {
+      await auth.updateProfile(
+        fullName: name,
+        phoneNumber: profile.phoneNumber,
+        role: profile.role,
+        organization: profile.organization,
+        assignedArea: profile.assignedArea,
+      );
+      _snack('Profile updated.');
+    } catch (_) {
+      _snack(auth.lastError ?? 'Could not update profile.');
+    } finally {
+      if (mounted) setState(() => _savingProfile = false);
+    }
+  }
+
+  Future<void> _changePassword() async {
+    final current = _currentPasswordCtrl.text;
+    final next = _newPasswordCtrl.text;
+    if (current.isEmpty) {
+      _snack('Enter your current password.');
+      return;
+    }
+    if (next.length < 8) {
+      _snack('Use at least 8 characters for the new password.');
+      return;
+    }
+    if (next != _confirmPasswordCtrl.text) {
+      _snack('New passwords do not match.');
+      return;
+    }
+    final auth = context.read<AuthProvider>();
+    setState(() => _changingPassword = true);
+    try {
+      await auth.changePassword(currentPassword: current, newPassword: next);
+      _currentPasswordCtrl.clear();
+      _newPasswordCtrl.clear();
+      _confirmPasswordCtrl.clear();
+      _snack('Password updated.');
+    } catch (_) {
+      _snack(auth.lastError ?? 'Could not update password.');
+    } finally {
+      if (mounted) setState(() => _changingPassword = false);
+    }
   }
 
   @override
@@ -86,7 +235,18 @@ class _AdminSettingsScreenState extends State<AdminSettingsScreen> {
               const SizedBox(height: 20),
               _titleBlock(),
               const SizedBox(height: 22),
-              _twoByTwoGrid(c.maxWidth),
+              if (_loadingPreferences)
+                const CotsLoadingSkeleton(
+                  layout: CotsSkeletonLayout.section,
+                  label: 'Loading administrator preferences',
+                )
+              else ...[
+                if (_preferencesError != null) ...[
+                  _preferencesErrorCard(),
+                  const SizedBox(height: 18),
+                ],
+                _twoByTwoGrid(c.maxWidth),
+              ],
               const SizedBox(height: 28),
               _footer(),
             ],
@@ -101,14 +261,16 @@ class _AdminSettingsScreenState extends State<AdminSettingsScreen> {
       children: [
         const Spacer(),
         OutlinedButton.icon(
-          onPressed: _onSettingsRefresh,
+          onPressed: _loadingPreferences ? null : _onSettingsRefresh,
           icon: AdminDateTimeTokens.refreshIcon,
-          label: const Text('Refresh', style: AdminDateTimeTokens.refreshChipTextStyle),
+          label: const Text('Refresh',
+              style: AdminDateTimeTokens.refreshChipTextStyle),
           style: AdminDateTimeTokens.refreshOutlinedButtonStyle(),
         ),
         const SizedBox(width: 12),
         Badge(
-          label: const Text('3', style: TextStyle(fontSize: 10, fontWeight: FontWeight.w800)),
+          label: const Text('3',
+              style: TextStyle(fontSize: 10, fontWeight: FontWeight.w800)),
           child: IconButton(
             style: IconButton.styleFrom(
               backgroundColor: Colors.white,
@@ -134,7 +296,10 @@ class _AdminSettingsScreenState extends State<AdminSettingsScreen> {
             borderRadius: BorderRadius.circular(12),
             border: Border.all(color: Colors.black.withValues(alpha: 0.07)),
             boxShadow: [
-              BoxShadow(color: Colors.black.withValues(alpha: 0.04), blurRadius: 10, offset: const Offset(0, 3)),
+              BoxShadow(
+                  color: Colors.black.withValues(alpha: 0.04),
+                  blurRadius: 10,
+                  offset: const Offset(0, 3)),
             ],
           ),
           child: const Column(
@@ -142,12 +307,18 @@ class _AdminSettingsScreenState extends State<AdminSettingsScreen> {
             children: [
               Text(
                 'May 18, 2026',
-                style: TextStyle(fontSize: 13, fontWeight: FontWeight.w800, color: AdminColors.headerTitle),
+                style: TextStyle(
+                    fontSize: 13,
+                    fontWeight: FontWeight.w800,
+                    color: AdminColors.headerTitle),
               ),
               SizedBox(height: 2),
               Text(
                 '09:30 AM',
-                style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: AdminColors.muted),
+                style: TextStyle(
+                    fontSize: 12,
+                    fontWeight: FontWeight.w600,
+                    color: AdminColors.muted),
               ),
             ],
           ),
@@ -193,7 +364,7 @@ class _AdminSettingsScreenState extends State<AdminSettingsScreen> {
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
             a,
-            SizedBox(height: gap),
+            const SizedBox(height: gap),
             b,
           ],
         );
@@ -202,7 +373,7 @@ class _AdminSettingsScreenState extends State<AdminSettingsScreen> {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Expanded(child: a),
-          SizedBox(width: gap),
+          const SizedBox(width: gap),
           Expanded(child: b),
         ],
       );
@@ -212,7 +383,7 @@ class _AdminSettingsScreenState extends State<AdminSettingsScreen> {
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
         pair(_profileCard(), _changePasswordCard()),
-        SizedBox(height: gap),
+        const SizedBox(height: gap),
         pair(_notificationsCard(), _securitySettingsCard()),
       ],
     );
@@ -235,7 +406,8 @@ class _AdminSettingsScreenState extends State<AdminSettingsScreen> {
                 CircleAvatar(
                   radius: 48,
                   backgroundColor: AdminColors.statBlue.withValues(alpha: 0.12),
-                  child: const Icon(Icons.person_rounded, size: 52, color: AdminColors.statBlue),
+                  child: const Icon(Icons.person_rounded,
+                      size: 52, color: AdminColors.statBlue),
                 ),
                 Positioned(
                   right: -2,
@@ -249,7 +421,8 @@ class _AdminSettingsScreenState extends State<AdminSettingsScreen> {
                       onTap: () => _snack('Profile photo upload (demo).'),
                       child: const Padding(
                         padding: EdgeInsets.all(8),
-                        child: Icon(Icons.photo_camera_rounded, color: Colors.white, size: 18),
+                        child: Icon(Icons.photo_camera_rounded,
+                            color: Colors.white, size: 18),
                       ),
                     ),
                   ),
@@ -269,6 +442,7 @@ class _AdminSettingsScreenState extends State<AdminSettingsScreen> {
           _fieldLabel('Email Address'),
           const SizedBox(height: 8),
           TextField(
+            enabled: false,
             controller: _emailCtrl,
             style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 14),
             keyboardType: TextInputType.emailAddress,
@@ -293,7 +467,10 @@ class _AdminSettingsScreenState extends State<AdminSettingsScreen> {
           const SizedBox(height: 22),
           Align(
             alignment: Alignment.centerLeft,
-            child: _saveButton(onPressed: () => _snack('Profile settings saved (demo).')),
+            child: _saveButton(
+              onPressed: _savingProfile ? null : _saveProfile,
+              label: _savingProfile ? 'Saving...' : 'Save Changes',
+            ),
           ),
         ],
       ),
@@ -316,7 +493,8 @@ class _AdminSettingsScreenState extends State<AdminSettingsScreen> {
             controller: _currentPasswordCtrl,
             obscureText: true,
             style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 14),
-            decoration: _inputDeco().copyWith(hintText: 'Enter current password'),
+            decoration:
+                _inputDeco().copyWith(hintText: 'Enter current password'),
           ),
           const SizedBox(height: 16),
           _fieldLabel('New Password'),
@@ -334,12 +512,16 @@ class _AdminSettingsScreenState extends State<AdminSettingsScreen> {
             controller: _confirmPasswordCtrl,
             obscureText: true,
             style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 14),
-            decoration: _inputDeco().copyWith(hintText: 'Re-enter new password'),
+            decoration:
+                _inputDeco().copyWith(hintText: 'Re-enter new password'),
           ),
           const SizedBox(height: 22),
           Align(
             alignment: Alignment.centerLeft,
-            child: _saveButton(onPressed: () => _snack('Password updated (demo).')),
+            child: _saveButton(
+              onPressed: _changingPassword ? null : _changePassword,
+              label: _changingPassword ? 'Updating...' : 'Update Password',
+            ),
           ),
         ],
       ),
@@ -360,84 +542,35 @@ class _AdminSettingsScreenState extends State<AdminSettingsScreen> {
             title: 'Two-Factor Authentication',
             subtitle: 'Require a second step when signing in',
             value: _twoFactorAuth,
-            onChanged: (v) => setState(() => _twoFactorAuth = v),
+            onChanged: _savingPreferences
+                ? null
+                : (v) => setState(() => _twoFactorAuth = v),
           ),
           const Divider(height: 22),
           _toggleTile(
             title: 'Login Alerts',
             subtitle: 'Notify me of new device sign-ins',
             value: _loginAlerts,
-            onChanged: (v) => setState(() => _loginAlerts = v),
+            onChanged: _savingPreferences
+                ? null
+                : (v) => setState(() => _loginAlerts = v),
           ),
           const Divider(height: 22),
           _toggleTile(
             title: 'Auto Session Timeout',
             subtitle: 'Sign out after inactivity',
             value: _sessionTimeout,
-            onChanged: (v) => setState(() => _sessionTimeout = v),
+            onChanged: _savingPreferences
+                ? null
+                : (v) => setState(() => _sessionTimeout = v),
           ),
           const SizedBox(height: 22),
           Align(
             alignment: Alignment.centerLeft,
-            child: _saveButton(onPressed: () => _snack('Security settings saved (demo).')),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _systemPreferencesCard() {
-    return _settingsCard(
-      icon: Icons.tune_rounded,
-      iconBg: AdminColors.statPurple.withValues(alpha: 0.14),
-      iconColor: AdminColors.statPurple,
-      title: 'System Preferences',
-      subtitle: 'Customize system behavior.',
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          _fieldLabel('Language'),
-          const SizedBox(height: 8),
-          _dropdown<String>(
-            value: _language,
-            items: _languages,
-            onChanged: (v) => setState(() => _language = v ?? _language),
-          ),
-          const SizedBox(height: 16),
-          _fieldLabel('Theme'),
-          const SizedBox(height: 8),
-          SegmentedButton<bool>(
-            segments: const [
-              ButtonSegment(value: false, label: Text('Light'), icon: Icon(Icons.light_mode_outlined, size: 18)),
-              ButtonSegment(value: true, label: Text('Dark'), icon: Icon(Icons.dark_mode_outlined, size: 18)),
-            ],
-            selected: {_useDarkTheme},
-            onSelectionChanged: (s) => setState(() => _useDarkTheme = s.first),
-            style: ButtonStyle(
-              visualDensity: VisualDensity.compact,
-              padding: WidgetStateProperty.all(const EdgeInsets.symmetric(horizontal: 12, vertical: 10)),
+            child: _saveButton(
+              onPressed: _savingPreferences ? null : _savePreferences,
+              label: _savingPreferences ? 'Saving...' : 'Save Preferences',
             ),
-          ),
-          const SizedBox(height: 16),
-          _fieldLabel('Date Format'),
-          const SizedBox(height: 8),
-          _dropdown<String>(
-            value: _dateFormat,
-            items: _dateFormats,
-            onChanged: (v) => setState(() => _dateFormat = v ?? _dateFormat),
-          ),
-          const SizedBox(height: 16),
-          _fieldLabel('Time Format'),
-          const SizedBox(height: 8),
-          _dropdown<String>(
-            value: _timeFormat,
-            items: _timeFormats,
-            onChanged: (v) => setState(() => _timeFormat = v ?? _timeFormat),
-          ),
-          const SizedBox(height: 22),
-          Align(
-            alignment: Alignment.centerLeft,
-            child: _saveButton(onPressed: () => _snack('System preferences saved (demo).')),
           ),
         ],
       ),
@@ -458,122 +591,80 @@ class _AdminSettingsScreenState extends State<AdminSettingsScreen> {
             title: 'Email Notifications',
             subtitle: 'Receive email alerts and updates',
             value: _emailNotifications,
-            onChanged: (v) => setState(() => _emailNotifications = v),
+            onChanged: _savingPreferences
+                ? null
+                : (v) => setState(() => _emailNotifications = v),
           ),
           const Divider(height: 22),
           _toggleTile(
             title: 'High Risk Alerts',
             subtitle: 'Get notified for high risk zones',
             value: _highRiskAlerts,
-            onChanged: (v) => setState(() => _highRiskAlerts = v),
+            onChanged: _savingPreferences
+                ? null
+                : (v) => setState(() => _highRiskAlerts = v),
           ),
           const Divider(height: 22),
           _toggleTile(
             title: 'System Updates',
             subtitle: 'Receive system update notifications',
             value: _systemUpdates,
-            onChanged: (v) => setState(() => _systemUpdates = v),
+            onChanged: _savingPreferences
+                ? null
+                : (v) => setState(() => _systemUpdates = v),
           ),
           const Divider(height: 22),
           _toggleTile(
             title: 'Weekly Reports',
             subtitle: 'Receive weekly summary reports',
             value: _weeklyReports,
-            onChanged: (v) => setState(() => _weeklyReports = v),
+            onChanged: _savingPreferences
+                ? null
+                : (v) => setState(() => _weeklyReports = v),
           ),
           const SizedBox(height: 22),
           Align(
             alignment: Alignment.centerLeft,
-            child: _saveButton(onPressed: () => _snack('Notification preferences saved (demo).')),
+            child: _saveButton(
+              onPressed: _savingPreferences ? null : _savePreferences,
+              label: _savingPreferences ? 'Saving...' : 'Save Preferences',
+            ),
           ),
         ],
       ),
     );
   }
 
-  Widget _alertThresholdsCard() {
-    return _settingsCard(
-      icon: Icons.warning_amber_rounded,
-      iconBg: AdminColors.statYellow.withValues(alpha: 0.18),
-      iconColor: const Color(0xFFE65100),
-      title: 'Alert Thresholds',
-      subtitle: 'Configure thresholds for risk alerts.',
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
+  Widget _preferencesErrorCard() {
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: AdminColors.statRed.withValues(alpha: 0.08),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(
+          color: AdminColors.statRed.withValues(alpha: 0.28),
+        ),
+      ),
+      child: Row(
         children: [
-          _thresholdRow(
-            shieldColor: AdminColors.statRed,
-            title: 'High Risk Threshold (COTS/ha)',
-            subtitle: 'Alert when density exceeds this value',
-            controller: _highThresholdCtrl,
+          const Icon(Icons.error_outline_rounded, color: AdminColors.statRed),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Text(
+              _preferencesError!,
+              style: const TextStyle(
+                color: AdminColors.headerTitle,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
           ),
-          const SizedBox(height: 16),
-          _thresholdRow(
-            shieldColor: AdminColors.statYellow,
-            title: 'Moderate Risk Threshold (COTS/ha)',
-            subtitle: 'Alert when density exceeds this value',
-            controller: _moderateThresholdCtrl,
-          ),
-          const SizedBox(height: 16),
-          _thresholdRow(
-            shieldColor: AdminColors.statGreen,
-            title: 'Low Risk Threshold (COTS/ha)',
-            subtitle: 'Alert when density exceeds this value',
-            controller: _lowThresholdCtrl,
-          ),
-          const SizedBox(height: 22),
-          Align(
-            alignment: Alignment.centerLeft,
-            child: _saveButton(onPressed: () => _snack('Alert thresholds saved (demo).')),
+          TextButton.icon(
+            onPressed: _loadPreferences,
+            icon: const Icon(Icons.refresh_rounded),
+            label: const Text('Retry'),
           ),
         ],
       ),
-    );
-  }
-
-  Widget _thresholdRow({
-    required Color shieldColor,
-    required String title,
-    required String subtitle,
-    required TextEditingController controller,
-  }) {
-    return Row(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Container(
-          width: 40,
-          height: 40,
-          decoration: BoxDecoration(
-            color: shieldColor.withValues(alpha: 0.14),
-            borderRadius: BorderRadius.circular(10),
-          ),
-          child: Icon(Icons.shield_outlined, color: shieldColor, size: 22),
-        ),
-        const SizedBox(width: 12),
-        Expanded(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(title, style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 13, color: AdminColors.headerTitle)),
-              const SizedBox(height: 2),
-              Text(
-                subtitle,
-                style: TextStyle(fontSize: 12, color: AdminColors.muted.withValues(alpha: 0.9), height: 1.3),
-              ),
-              const SizedBox(height: 8),
-              SizedBox(
-                width: 120,
-                child: TextField(
-                  controller: controller,
-                  keyboardType: TextInputType.number,
-                  style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 15),
-                  decoration: _inputDeco().copyWith(contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10)),
-                ),
-              ),
-            ],
-          ),
-        ),
-      ],
     );
   }
 
@@ -581,7 +672,7 @@ class _AdminSettingsScreenState extends State<AdminSettingsScreen> {
     required String title,
     required String subtitle,
     required bool value,
-    required ValueChanged<bool> onChanged,
+    required ValueChanged<bool>? onChanged,
   }) {
     return Row(
       crossAxisAlignment: CrossAxisAlignment.center,
@@ -590,11 +681,18 @@ class _AdminSettingsScreenState extends State<AdminSettingsScreen> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text(title, style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 14, color: AdminColors.headerTitle)),
+              Text(title,
+                  style: const TextStyle(
+                      fontWeight: FontWeight.w800,
+                      fontSize: 14,
+                      color: AdminColors.headerTitle)),
               const SizedBox(height: 4),
               Text(
                 subtitle,
-                style: TextStyle(fontSize: 12.5, color: AdminColors.muted.withValues(alpha: 0.92), height: 1.35),
+                style: TextStyle(
+                    fontSize: 12.5,
+                    color: AdminColors.muted.withValues(alpha: 0.92),
+                    height: 1.35),
               ),
             ],
           ),
@@ -609,48 +707,18 @@ class _AdminSettingsScreenState extends State<AdminSettingsScreen> {
     );
   }
 
-  Widget _saveButton({required VoidCallback onPressed}) {
+  Widget _saveButton(
+      {required VoidCallback? onPressed, String label = 'Save Changes'}) {
     return FilledButton.icon(
       onPressed: onPressed,
       icon: const Icon(Icons.save_outlined, size: 20),
-      label: const Text('Save Changes'),
+      label: Text(label),
       style: FilledButton.styleFrom(
         backgroundColor: AdminColors.statBlue,
         foregroundColor: Colors.white,
         padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
         elevation: 0,
-      ),
-    );
-  }
-
-  Widget _dropdown<T>({
-    required T value,
-    required List<T> items,
-    required ValueChanged<T?> onChanged,
-  }) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 12),
-      decoration: BoxDecoration(
-        color: const Color(0xFFF7F9FC),
-        borderRadius: BorderRadius.circular(10),
-        border: Border.all(color: Colors.black.withValues(alpha: 0.08)),
-      ),
-      child: DropdownButtonHideUnderline(
-        child: DropdownButton<T>(
-          value: value,
-          isExpanded: true,
-          borderRadius: BorderRadius.circular(12),
-          items: items
-              .map(
-                (e) => DropdownMenuItem<T>(
-                  value: e,
-                  child: Text('$e', overflow: TextOverflow.ellipsis, style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 14)),
-                ),
-              )
-              .toList(),
-          onChanged: onChanged,
-        ),
       ),
     );
   }
@@ -685,7 +753,8 @@ class _AdminSettingsScreenState extends State<AdminSettingsScreen> {
               Container(
                 width: 46,
                 height: 46,
-                decoration: BoxDecoration(color: iconBg, borderRadius: BorderRadius.circular(14)),
+                decoration: BoxDecoration(
+                    color: iconBg, borderRadius: BorderRadius.circular(14)),
                 child: Icon(icon, color: iconColor, size: 24),
               ),
               const SizedBox(width: 14),
@@ -695,12 +764,19 @@ class _AdminSettingsScreenState extends State<AdminSettingsScreen> {
                   children: [
                     Text(
                       title,
-                      style: const TextStyle(fontSize: 17, fontWeight: FontWeight.w900, color: AdminColors.headerTitle),
+                      style: const TextStyle(
+                          fontSize: 17,
+                          fontWeight: FontWeight.w900,
+                          color: AdminColors.headerTitle),
                     ),
                     const SizedBox(height: 4),
                     Text(
                       subtitle,
-                      style: TextStyle(fontSize: 13, fontWeight: FontWeight.w500, color: AdminColors.muted.withValues(alpha: 0.92), height: 1.35),
+                      style: TextStyle(
+                          fontSize: 13,
+                          fontWeight: FontWeight.w500,
+                          color: AdminColors.muted.withValues(alpha: 0.92),
+                          height: 1.35),
                     ),
                   ],
                 ),
@@ -717,7 +793,11 @@ class _AdminSettingsScreenState extends State<AdminSettingsScreen> {
   Widget _fieldLabel(String t) {
     return Text(
       t,
-      style: TextStyle(fontSize: 12, fontWeight: FontWeight.w800, color: AdminColors.muted.withValues(alpha: 0.88), letterSpacing: 0.2),
+      style: TextStyle(
+          fontSize: 12,
+          fontWeight: FontWeight.w800,
+          color: AdminColors.muted.withValues(alpha: 0.88),
+          letterSpacing: 0.2),
     );
   }
 
@@ -750,7 +830,10 @@ class _AdminSettingsScreenState extends State<AdminSettingsScreen> {
     return Text(
       '© 2026 COTS Monitoring System. All rights reserved.',
       textAlign: TextAlign.center,
-      style: TextStyle(fontSize: 12.5, fontWeight: FontWeight.w600, color: AdminColors.muted.withValues(alpha: 0.72)),
+      style: TextStyle(
+          fontSize: 12.5,
+          fontWeight: FontWeight.w600,
+          color: AdminColors.muted.withValues(alpha: 0.72)),
     );
   }
 }

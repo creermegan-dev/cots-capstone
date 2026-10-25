@@ -361,6 +361,36 @@ service cloud.firestore {
       allow delete: if request.auth != null && request.auth.uid == userId;
     }
 
+    match /admin_preferences/{userId} {
+      function validPreferences() {
+        let d = request.resource.data;
+        return d.keys().hasOnly([
+            'uid',
+            'email_notifications',
+            'high_risk_alerts',
+            'system_updates',
+            'weekly_reports',
+            'two_factor_auth',
+            'login_alerts',
+            'session_timeout',
+          ])
+          && d.uid == request.auth.uid
+          && d.email_notifications is bool
+          && d.high_risk_alerts is bool
+          && d.system_updates is bool
+          && d.weekly_reports is bool
+          && d.two_factor_auth is bool
+          && d.login_alerts is bool
+          && d.session_timeout is bool;
+      }
+
+      allow read: if isAdmin() && request.auth.uid == userId;
+      allow create, update: if isAdmin()
+        && request.auth.uid == userId
+        && validPreferences();
+      allow delete: if false;
+    }
+
     // Processed detection captures (AI results only — images in capture_images).
     match /captures/{captureId} {
       allow read: if request.auth != null;
