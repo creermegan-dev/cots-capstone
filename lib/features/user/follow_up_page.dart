@@ -20,6 +20,7 @@ import 'records_page.dart';
 import 'scan_detection_page.dart';
 import 'user_bottom_nav.dart';
 import 'user_record_details_page.dart';
+import '../../widgets/cots_loading_skeleton.dart';
 
 class FollowUpPage extends StatefulWidget {
   const FollowUpPage({super.key});
@@ -130,9 +131,8 @@ class _FollowUpPageState extends State<FollowUpPage> {
                   );
                 }
                 if (!captureSnapshot.hasData) {
-                  return const Center(
-                    child: CircularProgressIndicator(color: kPrimaryTeal),
-                  );
+                  return const CotsPageLoading(
+                      label: 'Loading follow-up monitoring');
                 }
                 final captures = captureSnapshot.data!;
                 _reconcileHistory(captures, uid);
@@ -147,9 +147,8 @@ class _FollowUpPageState extends State<FollowUpPage> {
                       );
                     }
                     if (!assignmentSnapshot.hasData) {
-                      return const Center(
-                        child: CircularProgressIndicator(color: kPrimaryTeal),
-                      );
+                      return const CotsPageLoading(
+                          label: 'Loading follow-up monitoring');
                     }
                     return StreamBuilder<List<FollowUpSurveyModel>>(
                       stream:
@@ -163,8 +162,8 @@ class _FollowUpPageState extends State<FollowUpPage> {
                           );
                         }
                         if (!surveySnapshot.hasData) {
-                          return const Center(
-                              child: CircularProgressIndicator());
+                          return const CotsPageLoading(
+                              label: 'Loading follow-up monitoring');
                         }
                         return StreamBuilder<List<ScanRecordModel>>(
                           stream: ScanRecordRepository.watchAll(),
@@ -176,8 +175,8 @@ class _FollowUpPageState extends State<FollowUpPage> {
                               );
                             }
                             if (!recordSnapshot.hasData) {
-                              return const Center(
-                                  child: CircularProgressIndicator());
+                              return const CotsPageLoading(
+                                  label: 'Loading follow-up monitoring');
                             }
                             return _buildContent(
                               assignments: assignmentSnapshot.data!,

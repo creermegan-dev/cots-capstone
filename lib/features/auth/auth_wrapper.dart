@@ -8,6 +8,7 @@ import '../admin/screens/admin_shell_screen.dart';
 import '../user/dashboard_screen.dart';
 import '../landing/landing_page.dart';
 import 'auth_navigation.dart';
+import '../../widgets/cots_loading_skeleton.dart';
 
 /// Routes guests to [LandingPage]; experts to [ExpertShellScreen]; admins to
 /// [AdminShellScreen]; field users to [DashboardScreen].
@@ -24,9 +25,8 @@ class AuthWrapper extends StatelessWidget {
 
         if (auth.isLoadingProfile) {
           return const Scaffold(
-            body: Center(
-              child: CircularProgressIndicator(color: kPrimaryTeal),
-            ),
+            body: CotsPageLoading(
+                layout: CotsSkeletonLayout.profile, label: 'Loading account'),
           );
         }
 

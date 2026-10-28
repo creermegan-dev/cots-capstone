@@ -8,6 +8,7 @@ import '../models/follow_up_infestation_assessment.dart';
 import '../providers/auth_provider.dart';
 import '../services/follow_up_reassignment_repository.dart';
 import '../services/follow_up_workflow_store.dart';
+import 'cots_loading_skeleton.dart';
 
 class FollowUpAssessmentLabel extends StatefulWidget {
   const FollowUpAssessmentLabel({super.key, required this.areaId});
@@ -41,7 +42,8 @@ class _FollowUpAssessmentLabelState extends State<FollowUpAssessmentLabel> {
                       const Text('Could not load validated assessment. Retry'));
             }
             if (snapshot.connectionState != ConnectionState.done) {
-              return const LinearProgressIndicator();
+              return const CotsLoadingSkeleton(
+                  layout: CotsSkeletonLayout.section);
             }
             final assessment = snapshot.data;
             return Text(
@@ -117,7 +119,9 @@ class _FollowUpReassignmentActionsState
             TextButton(onPressed: _refresh, child: const Text('Retry')),
           ]);
         }
-        if (!snapshot.hasData) return const LinearProgressIndicator();
+        if (!snapshot.hasData) {
+          return const CotsLoadingSkeleton(layout: CotsSkeletonLayout.section);
+        }
         final matches = snapshot.data!.where((r) =>
             r.areaId == assignment.areaId && r.isCurrent(DateTime.now()));
         final request = matches.isEmpty ? null : matches.first;
@@ -353,7 +357,9 @@ class _ReassignmentDetailsState extends State<ReassignmentDetails> {
               if (snapshot.hasError)
                 Text('Could not load request: ${snapshot.error}')
               else
-                const CircularProgressIndicator(),
+                const CotsLoadingSkeleton(
+                    layout: CotsSkeletonLayout.section,
+                    label: 'Loading request'),
               TextButton(
                   onPressed: () => setState(() => _request = _load()),
                   child: const Text('Retry')),
@@ -448,7 +454,8 @@ class _ReassignmentDetailsState extends State<ReassignmentDetails> {
                                   'Could not load audit history: ${history.error}');
                             }
                             if (!history.hasData) {
-                              return const LinearProgressIndicator();
+                              return const CotsLoadingSkeleton(
+                                  layout: CotsSkeletonLayout.section);
                             }
                             return Column(children: [
                               for (final event in history.data!)

@@ -13,6 +13,7 @@ import 'cots_map_page.dart';
 import 'profile_page.dart';
 import 'user_bottom_nav.dart';
 import 'user_record_details_page.dart';
+import '../../widgets/cots_loading_skeleton.dart';
 
 /// One user submission row in the records list.
 class ScanRecord {
@@ -228,9 +229,7 @@ class _RecordsPageState extends State<RecordsPage> {
               builder: (context, snapshot) {
                 if (snapshot.connectionState == ConnectionState.waiting &&
                     !snapshot.hasData) {
-                  return const Center(
-                    child: CircularProgressIndicator(color: kGreen),
-                  );
+                  return const CotsPageLoading(label: 'Loading records');
                 }
                 if (snapshot.hasError) {
                   return Center(

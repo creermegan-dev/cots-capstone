@@ -10,6 +10,7 @@ import '../../models/capture_model.dart';
 import '../../services/capture_repository.dart';
 import '../../widgets/cots_detection_image_overlay.dart';
 import 'cots_map_page.dart';
+import '../../widgets/cots_loading_skeleton.dart';
 
 /// Full detail view for a single GoPro submission (user-facing).
 class UserRecordDetailsPage extends StatelessWidget {
@@ -80,7 +81,7 @@ class UserRecordDetailsPage extends StatelessWidget {
           }
           if (!snapshot.hasData) {
             return const Scaffold(
-                body: Center(child: CircularProgressIndicator()));
+                body: CotsPageLoading(layout: CotsSkeletonLayout.detail));
           }
           return UserRecordDetailsPage(
             record: ScanRecordModel.fromFollowUpSurvey(survey,

@@ -9,6 +9,7 @@ import '../../../services/follow_up_workflow_store.dart';
 import '../../../services/notification_repository.dart';
 import '../../../widgets/follow_up_reassignment_controls.dart';
 import '../../admin/theme/admin_theme.dart';
+import '../../../widgets/cots_loading_skeleton.dart';
 
 class ExpertReassignmentsScreen extends StatefulWidget {
   const ExpertReassignmentsScreen({super.key});
@@ -37,7 +38,7 @@ class _ExpertReassignmentsScreenState extends State<ExpertReassignmentsScreen> {
             ]));
           }
           if (!snapshot.hasData) {
-            return const Center(child: CircularProgressIndicator());
+            return const CotsPageLoading(label: 'Loading Expert reassignments');
           }
           final requests = snapshot.data!
               .where((r) =>
@@ -69,7 +70,8 @@ class _ExpertReassignmentsScreenState extends State<ExpertReassignmentsScreen> {
                             Text(
                                 'Could not load notifications: ${notifications.error}'),
                           if (!notifications.hasData && !notifications.hasError)
-                            const LinearProgressIndicator(),
+                            const CotsLoadingSkeleton(
+                                layout: CotsSkeletonLayout.section),
                           for (final n
                               in (notifications.data ?? <AppNotification>[])
                                   .take(10))
@@ -150,6 +152,7 @@ class _MonitoringSummary extends StatelessWidget {
                 ? Text('Could not load monitoring summary: ${snapshot.error}')
                 : snapshot.hasData
                     ? Text(snapshot.data!)
-                    : const LinearProgressIndicator(),
+                    : const CotsLoadingSkeleton(
+                        layout: CotsSkeletonLayout.section),
           ));
 }

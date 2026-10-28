@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 
 import '../models/record_collection.dart';
 import '../services/scan_record_image_loader.dart';
+import 'cots_loading_skeleton.dart';
 
 /// Loads a submitted scan image via local path, download URL, or Storage object path.
 class SubmittedScanImage extends StatefulWidget {
@@ -91,7 +92,7 @@ class _SubmittedScanImageState extends State<SubmittedScanImage> {
   @override
   Widget build(BuildContext context) {
     if (_loading) {
-      return _placeholder(showProgress: true);
+      return const CotsLoadingSkeleton(layout: CotsSkeletonLayout.image);
     }
     if (_bytes != null && _bytes!.isNotEmpty) {
       return Image.memory(
@@ -104,7 +105,7 @@ class _SubmittedScanImageState extends State<SubmittedScanImage> {
     return _placeholder();
   }
 
-  Widget _placeholder({bool showProgress = false}) {
+  Widget _placeholder() {
     return Container(
       color: const Color(0xFFE8EEF5),
       alignment: Alignment.center,
@@ -112,13 +113,7 @@ class _SubmittedScanImageState extends State<SubmittedScanImage> {
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
-          if (showProgress)
-            const Padding(
-              padding: EdgeInsets.only(bottom: 12),
-              child: CircularProgressIndicator(strokeWidth: 2),
-            )
-          else
-            Icon(Icons.photo_outlined, size: 48, color: Colors.grey.shade500),
+          Icon(Icons.photo_outlined, size: 48, color: Colors.grey.shade500),
           if (!_loading && _failed) ...[
             const SizedBox(height: 12),
             Text(

@@ -15,6 +15,7 @@ import '../widgets/admin_dashboard_header.dart';
 import '../widgets/admin_data_table.dart';
 import '../widgets/admin_stat_card.dart';
 import 'admin_record_details_screen.dart';
+import '../../../widgets/cots_loading_skeleton.dart';
 
 class AdminRecordsSubmissionsScreen extends StatefulWidget {
   const AdminRecordsSubmissionsScreen({
@@ -279,12 +280,7 @@ class _AdminRecordsSubmissionsScreenState
       builder: (context, snapshot) {
         if (snapshot.connectionState == ConnectionState.waiting &&
             !snapshot.hasData) {
-          return const Center(
-            child: Padding(
-              padding: EdgeInsets.all(48),
-              child: CircularProgressIndicator(color: AdminColors.statBlue),
-            ),
-          );
+          return const CotsPageLoading(label: 'Loading monitoring records');
         }
 
         if (snapshot.hasError) {

@@ -10,6 +10,7 @@ import '../auth/auth_navigation.dart';
 import 'cots_map_page.dart';
 import 'records_page.dart';
 import 'user_bottom_nav.dart';
+import '../../widgets/cots_loading_skeleton.dart';
 
 const String _appVersion = '1.0.2+3';
 
@@ -83,7 +84,8 @@ class ProfilePage extends StatelessWidget {
         child: Consumer<AuthProvider>(
           builder: (context, auth, _) {
             if (auth.isLoadingProfile && auth.userModel == null) {
-              return const Center(child: CircularProgressIndicator(color: kGreen));
+              return const CotsPageLoading(
+                  layout: CotsSkeletonLayout.profile, label: 'Loading profile');
             }
             return ListView(
               padding: const EdgeInsets.fromLTRB(16, 8, 16, 100),

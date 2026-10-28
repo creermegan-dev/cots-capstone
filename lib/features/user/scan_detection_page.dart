@@ -22,6 +22,7 @@ import '../../models/cots_confidence_policy.dart';
 import '../../models/cots_detection_result.dart';
 import '../../models/follow_up_monitoring_model.dart';
 import '../../widgets/cots_detection_image_overlay.dart';
+import '../../widgets/cots_loading_skeleton.dart';
 import '../../providers/auth_provider.dart';
 import '../../services/cots_yolo_detector.dart';
 import '../../services/gps_exif_parser.dart';
@@ -247,11 +248,13 @@ class _ScanDetectionPageState extends State<ScanDetectionPage> {
               Expanded(
                 child: SingleChildScrollView(
                   padding: const EdgeInsets.fromLTRB(16, 8, 16, 24),
-                  child: switch (_step) {
-                    _DetectionStep.upload => _buildUploadStep(),
-                    _DetectionStep.details => _buildDetailsStep(),
-                    _DetectionStep.review => _buildReviewStep(),
-                  },
+                  child: _isBusy
+                      ? _buildDetectionLoading()
+                      : switch (_step) {
+                          _DetectionStep.upload => _buildUploadStep(),
+                          _DetectionStep.details => _buildDetailsStep(),
+                          _DetectionStep.review => _buildReviewStep(),
+                        },
                 ),
               ),
               _bottomActions(),
@@ -259,6 +262,40 @@ class _ScanDetectionPageState extends State<ScanDetectionPage> {
           ),
         ),
       ),
+    );
+  }
+
+  Widget _buildDetectionLoading() {
+    final label = _detectionProgress ??
+        (_step == _DetectionStep.review
+            ? 'Submitting detection record…'
+            : 'Processing detection images…');
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Row(
+          children: [
+            const Icon(Icons.auto_awesome_rounded,
+                color: kPrimaryTeal, size: 20),
+            const SizedBox(width: 8),
+            Expanded(
+              child: Text(
+                label,
+                style: const TextStyle(
+                  color: kTextNavy,
+                  fontSize: 14,
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 16),
+        CotsLoadingSkeleton(
+          layout: CotsSkeletonLayout.detail,
+          label: label,
+        ),
+      ],
     );
   }
 
