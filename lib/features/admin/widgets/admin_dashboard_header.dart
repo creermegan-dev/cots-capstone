@@ -119,7 +119,8 @@ class AdminDashboardHeader extends StatelessWidget {
       OutlinedButton.icon(
         onPressed: () {},
         icon: AdminDateTimeTokens.dateChipIcon(),
-        label: Text(AdminDateTimeTokens.demoDateRangeLabel, style: AdminDateTimeTokens.dateRangeChipTextStyle),
+        label: Text(AdminDateTimeTokens.currentDateRangeLabel,
+            style: AdminDateTimeTokens.dateRangeChipTextStyle),
         style: AdminDateTimeTokens.dateRangeOutlinedButtonStyle(),
       ),
     ];
@@ -130,7 +131,8 @@ class AdminDashboardHeader extends StatelessWidget {
         OutlinedButton.icon(
           onPressed: onRefreshTap,
           icon: AdminDateTimeTokens.refreshIcon,
-          label: const Text('Refresh', style: AdminDateTimeTokens.refreshChipTextStyle),
+          label: const Text('Refresh',
+              style: AdminDateTimeTokens.refreshChipTextStyle),
           style: AdminDateTimeTokens.refreshOutlinedButtonStyle(),
         ),
       );

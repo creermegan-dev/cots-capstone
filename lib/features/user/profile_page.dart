@@ -92,51 +92,43 @@ class ProfilePage extends StatelessWidget {
                 const SizedBox(height: 16),
                 _OptionsCard(
                   children: [
-                _ProfileOptionTile(
-                  icon: Icons.person_outline,
-                  label: 'Personal Information',
-                  onTap: () => Navigator.of(context).push<void>(
-                    MaterialPageRoute<void>(
-                      builder: (_) => const PersonalInformationPage(),
+                    _ProfileOptionTile(
+                      icon: Icons.person_outline,
+                      label: 'Personal Information',
+                      onTap: () => Navigator.of(context).push<void>(
+                        MaterialPageRoute<void>(
+                          builder: (_) => const PersonalInformationPage(),
+                        ),
+                      ),
                     ),
-                  ),
-                ),
-                _ProfileOptionTile(
-                  icon: Icons.lock_outline_rounded,
-                  label: 'Change Password',
-                  onTap: () => Navigator.of(context).push<void>(
-                    MaterialPageRoute<void>(
-                      builder: (_) => const ChangePasswordPage(),
+                    _ProfileOptionTile(
+                      icon: Icons.lock_outline_rounded,
+                      label: 'Change Password',
+                      onTap: () => Navigator.of(context).push<void>(
+                        MaterialPageRoute<void>(
+                          builder: (_) => const ChangePasswordPage(),
+                        ),
+                      ),
                     ),
-                  ),
-                ),
-                _ProfileOptionTile(
-                  icon: Icons.info_outline,
-                  label: 'About',
-                  onTap: () => Navigator.of(context).push<void>(
-                    MaterialPageRoute<void>(
-                      builder: (_) => const AboutPage(),
+                    _ProfileOptionTile(
+                      icon: Icons.info_outline,
+                      label: 'About',
+                      onTap: () => Navigator.of(context).push<void>(
+                        MaterialPageRoute<void>(
+                          builder: (_) => const AboutPage(),
+                        ),
+                      ),
                     ),
-                  ),
-                ),
-                _ProfileOptionTile(
-                  icon: Icons.chat_bubble_outline,
-                  label: 'Feedback',
-                  onTap: () => Navigator.of(context).push<void>(
-                    MaterialPageRoute<void>(
-                      builder: (_) => const FeedbackPage(),
+                    _ProfileOptionTile(
+                      icon: Icons.logout_rounded,
+                      label: 'Log Out',
+                      isDestructive: true,
+                      onTap: () =>
+                          confirmAndSignOut(context, showSuccessSnackBar: true),
                     ),
-                  ),
-                ),
-                _ProfileOptionTile(
-                  icon: Icons.logout_rounded,
-                  label: 'Log Out',
-                  isDestructive: true,
-                  onTap: () => confirmAndSignOut(context, showSuccessSnackBar: true),
+                  ],
                 ),
               ],
-            ),
-          ],
             );
           },
         ),
@@ -1697,165 +1689,4 @@ class _AboutDivider extends StatelessWidget {
         thickness: 1,
         color: Color(0xFFEEEEEE),
       );
-}
-
-class FeedbackPage extends StatefulWidget {
-  const FeedbackPage({super.key});
-
-  @override
-  State<FeedbackPage> createState() => _FeedbackPageState();
-}
-
-class _FeedbackPageState extends State<FeedbackPage> {
-  final TextEditingController _message = TextEditingController();
-  String _category = 'Bug';
-  int _rating = 5;
-  bool _sending = false;
-
-  @override
-  void dispose() {
-    _message.dispose();
-    super.dispose();
-  }
-
-  Future<void> _send() async {
-    if (_message.text.trim().isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Please write a short message.')),
-      );
-      return;
-    }
-    setState(() => _sending = true);
-    await Future<void>.delayed(const Duration(milliseconds: 900));
-    if (!mounted) return;
-    setState(() => _sending = false);
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('Thanks for the feedback! (demo)')),
-    );
-    Navigator.of(context).pop();
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return _SubScaffold(
-      title: 'Feedback',
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          const Text(
-            'How would you rate the app?',
-            style: TextStyle(
-              fontSize: 13,
-              fontWeight: FontWeight.w700,
-              color: kNavy,
-            ),
-          ),
-          const SizedBox(height: 6),
-          Row(
-            children: List.generate(5, (i) {
-              final filled = i < _rating;
-              return IconButton(
-                icon: Icon(
-                  filled ? Icons.star_rounded : Icons.star_border_rounded,
-                  color: filled ? kModerate : Colors.grey.shade400,
-                ),
-                onPressed: () => setState(() => _rating = i + 1),
-              );
-            }),
-          ),
-          const SizedBox(height: 12),
-          const Text(
-            'Category',
-            style: TextStyle(
-              fontSize: 13,
-              fontWeight: FontWeight.w700,
-              color: kNavy,
-            ),
-          ),
-          const SizedBox(height: 8),
-          Wrap(
-            spacing: 8,
-            runSpacing: 8,
-            children: ['Bug', 'Suggestion', 'Praise', 'Other'].map((c) {
-              final selected = _category == c;
-              return ChoiceChip(
-                label: Text(c),
-                selected: selected,
-                onSelected: (_) => setState(() => _category = c),
-                selectedColor: kGreen.withValues(alpha: 0.15),
-                labelStyle: TextStyle(
-                  color: selected ? kGreen : kNavy,
-                  fontWeight:
-                      selected ? FontWeight.w700 : FontWeight.w500,
-                ),
-              );
-            }).toList(),
-          ),
-          const SizedBox(height: 16),
-          const Text(
-            'Message',
-            style: TextStyle(
-              fontSize: 13,
-              fontWeight: FontWeight.w700,
-              color: kNavy,
-            ),
-          ),
-          const SizedBox(height: 8),
-          TextField(
-            controller: _message,
-            maxLines: 5,
-            maxLength: 500,
-            decoration: InputDecoration(
-              hintText: 'Tell us what happened or what could be better...',
-              filled: true,
-              fillColor: Colors.white,
-              contentPadding: const EdgeInsets.all(12),
-              border: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(10),
-                borderSide: const BorderSide(color: Color(0xFFE2E8F0)),
-              ),
-              enabledBorder: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(10),
-                borderSide: const BorderSide(color: Color(0xFFE2E8F0)),
-              ),
-              focusedBorder: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(10),
-                borderSide: const BorderSide(color: kGreen, width: 1.5),
-              ),
-            ),
-          ),
-          const SizedBox(height: 8),
-          ElevatedButton.icon(
-            onPressed: _sending ? null : _send,
-            icon: _sending
-                ? const SizedBox(
-                    width: 18,
-                    height: 18,
-                    child: CircularProgressIndicator(
-                      strokeWidth: 2,
-                      color: Colors.white,
-                    ),
-                  )
-                : const Icon(Icons.send_rounded, size: 18),
-            label: const Text(
-              'SEND',
-              style: TextStyle(
-                fontWeight: FontWeight.w700,
-                letterSpacing: 0.5,
-              ),
-            ),
-            style: ElevatedButton.styleFrom(
-              backgroundColor: kGreen,
-              foregroundColor: Colors.white,
-              elevation: 0,
-              padding: const EdgeInsets.symmetric(vertical: 14, horizontal: 16),
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(10),
-              ),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
 }

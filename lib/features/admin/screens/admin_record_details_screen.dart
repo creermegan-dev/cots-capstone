@@ -20,6 +20,7 @@ import '../layout/admin_responsive_chrome.dart';
 import '../widgets/admin_back_icon_button.dart';
 import '../widgets/admin_record_details_dialogs.dart';
 import 'admin_shell_screen.dart';
+import '../../../widgets/cots_loading_skeleton.dart';
 
 /// Full detail view for a single record / submission (admin).
 class AdminRecordDetailsData {
@@ -560,12 +561,9 @@ class _AdminRecordDetailsScreenState extends State<AdminRecordDetailsScreen> {
                       return Row(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          Expanded(
-                              flex: 52, child: Column(children: leftCol)),
+                          Expanded(flex: 52, child: Column(children: leftCol)),
                           const SizedBox(width: 16),
-                          Expanded(
-                              flex: 48,
-                              child: Column(children: rightCol)),
+                          Expanded(flex: 48, child: Column(children: rightCol)),
                         ],
                       );
                     },
@@ -631,7 +629,7 @@ class _AdminRecordDetailsScreenState extends State<AdminRecordDetailsScreen> {
     final dateBtn = OutlinedButton.icon(
       onPressed: () {},
       icon: AdminDateTimeTokens.dateChipIcon(),
-      label: Text(AdminDateTimeTokens.demoDateRangeLabel,
+      label: Text(AdminDateTimeTokens.currentDateRangeLabel,
           style: AdminDateTimeTokens.dateRangeChipTextStyle),
       style: AdminDateTimeTokens.dateRangeOutlinedButtonStyle(),
     );
@@ -1060,7 +1058,9 @@ class _AdminRecordDetailsScreenState extends State<AdminRecordDetailsScreen> {
                 )
               else if (snapshot.connectionState == ConnectionState.waiting &&
                   !snapshot.hasData)
-                const Center(child: CircularProgressIndicator())
+                const CotsLoadingSkeleton(
+                    layout: CotsSkeletonLayout.section,
+                    label: 'Loading assignment')
               else if (assignment == null) ...[
                 Text(
                   _row.displayStatusLabel == 'Accepted'
@@ -1896,10 +1896,12 @@ class _AdminRecordDetailsScreenState extends State<AdminRecordDetailsScreen> {
               hintText: 'Add expert validation comments (optional)',
               filled: true,
               fillColor: Colors.white,
-              border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
+              border:
+                  OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
               enabledBorder: OutlineInputBorder(
                 borderRadius: BorderRadius.circular(10),
-                borderSide: BorderSide(color: Colors.black.withValues(alpha: 0.1)),
+                borderSide:
+                    BorderSide(color: Colors.black.withValues(alpha: 0.1)),
               ),
             ),
           ),

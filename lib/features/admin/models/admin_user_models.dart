@@ -12,6 +12,8 @@ class AdminUserTableRow {
     required this.organization,
     required this.active,
     required this.joined,
+    this.phone = '',
+    this.assignedArea = '',
   });
 
   final String id;
@@ -21,6 +23,8 @@ class AdminUserTableRow {
   final String organization;
   final bool active;
   final String joined;
+  final String phone;
+  final String assignedArea;
 
   String get initials => adminUserInitials(name);
 }
@@ -74,104 +78,29 @@ class AdminUserProfileData {
   final String loginIp;
 
   factory AdminUserProfileData.fromTableRow(AdminUserTableRow r) {
-    if (r.id == 'USR-00043') {
-      return const AdminUserProfileData(
-        userId: 'USR-00043',
-        name: 'Riza Padilla',
-        email: 'r.padilla@bfar.gov.ph',
-        phone: '+63 912 123 3456',
-        active: true,
-        memberSince: 'May 14, 2026',
-        lastLogin: 'May 19, 2026 8:15 AM',
-        role: 'Field Officer',
-        organization: 'BFAR Region 7',
-        assignedZones: 'Zone A, Zone B',
-        roleDescription:
-            'Collects field data, monitors COTS incidents, and submits reports.',
-        permissions: [
-          'Map Monitoring (View)',
-          'Records / Submissions (Create)',
-          'Reports (View Only)',
-          'Alerts (View)',
-        ],
-        orgType: 'BFAR',
-        orgLocation: 'Central Visayas, Philippines',
-        orgDescription: 'Bureau of Fisheries and Aquatic Resources — Region 7 Central Visayas',
-        orgEmail: 'region7@bfar.gov.ph',
-        orgPhone: '+63 32 345 5678',
-        emailVerified: true,
-        twoFactorEnabled: true,
-        loginAccess: 'Mobile & Web',
-        loginIp: '119.94.45.87',
-      );
-    }
-    return AdminUserProfileData._generic(r);
-  }
-
-  factory AdminUserProfileData._generic(AdminUserTableRow r) {
-    final zones = switch (r.organization) {
-      'BFAR Region 7' => 'Zone A, Zone C',
-      'LGU Cebu City' => 'Zone B',
-      'Marine Institute' => 'Zone D, Zone E',
-      _ => 'Zone A',
-    };
-    final desc = switch (r.role) {
-      'Administrator' => 'Full system access, user management, and policy configuration.',
-      'Marine Conservation Officer' => 'Reviews detection reports and coordinates conservation response.',
-      'LGU Staff' => 'Submits local observations and coordinates with field teams.',
-      'Researcher' => 'Views and exports data for analysis and publications.',
-      'Volunteer' => 'Limited submission access under supervision.',
-      'Field Officer' => 'Collects field data, monitors COTS incidents, and submits reports.',
-      'BFAR Staff' => 'Regional data submission and compliance monitoring.',
-      _ => 'Standard operational access.',
-    };
-    final perms = switch (r.role) {
-      'Administrator' => [
-        'Map Monitoring (Full)',
-        'Records / Submissions (Full)',
-        'Reports (Full)',
-        'Alerts (Full)',
-        'Users (Manage)',
-      ],
-      'Marine Conservation Officer' => [
-        'Map Monitoring (View)',
-        'Records / Submissions (Review)',
-        'Reports (View)',
-        'Alerts (View)',
-      ],
-      'Researcher' => [
-        'Map Monitoring (View)',
-        'Reports (View)',
-        'Analytics (View)',
-      ],
-      _ => [
-        'Map Monitoring (View)',
-        'Records / Submissions (Create)',
-        'Alerts (View)',
-      ],
-    };
     return AdminUserProfileData(
       userId: r.id,
       name: r.name,
       email: r.email,
-      phone: '+63 917 000 0000',
+      phone: r.phone.isEmpty ? 'Not provided' : r.phone,
       active: r.active,
       memberSince: r.joined,
-      lastLogin: 'May 19, 2026 7:42 AM',
+      lastLogin: 'Not available',
       role: r.role,
       organization: r.organization,
-      assignedZones: zones,
-      roleDescription: desc,
-      permissions: perms,
-      orgType: r.organization.contains('BFAR') ? 'BFAR' : 'Partner Agency',
-      orgLocation: 'Philippines',
-      orgDescription: '${r.organization} — affiliated unit for COTS monitoring.',
-      orgEmail: 'contact@${r.organization.toLowerCase().replaceAll(' ', '')}.gov.ph',
-      orgPhone: '+63 2 888 0000',
-      emailVerified: r.active,
-      twoFactorEnabled: r.role == 'Administrator' || r.role == 'Marine Conservation Officer',
-      loginAccess: 'Web',
-      loginIp: '203.0.113.${(r.id.hashCode % 200).abs() + 10}',
+      assignedZones: r.assignedArea.isEmpty ? 'Not assigned' : r.assignedArea,
+      roleDescription: 'Role information from the registered user profile.',
+      permissions: const [],
+      orgType: 'Registered organization',
+      orgLocation: 'Not provided',
+      orgDescription:
+          r.organization.isEmpty ? 'No organization provided.' : r.organization,
+      orgEmail: 'Not provided',
+      orgPhone: 'Not provided',
+      emailVerified: false,
+      twoFactorEnabled: false,
+      loginAccess: 'Not available',
+      loginIp: 'Not available',
     );
   }
 }

@@ -45,7 +45,8 @@ class _AdminShellScreenState extends State<AdminShellScreen> {
 
   static const int _recordsNavIndex = 3;
 
-  int? _recordsNavBadge(AdminRecordReviewTracker tracker, List<AdminRecordTableRow> rows) {
+  int? _recordsNavBadge(
+      AdminRecordReviewTracker tracker, List<AdminRecordTableRow> rows) {
     final count = tracker.unopenedNeedsReviewCount(rows);
     return count > 0 ? count : null;
   }
@@ -67,16 +68,17 @@ class _AdminShellScreenState extends State<AdminShellScreen> {
           context,
           child: AdminResponsiveChrome(
             selectedNavIndex: _index,
-            onNavSelect: (i) => setState(() => _index = i.clamp(0, kAdminShellPageTitles.length - 1)),
+            onNavSelect: (i) => setState(
+                () => _index = i.clamp(0, kAdminShellPageTitles.length - 1)),
             onLogout: _logout,
             pageTitle: kAdminShellPageTitles[_index],
             navBadgeFor: navBadgeFor,
             body: switch (_index) {
               0 => AdminDashboardScreen(
-                onOpenMapMonitoring: () => setState(() => _index = 1),
-              ),
+                  onOpenMapMonitoring: () => setState(() => _index = 1),
+                ),
               1 => const AdminMapMonitoringScreen(),
-              2 => const AdminZonesManagementScreen(),
+              2 => const AdminZonesScreen(),
               3 => const AdminRecordsSubmissionsScreen(viewOnly: true),
               4 => const AdminAlertsScreen(),
               5 => const AdminNotificationsScreen(),
@@ -85,8 +87,9 @@ class _AdminShellScreenState extends State<AdminShellScreen> {
               8 => const AdminUsersScreen(),
               9 => const AdminSettingsScreen(),
               _ => AdminPlaceholderScreen(
-                title: kAdminShellPageTitles[_index.clamp(0, kAdminShellPageTitles.length - 1)],
-              ),
+                  title: kAdminShellPageTitles[
+                      _index.clamp(0, kAdminShellPageTitles.length - 1)],
+                ),
             },
           ),
         );

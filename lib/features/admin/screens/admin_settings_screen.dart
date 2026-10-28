@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
 
 import '../../../models/admin_preferences.dart';
@@ -302,20 +303,20 @@ class _AdminSettingsScreenState extends State<AdminSettingsScreen> {
                   offset: const Offset(0, 3)),
             ],
           ),
-          child: const Column(
+          child: Column(
             crossAxisAlignment: CrossAxisAlignment.end,
             children: [
               Text(
-                'May 18, 2026',
-                style: TextStyle(
+                DateFormat('MMM d, yyyy').format(DateTime.now()),
+                style: const TextStyle(
                     fontSize: 13,
                     fontWeight: FontWeight.w800,
                     color: AdminColors.headerTitle),
               ),
-              SizedBox(height: 2),
+              const SizedBox(height: 2),
               Text(
-                '09:30 AM',
-                style: TextStyle(
+                DateFormat('h:mm a').format(DateTime.now()),
+                style: const TextStyle(
                     fontSize: 12,
                     fontWeight: FontWeight.w600,
                     color: AdminColors.muted),
@@ -408,24 +409,6 @@ class _AdminSettingsScreenState extends State<AdminSettingsScreen> {
                   backgroundColor: AdminColors.statBlue.withValues(alpha: 0.12),
                   child: const Icon(Icons.person_rounded,
                       size: 52, color: AdminColors.statBlue),
-                ),
-                Positioned(
-                  right: -2,
-                  bottom: -2,
-                  child: Material(
-                    color: AdminColors.statBlue,
-                    shape: const CircleBorder(),
-                    elevation: 2,
-                    child: InkWell(
-                      customBorder: const CircleBorder(),
-                      onTap: () => _snack('Profile photo upload (demo).'),
-                      child: const Padding(
-                        padding: EdgeInsets.all(8),
-                        child: Icon(Icons.photo_camera_rounded,
-                            color: Colors.white, size: 18),
-                      ),
-                    ),
-                  ),
                 ),
               ],
             ),

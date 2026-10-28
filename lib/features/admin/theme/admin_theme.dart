@@ -31,7 +31,7 @@ abstract final class AdminDateTimeTokens {
   AdminDateTimeTokens._();
 
   /// Rolling last-7-days label for date-range controls (always current).
-  static String get demoDateRangeLabel => rollingWeekRangeLabel();
+  static String get currentDateRangeLabel => rollingWeekRangeLabel();
 
   static String rollingWeekRangeLabel({DateTime? end}) {
     final anchor = end ?? DateTime.now();
@@ -67,8 +67,9 @@ abstract final class AdminDateTimeTokens {
     decoration: TextDecoration.none,
   );
 
-  /// Timestamps in tables and dense detail rows (`May 18, 2026 09:15 AM`).
-  static TextStyle inlineDateTimeTextStyle({bool secondary = false}) => TextStyle(
+  /// Timestamps in tables and dense detail rows (`MMM d, y hh:mm a`).
+  static TextStyle inlineDateTimeTextStyle({bool secondary = false}) =>
+      TextStyle(
         fontSize: 12.5,
         fontWeight: FontWeight.w600,
         height: 1.2,
@@ -94,7 +95,9 @@ abstract final class AdminDateTimeTokens {
         side: const BorderSide(color: _outlineBorder),
       );
 
-  static Widget dateChipIcon({IconData icon = Icons.calendar_today_outlined, double size = 18}) => Icon(
+  static Widget dateChipIcon(
+          {IconData icon = Icons.calendar_today_outlined, double size = 18}) =>
+      Icon(
         icon,
         size: size,
         color: AdminColors.muted.withValues(alpha: 0.9),

@@ -1,329 +1,134 @@
 import 'package:flutter/material.dart';
 
+import '../../../models/scan_record_model.dart';
+import '../../../services/scan_record_repository.dart';
+import '../../../widgets/cots_loading_skeleton.dart';
+import '../../../widgets/monitoring_record_map.dart';
 import '../layout/admin_breakpoints.dart';
 import '../theme/admin_theme.dart';
-import '../widgets/map_monitoring/map_monitoring_analytics_panel.dart';
-import '../widgets/map_monitoring/map_monitoring_bottom_section.dart';
-import '../widgets/map_monitoring/map_monitoring_data.dart';
-import '../widgets/map_monitoring/map_monitoring_filters.dart';
-import '../widgets/map_monitoring/map_monitoring_header.dart';
-import '../widgets/map_monitoring/map_monitoring_map.dart';
+import '../widgets/admin_dashboard_header.dart';
 
-/// GIS-style map workspace for the admin shell (index **Map Monitoring**).
 class AdminMapMonitoringScreen extends StatefulWidget {
   const AdminMapMonitoringScreen({super.key});
 
   @override
-  State<AdminMapMonitoringScreen> createState() => _AdminMapMonitoringScreenState();
+  State<AdminMapMonitoringScreen> createState() =>
+      _AdminMapMonitoringScreenState();
 }
 
-class _AdminMapMonitoringScreenState extends State<AdminMapMonitoringScreen>
-    with SingleTickerProviderStateMixin {
-  late final AnimationController _fadeController;
-  late final Animation<double> _fade;
-
-  String _zoneFilter = 'All Zones';
-  String _statusFilter = 'All Status';
-  String _riskFilter = 'All Risk Levels';
-  String _densityFilter = 'All Density Levels';
-
-  MapMonitoringViewMode _viewMode = MapMonitoringViewMode.mapViewing;
-  bool _zoneBoundaries = true;
-  bool _densityHeatmap = false;
-  bool _zoneLabels = true;
-  bool _satelliteView = true;
-  bool _removalRecordsLayer = false;
-  int _mapRefreshGeneration = 0;
+class _AdminMapMonitoringScreenState extends State<AdminMapMonitoringScreen> {
+  late Stream<List<ScanRecordModel>> _recordsStream;
 
   @override
   void initState() {
     super.initState();
-    _fadeController = AnimationController(
-      vsync: this,
-      duration: const Duration(milliseconds: 520),
-    );
-    _fade = CurvedAnimation(parent: _fadeController, curve: Curves.easeOutCubic);
-    _fadeController.forward();
+    _recordsStream = ScanRecordRepository.watchAll();
+  }
+
+  void _refresh() {
+    setState(() => _recordsStream = ScanRecordRepository.watchAll());
   }
 
   @override
-  void dispose() {
-    _fadeController.dispose();
-    super.dispose();
-  }
-
-  Future<void> _pickDateRange() async {
-    final now = DateTime(2026, 5, 18);
-    final picked = await showDateRangePicker(
-      context: context,
-      firstDate: DateTime(2026, 1, 1),
-      lastDate: DateTime(2027, 12, 31),
-      initialDateRange: DateTimeRange(
-        start: now.subtract(const Duration(days: 6)),
-        end: now,
-      ),
-      builder: (context, child) {
-        return Theme(
-          data: Theme.of(context).copyWith(
-            colorScheme: const ColorScheme.light(
-              primary: AdminColors.statBlue,
-              surface: Colors.white,
-            ),
+  Widget build(BuildContext context) {
+    final pagePadding =
+        AdminBreakpoints.pagePadding(MediaQuery.sizeOf(context).width);
+    return StreamBuilder<List<ScanRecordModel>>(
+      stream: _recordsStream,
+      builder: (context, snapshot) {
+        return SingleChildScrollView(
+          padding:
+              EdgeInsets.fromLTRB(pagePadding.left, 22, pagePadding.right, 28),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              AdminDashboardHeader(
+                title: 'Map Monitoring',
+                subtitle: 'Saved monitoring locations from real field records.',
+                onRefreshTap: _refresh,
+              ),
+              const SizedBox(height: 18),
+              if (snapshot.hasError)
+                _errorCard(snapshot.error)
+              else if (!snapshot.hasData)
+                const CotsLoadingSkeleton(
+                  layout: CotsSkeletonLayout.detail,
+                  label: 'Loading monitoring locations',
+                )
+              else ...[
+                _summary(snapshot.data!),
+                const SizedBox(height: 14),
+                MonitoringRecordMap(records: snapshot.data!),
+              ],
+            ],
           ),
-          child: child ?? const SizedBox.shrink(),
         );
       },
     );
-    if (picked != null && mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          behavior: SnackBarBehavior.floating,
-          content: Text(
-            'Demo filter: ${picked.start.toLocal()} → ${picked.end.toLocal()}',
-          ),
-        ),
-      );
-    }
   }
 
-  void _resetLayers() {
-    setState(() {
-      _zoneBoundaries = true;
-      _densityHeatmap = false;
-      _zoneLabels = true;
-      _satelliteView = true;
-      _removalRecordsLayer = false;
-      _viewMode = MapMonitoringViewMode.mapViewing;
-    });
-  }
-
-  void _refreshMonitoringView() {
-    if (!mounted) return;
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(
-        behavior: SnackBarBehavior.floating,
-        content: Text('Monitoring layers refreshed (demo).'),
-      ),
-    );
-    setState(() => _mapRefreshGeneration++);
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return FadeTransition(
-      opacity: _fade,
-      child: LayoutBuilder(
-        builder: (context, constraints) {
-          final w = constraints.maxWidth;
-          final wide = w >= AdminBreakpoints.contentWide;
-          final basePad = AdminBreakpoints.pagePadding(w);
-          final pad = EdgeInsets.fromLTRB(basePad.left, 22, basePad.right, 22);
-          final mapH = wide ? 480.0 : (w < AdminBreakpoints.mobile ? 320.0 : 400.0);
-
-          return SingleChildScrollView(
-            padding: pad,
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                MapMonitoringHeader(
-                  onDateRangeTap: _pickDateRange,
-                  onRefreshTap: _refreshMonitoringView,
-                ),
-                const SizedBox(height: 22),
-                MapMonitoringFilters(
-                  zoneFilter: _zoneFilter,
-                  statusFilter: _statusFilter,
-                  riskFilter: _riskFilter,
-                  densityFilter: _densityFilter,
-                  onZoneChanged: (v) => setState(() => _zoneFilter = v ?? _zoneFilter),
-                  onStatusChanged: (v) => setState(() => _statusFilter = v ?? _statusFilter),
-                  onRiskChanged: (v) => setState(() => _riskFilter = v ?? _riskFilter),
-                  onDensityChanged: (v) => setState(() => _densityFilter = v ?? _densityFilter),
-                ),
-                const SizedBox(height: 18),
-                if (wide)
-                  Column(
-                    crossAxisAlignment: CrossAxisAlignment.stretch,
-                    children: [
-                      MapMonitoringMap(
-                        key: ValueKey<int>(_mapRefreshGeneration),
-                        mapHeight: mapH,
-                        viewMode: _viewMode,
-                        onViewModeChanged: (m) => setState(() => _viewMode = m),
-                        showZonePolygons: _zoneBoundaries,
-                        densityHeatmapEnabled: _densityHeatmap,
-                        showLabels: _zoneLabels,
-                        useSatelliteTiles: _satelliteView,
-                        showRemovalRecords: _removalRecordsLayer,
-                      ),
-                      const SizedBox(height: 18),
-                      const _SelectedCaptureInformationCard(),
-                      const SizedBox(height: 18),
-                      MapMonitoringAnalyticsPanel(
-                        zoneBoundaries: _zoneBoundaries,
-                        densityHeatmap: _densityHeatmap,
-                        densityLayers: _viewMode == MapMonitoringViewMode.densityLayers,
-                        zoneLabels: _zoneLabels,
-                        satelliteView: _satelliteView,
-                        removalRecords: _removalRecordsLayer,
-                        onZoneBoundariesChanged: (v) => setState(() => _zoneBoundaries = v),
-                        onDensityHeatmapChanged: (v) => setState(() => _densityHeatmap = v),
-                        onDensityLayersChanged: (v) => setState(() {
-                          if (v) {
-                            _viewMode = MapMonitoringViewMode.densityLayers;
-                          } else if (_viewMode == MapMonitoringViewMode.densityLayers) {
-                            _viewMode = MapMonitoringViewMode.mapViewing;
-                          }
-                        }),
-                        onZoneLabelsChanged: (v) => setState(() => _zoneLabels = v),
-                        onSatelliteViewChanged: (v) => setState(() => _satelliteView = v),
-                        onRemovalRecordsChanged: (v) => setState(() => _removalRecordsLayer = v),
-                        onResetLayers: _resetLayers,
-                      ),
-                    ],
-                  )
-                else ...[
-                  MapMonitoringMap(
-                    key: ValueKey<int>(_mapRefreshGeneration),
-                    mapHeight: mapH,
-                    viewMode: _viewMode,
-                    onViewModeChanged: (m) => setState(() => _viewMode = m),
-                    showZonePolygons: _zoneBoundaries,
-                    densityHeatmapEnabled: _densityHeatmap,
-                    showLabels: _zoneLabels,
-                    useSatelliteTiles: _satelliteView,
-                    showRemovalRecords: _removalRecordsLayer,
-                  ),
-                  const SizedBox(height: 18),
-                  const _SelectedCaptureInformationCard(),
-                  const SizedBox(height: 18),
-                  MapMonitoringAnalyticsPanel(
-                    zoneBoundaries: _zoneBoundaries,
-                    densityHeatmap: _densityHeatmap,
-                    densityLayers: _viewMode == MapMonitoringViewMode.densityLayers,
-                    zoneLabels: _zoneLabels,
-                    satelliteView: _satelliteView,
-                    removalRecords: _removalRecordsLayer,
-                    onZoneBoundariesChanged: (v) => setState(() => _zoneBoundaries = v),
-                    onDensityHeatmapChanged: (v) => setState(() => _densityHeatmap = v),
-                    onDensityLayersChanged: (v) => setState(() {
-                      if (v) {
-                        _viewMode = MapMonitoringViewMode.densityLayers;
-                      } else if (_viewMode == MapMonitoringViewMode.densityLayers) {
-                        _viewMode = MapMonitoringViewMode.mapViewing;
-                      }
-                    }),
-                    onZoneLabelsChanged: (v) => setState(() => _zoneLabels = v),
-                    onSatelliteViewChanged: (v) => setState(() => _satelliteView = v),
-                    onRemovalRecordsChanged: (v) => setState(() => _removalRecordsLayer = v),
-                    onResetLayers: _resetLayers,
-                  ),
-                ],
-                const SizedBox(height: 22),
-                const MapMonitoringBottomSection(),
-                const SizedBox(height: 28),
-              ],
-            ),
-          );
-        },
-      ),
-    );
-  }
-}
-
-class _SelectedCaptureInformationCard extends StatelessWidget {
-  const _SelectedCaptureInformationCard();
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.all(18),
-      decoration: BoxDecoration(
-        color: AdminColors.cardWhite,
-        borderRadius: BorderRadius.circular(14),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withValues(alpha: 0.05),
-            blurRadius: 12,
-            offset: const Offset(0, 4),
-          ),
-        ],
-        border: Border.all(color: AdminColors.statRed.withValues(alpha: 0.18)),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          const Row(
-            children: [
-              Icon(Icons.place, color: AdminColors.statRed, size: 20),
-              SizedBox(width: 8),
-              Text(
-                'Selected Capture Information',
-                style: TextStyle(
-                  fontSize: 15,
-                  fontWeight: FontWeight.w800,
-                  color: AdminColors.headerTitle,
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 12),
-          Wrap(
-            spacing: 18,
-            runSpacing: 10,
-            children: const [
-              _CaptureInfoChip(label: 'Record ID', value: 'REC-OZHX6L6I'),
-              _CaptureInfoChip(label: 'Reef Zone', value: 'Zone A'),
-              _CaptureInfoChip(label: 'Infestation Level', value: 'High'),
-              _CaptureInfoChip(label: 'COTS Count', value: '17'),
-              _CaptureInfoChip(label: 'Confidence Score', value: '58%'),
-              _CaptureInfoChip(label: 'Date', value: 'Jun 1, 2026'),
-            ],
-          ),
-          const SizedBox(height: 10),
-          Text(
-            'Red markers indicate high-infestation captures. Select a marker on the interactive map to update this panel.',
-            style: TextStyle(
-              fontSize: 12,
-              height: 1.4,
-              color: AdminColors.muted.withValues(alpha: 0.95),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _CaptureInfoChip extends StatelessWidget {
-  const _CaptureInfoChip({required this.label, required this.value});
-
-  final String label;
-  final String value;
-
-  @override
-  Widget build(BuildContext context) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
+  Widget _summary(List<ScanRecordModel> records) {
+    final located = records
+        .where((record) => record.latitude != null && record.longitude != null)
+        .toList();
+    final zones = located
+        .map((record) => record.zone)
+        .where((zone) => zone.isNotEmpty && zone != 'Unassigned')
+        .toSet();
+    return Wrap(
+      spacing: 12,
+      runSpacing: 12,
       children: [
-        Text(
-          label,
-          style: TextStyle(
-            fontSize: 11,
-            fontWeight: FontWeight.w700,
-            color: AdminColors.muted.withValues(alpha: 0.9),
-          ),
-        ),
-        const SizedBox(height: 2),
-        Text(
-          value,
-          style: const TextStyle(
-            fontSize: 13.5,
-            fontWeight: FontWeight.w800,
-            color: AdminColors.headerTitle,
-          ),
-        ),
+        _summaryCard('Saved records', '${records.length}', Icons.description),
+        _summaryCard(
+            'Mapped records', '${located.length}', Icons.location_on_outlined),
+        _summaryCard('Monitoring areas', '${zones.length}', Icons.map_outlined),
       ],
+    );
+  }
+
+  Widget _summaryCard(String label, String value, IconData icon) {
+    return Container(
+      width: 210,
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: Colors.black.withValues(alpha: 0.06)),
+      ),
+      child: Row(
+        children: [
+          Icon(icon, color: AdminColors.statBlue),
+          const SizedBox(width: 12),
+          Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(value,
+                  style: const TextStyle(
+                      fontSize: 22, fontWeight: FontWeight.w900)),
+              Text(label, style: const TextStyle(color: AdminColors.muted)),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _errorCard(Object? error) {
+    return Center(
+      child: Column(
+        children: [
+          const Icon(Icons.cloud_off_rounded,
+              size: 42, color: AdminColors.statRed),
+          const SizedBox(height: 10),
+          const Text('Could not load monitoring records.'),
+          TextButton.icon(
+            onPressed: _refresh,
+            icon: const Icon(Icons.refresh_rounded),
+            label: const Text('Retry'),
+          ),
+        ],
+      ),
     );
   }
 }

@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../theme/admin_theme.dart';
 
-/// Placeholder for admin sections not built yet (mock shell).
+/// Safe fallback for an unknown admin navigation index.
 class AdminPlaceholderScreen extends StatefulWidget {
   const AdminPlaceholderScreen({super.key, required this.title});
 
