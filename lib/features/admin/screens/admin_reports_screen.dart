@@ -1,13 +1,16 @@
 import 'package:flutter/material.dart';
 
-import '../models/admin_report_modal_data.dart';
+import '../../../services/scan_record_repository.dart';
+import '../../../widgets/cots_loading_skeleton.dart';
+import '../models/admin_record_table_row.dart';
 import '../theme/admin_theme.dart';
 import '../widgets/admin_data_table.dart';
-import '../widgets/admin_report_modals.dart';
-import 'admin_report_details_screen.dart';
+import 'admin_record_details_screen.dart';
 
 class AdminReportsScreen extends StatefulWidget {
-  const AdminReportsScreen({super.key});
+  const AdminReportsScreen({super.key, this.recordsStream});
+
+  final Stream<List<AdminRecordTableRow>>? recordsStream;
 
   @override
   State<AdminReportsScreen> createState() => _AdminReportsScreenState();
@@ -25,13 +28,13 @@ class _AdminReportsScreenState extends State<AdminReportsScreen> {
   /// Last-used summary stat card (0–4); `null` if filters were changed manually and no preset matches.
   int? _selectedStatIndex;
 
-  /// Mock post-review updates (Approve / Reject from review modal).
-  final Map<String, _RepStatus> _statusOverrides = {};
-  final Map<String, String> _reviewOverrides = {};
+  late Stream<List<AdminRecordTableRow>> _recordsStream;
   int _refreshGeneration = 0;
 
   void _onReportsRefresh() {
     if (!mounted) return;
+    _recordsStream =
+        widget.recordsStream ?? ScanRecordRepository.watchAdminTableRows();
     ScaffoldMessenger.of(context).showSnackBar(
       const SnackBar(
         behavior: SnackBarBehavior.floating,
@@ -45,39 +48,27 @@ class _AdminReportsScreenState extends State<AdminReportsScreen> {
   void initState() {
     super.initState();
     _selectedStatIndex = 0;
+    _recordsStream =
+        widget.recordsStream ?? ScanRecordRepository.watchAdminTableRows();
   }
-
-  static const _mockReportImages = <String>[
-    'https://images.unsplash.com/photo-1583212292454-1fe62296095b?w=800&q=80',
-    'https://images.unsplash.com/photo-1546026423-cc4642628d2b?w=800&q=80',
-    'https://images.unsplash.com/photo-1559827260-dc66d52bef19?w=800&q=80',
-  ];
 
   static const _types = [
     'All Types',
     'COTS Detection',
     'Citizen Removal Record',
-    'Outbreak Alert',
-    'Zone Activity',
+    'Follow-up Monitoring',
   ];
-  static const _statuses = ['All Status', 'Auto Approved', 'For Review', 'Rejected', 'Completed'];
-  static const _confidences = ['All Confidence Levels', 'High', 'Medium', 'Low'];
-  static const _zones = ['All Zones', 'Zone A', 'Zone B', 'Zone C', 'Zone D', 'Zone E'];
-
-  static const _allRows = <_ReportRow>[
-    _ReportRow('RPT-00025', _ReportType.citizenRemoval, 'Citizen Diver', 'Zone A', 'May 18, 2026 10:00 AM', 90, _RepStatus.autoApproved, 'GoPro removal record — 4 COTS removed.'),
-    _ReportRow('RPT-00024', _ReportType.cotsDetection, 'Juan Dela Cruz', 'Zone A', 'May 18, 2026 09:30 AM', 92, _RepStatus.autoApproved, 'Auto-approved at submission.'),
-    _ReportRow('RPT-00023', _ReportType.cotsDetection, 'Maria Santos', 'Zone B', 'May 18, 2026 08:45 AM', 78, _RepStatus.forReview, 'Pending admin review'),
-    _ReportRow('RPT-00022', _ReportType.outbreakAlert, 'Pedro Reyes', 'Zone C', 'May 17, 2026 04:45 PM', 66, _RepStatus.forReview, 'Pending admin review'),
-    _ReportRow('RPT-00021', _ReportType.zoneActivity, 'Ana Garcia', 'Zone D', 'May 17, 2026 11:20 AM', 88, _RepStatus.completed, 'Reviewed May 17, 2026 02:10 PM'),
-    _ReportRow('RPT-00020', _ReportType.cotsDetection, 'Luis Mendoza', 'Zone A', 'May 16, 2026 03:00 PM', 52, _RepStatus.rejected, 'Rejected May 16, 2026 05:22 PM — below threshold'),
-    _ReportRow('RPT-00019', _ReportType.cotsDetection, 'Rica Bautista', 'Zone E', 'May 16, 2026 10:10 AM', 91, _RepStatus.autoApproved, 'Auto-approved at submission.'),
-    _ReportRow('RPT-00018', _ReportType.outbreakAlert, 'Jose Villanueva', 'Zone B', 'May 15, 2026 02:30 PM', 72, _RepStatus.forReview, 'Pending admin review'),
-    _ReportRow('RPT-00017', _ReportType.zoneActivity, 'Mark Antonio', 'Zone C', 'May 15, 2026 09:00 AM', 45, _RepStatus.rejected, 'Rejected May 15, 2026 11:05 AM'),
-    _ReportRow('RPT-00016', _ReportType.cotsDetection, 'Juan Dela Cruz', 'Zone D', 'May 14, 2026 06:45 PM', 87, _RepStatus.completed, 'Approved May 15, 2026 09:12 AM'),
-    _ReportRow('RPT-00015', _ReportType.cotsDetection, 'Maria Santos', 'Zone A', 'May 14, 2026 01:20 PM', 74, _RepStatus.forReview, 'Pending admin review'),
-    _ReportRow('RPT-00014', _ReportType.zoneActivity, 'Pedro Reyes', 'Zone E', 'May 13, 2026 04:00 PM', 90, _RepStatus.autoApproved, 'Auto-approved at submission.'),
-    _ReportRow('RPT-00013', _ReportType.cotsDetection, 'Ana Garcia', 'Zone B', 'May 13, 2026 11:30 AM', 55, _RepStatus.rejected, 'Rejected May 13, 2026 01:45 PM'),
+  static const _statuses = [
+    'All Status',
+    'Accepted',
+    'Under Review',
+    'Rejected'
+  ];
+  static const _confidences = [
+    'All Confidence Levels',
+    'High',
+    'Medium',
+    'Low'
   ];
 
   @override
@@ -86,47 +77,52 @@ class _AdminReportsScreenState extends State<AdminReportsScreen> {
     super.dispose();
   }
 
-  _RepStatus _statusOf(_ReportRow r) => _statusOverrides[r.id] ?? r.status;
+  _RepStatus _statusOf(_ReportRow r) => r.status;
 
-  String _reviewOf(_ReportRow r) => _reviewOverrides[r.id] ?? r.reviewDetails;
+  String _reviewOf(_ReportRow r) => r.reviewDetails;
 
-  List<_ReportRow> get _filtered {
+  List<_ReportRow> _filtered(List<_ReportRow> rows) {
     final q = _searchCtrl.text.trim().toLowerCase();
-    return _allRows.where((r) {
+    return rows.where((r) {
       final byQ = q.isEmpty ||
           r.id.toLowerCase().contains(q) ||
           r.submittedBy.toLowerCase().contains(q) ||
           r.zone.toLowerCase().contains(q);
       final byT = _type == 'All Types' || r.typeLabel == _type;
       final byS = _status == 'All Status' || _statusOf(r).label == _status;
-      final byC = _confidence == 'All Confidence Levels' || r.confidenceBand == _confidence;
+      final byC = _confidence == 'All Confidence Levels' ||
+          r.confidenceBand == _confidence;
       final byZ = _zone == 'All Zones' || r.zone == _zone;
       return byQ && byT && byS && byC && byZ;
     }).toList();
   }
 
-  int get _totalCount => 56;
-
-  bool get _filtersDefault =>
-      _searchCtrl.text.trim().isEmpty &&
-      _type == 'All Types' &&
-      _status == 'All Status' &&
-      _confidence == 'All Confidence Levels' &&
-      _zone == 'All Zones';
-
-  int _displayTotal(List<_ReportRow> filtered) => _filtersDefault ? _totalCount : filtered.length;
-
   int? _matchingStatCardIndex() {
-    if (_type == 'All Types' && _status == 'All Status' && _confidence == 'All Confidence Levels') return 0;
-    if (_type == 'COTS Detection' && _status == 'For Review' && _confidence == 'Medium') return 1;
-    if (_type == 'All Types' && _status == 'Auto Approved' && _confidence == 'High') return 2;
-    if (_type == 'Zone Activity' && _status == 'All Status' && _confidence == 'All Confidence Levels') return 3;
-    if (_type == 'All Types' && _status == 'Rejected' && _confidence == 'Low') return 4;
+    if (_type == 'All Types' &&
+        _status == 'All Status' &&
+        _confidence == 'All Confidence Levels') {
+      return 0;
+    }
+    if (_type == 'COTS Detection' &&
+        _status == 'Under Review' &&
+        _confidence == 'Medium') {
+      return 1;
+    }
+    if (_type == 'All Types' &&
+        _status == 'Accepted' &&
+        _confidence == 'High') {
+      return 2;
+    }
+    if (_type == 'All Types' && _status == 'Rejected' && _confidence == 'Low') {
+      return 4;
+    }
     return null;
   }
 
   int? _syncedStatSelection() {
-    if (_searchCtrl.text.trim().isNotEmpty || _zone != 'All Zones') return null;
+    if (_searchCtrl.text.trim().isNotEmpty || _zone != 'All Zones') {
+      return null;
+    }
     return _matchingStatCardIndex();
   }
 
@@ -142,16 +138,16 @@ class _AdminReportsScreenState extends State<AdminReportsScreen> {
           break;
         case 1:
           _type = 'COTS Detection';
-          _status = 'For Review';
+          _status = 'Under Review';
           _confidence = 'Medium';
           break;
         case 2:
           _type = 'All Types';
-          _status = 'Auto Approved';
+          _status = 'Accepted';
           _confidence = 'High';
           break;
         case 3:
-          _type = 'Zone Activity';
+          _type = 'All Types';
           _status = 'All Status';
           _confidence = 'All Confidence Levels';
           break;
@@ -166,7 +162,34 @@ class _AdminReportsScreenState extends State<AdminReportsScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final filtered = _filtered;
+    return StreamBuilder<List<AdminRecordTableRow>>(
+      key: ValueKey<int>(_refreshGeneration),
+      stream: _recordsStream,
+      builder: (context, snapshot) {
+        if (snapshot.hasError) return _loadError(snapshot.error);
+        if (!snapshot.hasData) {
+          return const Padding(
+            padding: EdgeInsets.all(24),
+            child: CotsLoadingSkeleton(
+              layout: CotsSkeletonLayout.table,
+              label: 'Loading reports from Firebase',
+            ),
+          );
+        }
+        return _buildReports(
+          snapshot.data!.map(_ReportRow.fromRecord).toList(),
+        );
+      },
+    );
+  }
+
+  Widget _buildReports(List<_ReportRow> rows) {
+    final zones = <String>{for (final row in rows) row.zone}.toList()..sort();
+    final zoneOptions = ['All Zones', ...zones];
+    if (!zoneOptions.contains(_zone)) {
+      _zone = 'All Zones';
+    }
+    final filtered = _filtered(rows);
     final pageCount = (filtered.length / _rowsPerPage).ceil().clamp(1, 999);
     _page = _page.clamp(0, pageCount - 1);
     final start = _page * _rowsPerPage;
@@ -179,13 +202,13 @@ class _AdminReportsScreenState extends State<AdminReportsScreen> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          _header(),
+          _header(zoneOptions),
           const SizedBox(height: 18),
-          _statCards(),
+          _statCards(rows),
           const SizedBox(height: 18),
           _filterBar(),
           const SizedBox(height: 14),
-          _tableCard(pageRows, start, end, _displayTotal(filtered), pageCount),
+          _tableCard(pageRows, start, end, filtered.length, pageCount),
           const SizedBox(height: 20),
           LayoutBuilder(
             builder: (context, c) {
@@ -218,7 +241,37 @@ class _AdminReportsScreenState extends State<AdminReportsScreen> {
     );
   }
 
-  Widget _header() {
+  Widget _loadError(Object? error) {
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.all(24),
+        child: _card(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const Icon(Icons.cloud_off_rounded,
+                  size: 42, color: AdminColors.statRed),
+              const SizedBox(height: 12),
+              const Text('Could not load reports',
+                  style: TextStyle(fontSize: 18, fontWeight: FontWeight.w800)),
+              const SizedBox(height: 6),
+              Text('$error',
+                  textAlign: TextAlign.center,
+                  style: const TextStyle(color: AdminColors.muted)),
+              const SizedBox(height: 14),
+              FilledButton.icon(
+                onPressed: _onReportsRefresh,
+                icon: const Icon(Icons.refresh_rounded),
+                label: const Text('Retry'),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _header(List<String> zoneOptions) {
     return LayoutBuilder(
       builder: (context, c) {
         final narrow = c.maxWidth < 780;
@@ -226,14 +279,16 @@ class _AdminReportsScreenState extends State<AdminReportsScreen> {
           OutlinedButton.icon(
             onPressed: () {},
             icon: AdminDateTimeTokens.dateChipIcon(),
-            label: Text(AdminDateTimeTokens.demoDateRangeLabel, style: AdminDateTimeTokens.dateRangeChipTextStyle),
+            label: Text(AdminDateTimeTokens.currentDateRangeLabel,
+                style: AdminDateTimeTokens.dateRangeChipTextStyle),
             style: AdminDateTimeTokens.dateRangeOutlinedButtonStyle(),
           ),
           const SizedBox(width: 10),
           OutlinedButton.icon(
             onPressed: _onReportsRefresh,
             icon: AdminDateTimeTokens.refreshIcon,
-            label: const Text('Refresh', style: AdminDateTimeTokens.refreshChipTextStyle),
+            label: const Text('Refresh',
+                style: AdminDateTimeTokens.refreshChipTextStyle),
             style: AdminDateTimeTokens.refreshOutlinedButtonStyle(),
           ),
           const SizedBox(width: 10),
@@ -245,7 +300,9 @@ class _AdminReportsScreenState extends State<AdminReportsScreen> {
                   value: _zone,
                   isExpanded: true,
                   icon: const Icon(Icons.filter_alt_outlined, size: 20),
-                  items: _zones.map((e) => DropdownMenuItem(value: e, child: Text(e))).toList(),
+                  items: zoneOptions
+                      .map((e) => DropdownMenuItem(value: e, child: Text(e)))
+                      .toList(),
                   onChanged: (v) => setState(() {
                     _zone = v ?? 'All Zones';
                     _page = 0;
@@ -257,31 +314,25 @@ class _AdminReportsScreenState extends State<AdminReportsScreen> {
           ),
           const SizedBox(width: 10),
           OutlinedButton.icon(
-            onPressed: () {
-              ScaffoldMessenger.of(context).showSnackBar(
-                const SnackBar(content: Text('Export PDF started (demo).')),
-              );
-            },
+            onPressed: null,
             icon: const Icon(Icons.picture_as_pdf_outlined, size: 18),
             label: const Text('Export PDF'),
             style: OutlinedButton.styleFrom(
               foregroundColor: AdminColors.statRed,
-              side: BorderSide(color: AdminColors.statRed.withValues(alpha: 0.35)),
+              side: BorderSide(
+                  color: AdminColors.statRed.withValues(alpha: 0.35)),
               backgroundColor: Colors.white,
             ),
           ),
           const SizedBox(width: 10),
           OutlinedButton.icon(
-            onPressed: () {
-              ScaffoldMessenger.of(context).showSnackBar(
-                const SnackBar(content: Text('Export Excel started (demo).')),
-              );
-            },
+            onPressed: null,
             icon: const Icon(Icons.table_view_outlined, size: 18),
             label: const Text('Export Excel'),
             style: OutlinedButton.styleFrom(
               foregroundColor: AdminColors.statGreen,
-              side: BorderSide(color: AdminColors.statGreen.withValues(alpha: 0.35)),
+              side: BorderSide(
+                  color: AdminColors.statGreen.withValues(alpha: 0.35)),
               backgroundColor: Colors.white,
             ),
           ),
@@ -290,11 +341,19 @@ class _AdminReportsScreenState extends State<AdminReportsScreen> {
           return Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              const Text('Reports', style: TextStyle(fontSize: 30, fontWeight: FontWeight.w800, color: AdminColors.headerTitle)),
+              const Text('Reports',
+                  style: TextStyle(
+                      fontSize: 30,
+                      fontWeight: FontWeight.w800,
+                      color: AdminColors.headerTitle)),
               const SizedBox(height: 8),
               Text(
                 'All system reports submitted by users. Detection reports are reviewed by admin based on confidence level.',
-                style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: AdminColors.muted.withValues(alpha: 0.95), height: 1.4),
+                style: TextStyle(
+                    fontSize: 13,
+                    fontWeight: FontWeight.w600,
+                    color: AdminColors.muted.withValues(alpha: 0.95),
+                    height: 1.4),
               ),
               const SizedBox(height: 14),
               Wrap(spacing: 10, runSpacing: 10, children: actions),
@@ -308,11 +367,19 @@ class _AdminReportsScreenState extends State<AdminReportsScreen> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  const Text('Reports', style: TextStyle(fontSize: 30, fontWeight: FontWeight.w800, color: AdminColors.headerTitle)),
+                  const Text('Reports',
+                      style: TextStyle(
+                          fontSize: 30,
+                          fontWeight: FontWeight.w800,
+                          color: AdminColors.headerTitle)),
                   const SizedBox(height: 8),
                   Text(
                     'All system reports submitted by users. Detection reports are reviewed by admin based on confidence level.',
-                    style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: AdminColors.muted.withValues(alpha: 0.95), height: 1.4),
+                    style: TextStyle(
+                        fontSize: 13,
+                        fontWeight: FontWeight.w600,
+                        color: AdminColors.muted.withValues(alpha: 0.95),
+                        height: 1.4),
                   ),
                 ],
               ),
@@ -336,13 +403,31 @@ class _AdminReportsScreenState extends State<AdminReportsScreen> {
     );
   }
 
-  Widget _statCards() {
+  Widget _statCards(List<_ReportRow> rows) {
+    final detectionCount = rows.fold<int>(0, (sum, row) => sum + row.cotsCount);
+    final underReview =
+        rows.where((r) => r.status == _RepStatus.forReview).length;
+    final accepted =
+        rows.where((r) => r.status == _RepStatus.autoApproved).length;
+    final zoneCount =
+        rows.map((r) => r.zone).where((z) => z != 'Unassigned').toSet().length;
+    final rejected = rows.where((r) => r.status == _RepStatus.rejected).length;
     final specs = [
-      const _StatSpec(0, Icons.pest_control_outlined, 'Total Detections', '248', 'All COTS detections', AdminColors.statBlue),
-      const _StatSpec(1, Icons.calendar_month_outlined, 'Monthly Reports', '12', 'Generated this year', AdminColors.statGreen),
-      const _StatSpec(2, Icons.check_circle_outline_rounded, 'Auto Approved (High)', '26', 'Detection ≥ 85%', AdminColors.statPurple),
-      const _StatSpec(3, Icons.map_outlined, 'Reef Zone Summary', '8', 'Zones with detections', AdminColors.statYellow),
-      const _StatSpec(4, Icons.cancel_outlined, 'Rejected (Low)', '10', 'Detection < 60%', AdminColors.statRed),
+      _StatSpec(
+          0,
+          Icons.pest_control_outlined,
+          'Total Detections',
+          '$detectionCount',
+          'COTS across ${rows.length} reports',
+          AdminColors.statBlue),
+      _StatSpec(1, Icons.rate_review_outlined, 'Pending Review', '$underReview',
+          'Reports needing expert review', AdminColors.statGreen),
+      _StatSpec(2, Icons.check_circle_outline_rounded, 'Accepted', '$accepted',
+          'Verified or policy-accepted', AdminColors.statPurple),
+      _StatSpec(3, Icons.map_outlined, 'Reef Zone Summary', '$zoneCount',
+          'Zones with reports', AdminColors.statYellow),
+      _StatSpec(4, Icons.cancel_outlined, 'Rejected', '$rejected',
+          'Rejected or retake required', AdminColors.statRed),
     ];
     return LayoutBuilder(
       builder: (context, c) {
@@ -413,7 +498,9 @@ class _AdminReportsScreenState extends State<AdminReportsScreen> {
                   child: DropdownButton<String>(
                     value: _type,
                     isExpanded: true,
-                    items: _types.map((e) => DropdownMenuItem(value: e, child: Text(e))).toList(),
+                    items: _types
+                        .map((e) => DropdownMenuItem(value: e, child: Text(e)))
+                        .toList(),
                     onChanged: (v) => setState(() {
                       _type = v ?? 'All Types';
                       _page = 0;
@@ -430,7 +517,9 @@ class _AdminReportsScreenState extends State<AdminReportsScreen> {
                   child: DropdownButton<String>(
                     value: _status,
                     isExpanded: true,
-                    items: _statuses.map((e) => DropdownMenuItem(value: e, child: Text(e))).toList(),
+                    items: _statuses
+                        .map((e) => DropdownMenuItem(value: e, child: Text(e)))
+                        .toList(),
                     onChanged: (v) => setState(() {
                       _status = v ?? 'All Status';
                       _page = 0;
@@ -447,7 +536,9 @@ class _AdminReportsScreenState extends State<AdminReportsScreen> {
                   child: DropdownButton<String>(
                     value: _confidence,
                     isExpanded: true,
-                    items: _confidences.map((e) => DropdownMenuItem(value: e, child: Text(e))).toList(),
+                    items: _confidences
+                        .map((e) => DropdownMenuItem(value: e, child: Text(e)))
+                        .toList(),
                     onChanged: (v) => setState(() {
                       _confidence = v ?? 'All Confidence Levels';
                       _page = 0;
@@ -459,8 +550,10 @@ class _AdminReportsScreenState extends State<AdminReportsScreen> {
             ),
             OutlinedButton.icon(
               onPressed: () {},
-              icon: AdminDateTimeTokens.dateChipIcon(icon: Icons.date_range_outlined),
-              label: const Text('Select date range', style: AdminDateTimeTokens.dateRangeChipTextStyle),
+              icon: AdminDateTimeTokens.dateChipIcon(
+                  icon: Icons.date_range_outlined),
+              label: const Text('Select date range',
+                  style: AdminDateTimeTokens.dateRangeChipTextStyle),
               style: AdminDateTimeTokens.refreshOutlinedButtonStyle(),
             ),
             OutlinedButton.icon(
@@ -469,7 +562,8 @@ class _AdminReportsScreenState extends State<AdminReportsScreen> {
               label: const Text('Filter'),
               style: OutlinedButton.styleFrom(
                 foregroundColor: AdminColors.statBlue,
-                side: BorderSide(color: AdminColors.statBlue.withValues(alpha: 0.35)),
+                side: BorderSide(
+                    color: AdminColors.statBlue.withValues(alpha: 0.35)),
               ),
             ),
           ];
@@ -495,7 +589,8 @@ class _AdminReportsScreenState extends State<AdminReportsScreen> {
     );
   }
 
-  Widget _tableCard(List<_ReportRow> pageRows, int start, int end, int displayTotal, int pageCount) {
+  Widget _tableCard(List<_ReportRow> pageRows, int start, int end,
+      int displayTotal, int pageCount) {
     final summaryText = pageRows.isEmpty
         ? 'No reports match your filters.'
         : 'Showing ${start + 1} to $end of $displayTotal reports';
@@ -517,7 +612,9 @@ class _AdminReportsScreenState extends State<AdminReportsScreen> {
                     displayStatus: _statusOf(r),
                     displayReview: _reviewOf(r),
                     onOpenDetails: () => _openReportForRow(r),
-                    onReview: _statusOf(r) == _RepStatus.forReview ? () => _openReportForRow(r) : null,
+                    onReview: _statusOf(r) == _RepStatus.forReview
+                        ? () => _openReportForRow(r)
+                        : null,
                   ),
               ],
             ),
@@ -547,11 +644,14 @@ class _AdminReportsScreenState extends State<AdminReportsScreen> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          _guideLine(AdminColors.statGreen, 'High (≥85%)', 'Auto approved, no admin review required.'),
+          _guideLine(AdminColors.statGreen, 'High (80–100%)',
+              'Accepted by the confidence policy.'),
           const SizedBox(height: 10),
-          _guideLine(AdminColors.statYellow, 'Medium (60%–84%)', 'Requires admin review.'),
+          _guideLine(AdminColors.statYellow, 'Medium (20–79%)',
+              'Requires expert verification.'),
           const SizedBox(height: 10),
-          _guideLine(AdminColors.statRed, 'Low (<60%)', 'Automatically rejected.'),
+          _guideLine(AdminColors.statRed, 'Low (<20%)',
+              'Retake or rejection required.'),
         ],
       ),
     );
@@ -563,13 +663,14 @@ class _AdminReportsScreenState extends State<AdminReportsScreen> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          _guideLine(AdminColors.statGreen, 'Auto Approved', 'Meets high confidence; no manual review needed.'),
+          _guideLine(AdminColors.statGreen, 'Accepted',
+              'Meets policy or was verified by an expert.'),
           const SizedBox(height: 10),
-          _guideLine(AdminColors.statYellow, 'For Review', 'Queued for administrator decision.'),
+          _guideLine(AdminColors.statYellow, 'Under Review',
+              'Queued for expert verification.'),
           const SizedBox(height: 10),
-          _guideLine(AdminColors.statRed, 'Rejected', 'Did not meet minimum confidence or policy.'),
-          const SizedBox(height: 10),
-          _guideLine(const Color(0xFF00897B), 'Completed', 'Review finished; report archived or closed.'),
+          _guideLine(AdminColors.statRed, 'Rejected',
+              'Did not meet minimum confidence or policy.'),
         ],
       ),
     );
@@ -583,7 +684,10 @@ class _AdminReportsScreenState extends State<AdminReportsScreen> {
         borderRadius: BorderRadius.circular(14),
         border: Border.all(color: AdminColors.statBlue.withValues(alpha: 0.2)),
         boxShadow: [
-          BoxShadow(color: Colors.black.withValues(alpha: 0.04), blurRadius: 12, offset: const Offset(0, 4)),
+          BoxShadow(
+              color: Colors.black.withValues(alpha: 0.04),
+              blurRadius: 12,
+              offset: const Offset(0, 4)),
         ],
       ),
       child: Column(
@@ -591,20 +695,28 @@ class _AdminReportsScreenState extends State<AdminReportsScreen> {
         children: [
           Row(
             children: [
-              Icon(Icons.info_outline_rounded, color: AdminColors.statBlue.withValues(alpha: 0.9)),
+              Icon(Icons.info_outline_rounded,
+                  color: AdminColors.statBlue.withValues(alpha: 0.9)),
               const SizedBox(width: 8),
-              const Text('System Notice', style: TextStyle(fontWeight: FontWeight.w900, fontSize: 14, color: AdminColors.headerTitle)),
+              const Text('System Notice',
+                  style: TextStyle(
+                      fontWeight: FontWeight.w900,
+                      fontSize: 14,
+                      color: AdminColors.headerTitle)),
             ],
           ),
           const SizedBox(height: 10),
           Text(
             'All types of reports are listed here. Only detection reports go through admin review based on confidence level.',
-            style: TextStyle(fontSize: 13, height: 1.45, color: AdminColors.headerTitle.withValues(alpha: 0.88)),
+            style: TextStyle(
+                fontSize: 13,
+                height: 1.45,
+                color: AdminColors.headerTitle.withValues(alpha: 0.88)),
           ),
           const SizedBox(height: 12),
-          _bullet('High (≥85%) → Auto Approved'),
-          _bullet('Medium (60%–84%) → For Admin Review'),
-          _bullet('Low (<60%) → Rejected'),
+          _bullet('High (80–100%) → Accepted'),
+          _bullet('Medium (20–79%) → Expert verification'),
+          _bullet('Low (<20%) → Retake or rejected'),
         ],
       ),
     );
@@ -616,8 +728,14 @@ class _AdminReportsScreenState extends State<AdminReportsScreen> {
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text('• ', style: TextStyle(fontWeight: FontWeight.w800, color: AdminColors.statBlue.withValues(alpha: 0.8))),
-          Expanded(child: Text(t, style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600))),
+          Text('• ',
+              style: TextStyle(
+                  fontWeight: FontWeight.w800,
+                  color: AdminColors.statBlue.withValues(alpha: 0.8))),
+          Expanded(
+              child: Text(t,
+                  style: const TextStyle(
+                      fontSize: 13, fontWeight: FontWeight.w600))),
         ],
       ),
     );
@@ -629,16 +747,27 @@ class _AdminReportsScreenState extends State<AdminReportsScreen> {
       children: [
         Padding(
           padding: const EdgeInsets.only(top: 4),
-          child: Container(width: 10, height: 10, decoration: BoxDecoration(color: dot, shape: BoxShape.circle)),
+          child: Container(
+              width: 10,
+              height: 10,
+              decoration: BoxDecoration(color: dot, shape: BoxShape.circle)),
         ),
         const SizedBox(width: 10),
         Expanded(
           child: RichText(
             text: TextSpan(
-              style: TextStyle(fontSize: 13, height: 1.4, color: AdminColors.headerTitle.withValues(alpha: 0.88), decoration: TextDecoration.none),
+              style: TextStyle(
+                  fontSize: 13,
+                  height: 1.4,
+                  color: AdminColors.headerTitle.withValues(alpha: 0.88),
+                  decoration: TextDecoration.none),
               children: [
-                TextSpan(text: '$title — ', style: const TextStyle(fontWeight: FontWeight.w900)),
-                TextSpan(text: text, style: const TextStyle(fontWeight: FontWeight.w500)),
+                TextSpan(
+                    text: '$title — ',
+                    style: const TextStyle(fontWeight: FontWeight.w900)),
+                TextSpan(
+                    text: text,
+                    style: const TextStyle(fontWeight: FontWeight.w500)),
               ],
             ),
           ),
@@ -652,7 +781,11 @@ class _AdminReportsScreenState extends State<AdminReportsScreen> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(title, style: const TextStyle(fontWeight: FontWeight.w900, fontSize: 15, color: AdminColors.headerTitle)),
+          Text(title,
+              style: const TextStyle(
+                  fontWeight: FontWeight.w900,
+                  fontSize: 15,
+                  color: AdminColors.headerTitle)),
           const SizedBox(height: 12),
           child,
         ],
@@ -667,124 +800,28 @@ class _AdminReportsScreenState extends State<AdminReportsScreen> {
         color: Colors.white,
         borderRadius: BorderRadius.circular(14),
         boxShadow: [
-          BoxShadow(color: Colors.black.withValues(alpha: 0.06), blurRadius: 18, offset: const Offset(0, 6)),
+          BoxShadow(
+              color: Colors.black.withValues(alpha: 0.06),
+              blurRadius: 18,
+              offset: const Offset(0, 6)),
         ],
       ),
       child: child,
     );
   }
 
-  String _zoneLongLabel(String zone) {
-    final tail = switch (zone) {
-      'Zone A' => 'North Reef',
-      'Zone B' => 'South Reef',
-      'Zone C' => 'East Ridge',
-      'Zone D' => 'West Shelf',
-      'Zone E' => 'Central Basin',
-      _ => 'Survey Area',
-    };
-    return '$zone — $tail';
-  }
-
-  int _cotsCountFor(_ReportRow r) {
-    return switch (r.id) {
-      'RPT-00024' => 42,
-      'RPT-00023' => 31,
-      _ => r.type == _ReportType.cotsDetection ? r.confidencePct.clamp(3, 85) : 0,
-    };
-  }
-
-  (String date, String time) _detectedDateTime(_ReportRow r) {
-    final parts = r.submittedOn.trim().split(RegExp(r'\s+')).where((e) => e.isNotEmpty).toList();
-    if (parts.length < 4) return (r.submittedOn, '');
-    final time = '${parts[parts.length - 2]} ${parts[parts.length - 1]}';
-    final date = parts.sublist(0, parts.length - 2).join(' ');
-    if (r.id == 'RPT-00024') return (date, '9:28 AM');
-    return (date, time);
-  }
-
-  AdminReportModalData _modalDataFromRow(_ReportRow r) {
-    final st = _statusOf(r);
-    final cots = _cotsCountFor(r);
-    final (detDate, detTime) = _detectedDateTime(r);
-    final depth = switch (r.zone) {
-      'Zone A' => '5–8 meters',
-      'Zone B' => '5–7 meters',
-      _ => '4–9 meters',
-    };
-    final notes = switch (r.id) {
-      'RPT-00024' => 'Multiple COTS observed on the reef flat area. Recommend continuous monitoring.',
-      'RPT-00023' => 'Multiple COTS observed on the reef flat and near coral clusters.',
-      _ => r.reviewDetails,
-    };
-    return AdminReportModalData(
-      id: r.id,
-      typeLabel: r.typeLabel,
-      typeColor: r.type.color,
-      submittedBy: r.submittedBy,
-      zoneShort: r.zone,
-      zoneLong: _zoneLongLabel(r.zone),
-      submittedOn: r.submittedOn,
-      confidencePct: r.confidencePct,
-      statusLabel: st.label,
-      isForReview: st == _RepStatus.forReview,
-      cotsCount: cots,
-      reviewDetailsLine: _reviewOf(r),
-      detectionMethod: 'Machine Learning Detection',
-      gpsCoordinates: '14.1956° N, 120.5952° E',
-      detectedDate: detDate,
-      detectedTime: detTime,
-      recordedRole: 'Field User',
-      waterVisibility: 'Good (>10m)',
-      weather: 'Sunny',
-      depthRange: depth,
-      notes: notes,
-      imageUrls: _mockReportImages,
-      falsePositives: 0,
-      otherMarine: 0,
-      totalAreaM2: r.id == 'RPT-00023' ? 1280 : 1250,
+  Future<void> _openReportForRow(_ReportRow report) async {
+    await Navigator.of(context).push<AdminRecordTableRow?>(
+      MaterialPageRoute<AdminRecordTableRow?>(
+        builder: (_) => AdminRecordDetailsScreen(row: report.source),
+      ),
     );
-  }
-
-  /// Row / ID / View: review workflow for [For Review], read-only details otherwise.
-  void _openReportForRow(_ReportRow r) {
-    if (_statusOf(r) == _RepStatus.forReview) {
-      _openReviewModal(r);
-    } else {
-      Navigator.of(context).push<void>(
-        MaterialPageRoute<void>(
-          builder: (_) => AdminReportDetailsScreen(data: _modalDataFromRow(r)),
-        ),
-      );
-    }
-  }
-
-  Future<void> _openReviewModal(_ReportRow r) async {
-    final data = _modalDataFromRow(r).copyWith(
-      statusLabel: 'For Review',
-      isForReview: true,
-    );
-    final outcome = await showReviewDetectionReportDialog(context, data);
-    if (!mounted) return;
-    if (outcome == ReportReviewOutcome.approved) {
-      setState(() {
-        _statusOverrides[r.id] = _RepStatus.autoApproved;
-        _reviewOverrides[r.id] = 'Auto-approved after admin review. Mock alert entry created.';
-      });
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('${r.id} marked Auto Approved. Mock alert added.')),
-      );
-    } else if (outcome == ReportReviewOutcome.rejected) {
-      setState(() {
-        _statusOverrides[r.id] = _RepStatus.rejected;
-        _reviewOverrides[r.id] = 'Rejected by administrator.';
-      });
-    }
   }
 }
 
 class _StatSpec {
-  const _StatSpec(this.index, this.icon, this.title, this.value, this.subtitle, this.color);
+  const _StatSpec(
+      this.index, this.icon, this.title, this.value, this.subtitle, this.color);
   final int index;
   final IconData icon;
   final String title;
@@ -794,7 +831,8 @@ class _StatSpec {
 }
 
 class _StatCard extends StatefulWidget {
-  const _StatCard({required this.spec, required this.selected, required this.onTap});
+  const _StatCard(
+      {required this.spec, required this.selected, required this.onTap});
   final _StatSpec spec;
   final bool selected;
   final VoidCallback onTap;
@@ -823,97 +861,166 @@ class _StatCardState extends State<_StatCard> {
             borderRadius: BorderRadius.circular(14),
             hoverColor: accent.withValues(alpha: 0.06),
             child: AnimatedContainer(
-            duration: const Duration(milliseconds: 180),
-            padding: const EdgeInsets.all(16),
-            decoration: BoxDecoration(
-              color: widget.selected ? accent.withValues(alpha: 0.06) : Colors.white,
-              borderRadius: BorderRadius.circular(14),
-              border: Border.all(
-                color: widget.selected ? accent.withValues(alpha: 0.55) : Colors.black.withValues(alpha: _hover ? 0.1 : 0.06),
-                width: widget.selected ? 2 : 1,
-              ),
-              boxShadow: [
-                BoxShadow(
-                  color: Colors.black.withValues(alpha: _hover || widget.selected ? 0.1 : 0.06),
-                  blurRadius: _hover || widget.selected ? 22 : 16,
-                  offset: Offset(0, _hover || widget.selected ? 8 : 5),
+              duration: const Duration(milliseconds: 180),
+              padding: const EdgeInsets.all(16),
+              decoration: BoxDecoration(
+                color: widget.selected
+                    ? accent.withValues(alpha: 0.06)
+                    : Colors.white,
+                borderRadius: BorderRadius.circular(14),
+                border: Border.all(
+                  color: widget.selected
+                      ? accent.withValues(alpha: 0.55)
+                      : Colors.black.withValues(alpha: _hover ? 0.1 : 0.06),
+                  width: widget.selected ? 2 : 1,
                 ),
-              ],
-            ),
-            child: Row(
-              children: [
-                Container(
-                  width: 46,
-                  height: 46,
-                  decoration: BoxDecoration(color: accent.withValues(alpha: 0.12), borderRadius: BorderRadius.circular(12)),
-                  child: Icon(s.icon, color: accent, size: 24),
-                ),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(s.title, style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 12, color: AdminColors.headerTitle)),
-                      Text(s.value, style: const TextStyle(fontWeight: FontWeight.w900, fontSize: 24, color: AdminColors.headerTitle)),
-                      Text(s.subtitle, style: TextStyle(fontSize: 11, color: AdminColors.muted.withValues(alpha: 0.9))),
-                    ],
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.black.withValues(
+                        alpha: _hover || widget.selected ? 0.1 : 0.06),
+                    blurRadius: _hover || widget.selected ? 22 : 16,
+                    offset: Offset(0, _hover || widget.selected ? 8 : 5),
                   ),
-                ),
-              ],
+                ],
+              ),
+              child: Row(
+                children: [
+                  Container(
+                    width: 46,
+                    height: 46,
+                    decoration: BoxDecoration(
+                        color: accent.withValues(alpha: 0.12),
+                        borderRadius: BorderRadius.circular(12)),
+                    child: Icon(s.icon, color: accent, size: 24),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(s.title,
+                            style: const TextStyle(
+                                fontWeight: FontWeight.w800,
+                                fontSize: 12,
+                                color: AdminColors.headerTitle)),
+                        Text(s.value,
+                            style: const TextStyle(
+                                fontWeight: FontWeight.w900,
+                                fontSize: 24,
+                                color: AdminColors.headerTitle)),
+                        Text(s.subtitle,
+                            style: TextStyle(
+                                fontSize: 11,
+                                color:
+                                    AdminColors.muted.withValues(alpha: 0.9))),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
             ),
           ),
-        ),
         ),
       ),
     );
   }
 }
 
-enum _ReportType { cotsDetection, citizenRemoval, outbreakAlert, zoneActivity }
+enum _ReportType { cotsDetection, citizenRemoval, followUp }
 
 extension on _ReportType {
   String get label => switch (this) {
         _ReportType.cotsDetection => 'COTS Detection',
         _ReportType.citizenRemoval => 'Citizen Removal Record',
-        _ReportType.outbreakAlert => 'Outbreak Alert',
-        _ReportType.zoneActivity => 'Zone Activity',
+        _ReportType.followUp => 'Follow-up Monitoring',
       };
 
   IconData get icon => switch (this) {
         _ReportType.cotsDetection => Icons.biotech_outlined,
         _ReportType.citizenRemoval => Icons.cleaning_services_outlined,
-        _ReportType.outbreakAlert => Icons.warning_amber_rounded,
-        _ReportType.zoneActivity => Icons.grid_view_rounded,
+        _ReportType.followUp => Icons.refresh_rounded,
       };
 
   Color get color => switch (this) {
         _ReportType.cotsDetection => AdminColors.statBlue,
         _ReportType.citizenRemoval => AdminColors.statGreen,
-        _ReportType.outbreakAlert => AdminColors.statYellow,
-        _ReportType.zoneActivity => AdminColors.statPurple,
+        _ReportType.followUp => AdminColors.statPurple,
       };
 }
 
-enum _RepStatus { autoApproved, forReview, rejected, completed }
+enum _RepStatus { autoApproved, forReview, rejected }
 
 extension on _RepStatus {
   String get label => switch (this) {
-        _RepStatus.autoApproved => 'Auto Approved',
-        _RepStatus.forReview => 'For Review',
+        _RepStatus.autoApproved => 'Accepted',
+        _RepStatus.forReview => 'Under Review',
         _RepStatus.rejected => 'Rejected',
-        _RepStatus.completed => 'Completed',
       };
 
   (Color fg, Color bg) get colors => switch (this) {
-        _RepStatus.autoApproved => (AdminColors.statGreen, AdminColors.statGreen.withValues(alpha: 0.14)),
-        _RepStatus.forReview => (const Color(0xFFE65100), const Color(0xFFFFF3E0)),
-        _RepStatus.rejected => (AdminColors.statRed, AdminColors.statRed.withValues(alpha: 0.12)),
-        _RepStatus.completed => (const Color(0xFF00897B), const Color(0xFFE0F2F1)),
+        _RepStatus.autoApproved => (
+            AdminColors.statGreen,
+            AdminColors.statGreen.withValues(alpha: 0.14)
+          ),
+        _RepStatus.forReview => (
+            const Color(0xFFE65100),
+            const Color(0xFFFFF3E0)
+          ),
+        _RepStatus.rejected => (
+            AdminColors.statRed,
+            AdminColors.statRed.withValues(alpha: 0.12)
+          ),
       };
 }
 
 class _ReportRow {
-  const _ReportRow(this.id, this.type, this.submittedBy, this.zone, this.submittedOn, this.confidencePct, this.status, this.reviewDetails);
+  const _ReportRow(
+    this.id,
+    this.type,
+    this.submittedBy,
+    this.zone,
+    this.submittedOn,
+    this.confidencePct,
+    this.status,
+    this.reviewDetails,
+    this.cotsCount,
+    this.source,
+  );
+
+  factory _ReportRow.fromRecord(AdminRecordTableRow record) {
+    final activity = record.activityType.toLowerCase();
+    final type = activity.contains('follow')
+        ? _ReportType.followUp
+        : activity.contains('removal') || record.removedQuantity != null
+            ? _ReportType.citizenRemoval
+            : _ReportType.cotsDetection;
+    final status = switch (record.displayStatusLabel) {
+      'Rejected' => _RepStatus.rejected,
+      'Under Review' => _RepStatus.forReview,
+      _ => _RepStatus.autoApproved,
+    };
+    final review = switch (status) {
+      _RepStatus.rejected =>
+        'Rejected by an expert or below the retake threshold.',
+      _RepStatus.forReview => 'Waiting for expert verification.',
+      _RepStatus.autoApproved => record.adminConfirmed
+          ? 'Verified by an expert.'
+          : 'Accepted by the confidence policy.',
+    };
+    return _ReportRow(
+      record.recordId,
+      type,
+      record.submittedBy,
+      record.zone,
+      record.dateUploaded.isNotEmpty ? record.dateUploaded : record.dateTime,
+      record.confidencePercent,
+      status,
+      review,
+      record.displayAiCount,
+      record,
+    );
+  }
+
   final String id;
   final _ReportType type;
   final String submittedBy;
@@ -922,18 +1029,20 @@ class _ReportRow {
   final int confidencePct;
   final _RepStatus status;
   final String reviewDetails;
+  final int cotsCount;
+  final AdminRecordTableRow source;
 
   String get typeLabel => type.label;
 
   String get confidenceBand {
-    if (confidencePct >= 85) return 'High';
-    if (confidencePct >= 60) return 'Medium';
+    if (confidencePct >= 80) return 'High';
+    if (confidencePct >= 20) return 'Medium';
     return 'Low';
   }
 
   Color get confidenceColor {
-    if (confidencePct >= 85) return AdminColors.statGreen;
-    if (confidencePct >= 60) return AdminColors.statYellow;
+    if (confidencePct >= 80) return AdminColors.statGreen;
+    if (confidencePct >= 20) return AdminColors.statYellow;
     return AdminColors.statRed;
   }
 }
@@ -955,7 +1064,16 @@ abstract final class _ReportTableDim {
   static const double menu = 44;
 
   static double get totalWidth =>
-      reportId + type + submittedBy + zone + submittedOn + confidence + status + reviewDetails + actions + menu;
+      reportId +
+      type +
+      submittedBy +
+      zone +
+      submittedOn +
+      confidence +
+      status +
+      reviewDetails +
+      actions +
+      menu;
 
   static Map<int, TableColumnWidth> get columnWidths => {
         0: const FixedColumnWidth(reportId),
@@ -1018,7 +1136,8 @@ class _TableHeader extends StatelessWidget {
           padding: _ReportTableDim.cellPadding,
           child: Align(
             alignment: _alignFromTextAlign(align),
-            child: Text(label, textAlign: align, style: _ReportTableDim.headerTextStyle),
+            child: Text(label,
+                textAlign: align, style: _ReportTableDim.headerTextStyle),
           ),
         ),
       ),
@@ -1093,159 +1212,178 @@ class _ReportTableRowState extends State<_ReportTableRow> {
                 duration: const Duration(milliseconds: 160),
                 curve: Curves.easeOutCubic,
                 decoration: BoxDecoration(
-                color: _hover ? const Color(0xFFF8FBFF) : Colors.white,
-                borderRadius: BorderRadius.circular(10),
-                border: Border.all(color: Colors.black.withValues(alpha: _hover ? 0.1 : 0.06)),
-                boxShadow: [
-                  BoxShadow(
-                    color: Colors.black.withValues(alpha: 0.05),
-                    blurRadius: 10,
-                    offset: const Offset(0, 2),
-                  ),
-                ],
-              ),
-              child: Table(
-                columnWidths: _ReportTableDim.columnWidths,
-                defaultVerticalAlignment: TableCellVerticalAlignment.middle,
-                children: [
-                  TableRow(
-                    children: [
-                      _bodyCell(
-                        Row(
-                          children: [
-                            Container(
-                              width: 28,
-                              height: 28,
-                              decoration: BoxDecoration(
-                                color: const Color(0xFFE8EEF5),
-                                borderRadius: BorderRadius.circular(6),
+                  color: _hover ? const Color(0xFFF8FBFF) : Colors.white,
+                  borderRadius: BorderRadius.circular(10),
+                  border: Border.all(
+                      color:
+                          Colors.black.withValues(alpha: _hover ? 0.1 : 0.06)),
+                  boxShadow: [
+                    BoxShadow(
+                      color: Colors.black.withValues(alpha: 0.05),
+                      blurRadius: 10,
+                      offset: const Offset(0, 2),
+                    ),
+                  ],
+                ),
+                child: Table(
+                  columnWidths: _ReportTableDim.columnWidths,
+                  defaultVerticalAlignment: TableCellVerticalAlignment.middle,
+                  children: [
+                    TableRow(
+                      children: [
+                        _bodyCell(
+                          Row(
+                            children: [
+                              Container(
+                                width: 28,
+                                height: 28,
+                                decoration: BoxDecoration(
+                                  color: const Color(0xFFE8EEF5),
+                                  borderRadius: BorderRadius.circular(6),
+                                ),
+                                child: const Icon(Icons.image_outlined,
+                                    size: 16, color: AdminColors.statBlue),
                               ),
-                              child: const Icon(Icons.image_outlined, size: 16, color: AdminColors.statBlue),
-                            ),
-                            const SizedBox(width: 8),
-                            Expanded(
-                              child: InkWell(
-                                onTap: widget.onOpenDetails,
-                                child: Text(
-                                  r.id,
-                                  maxLines: 1,
-                                  overflow: TextOverflow.ellipsis,
-                                  style: const TextStyle(
-                                    fontWeight: FontWeight.w900,
-                                    fontSize: 12,
-                                    color: AdminColors.statBlue,
-                                    decoration: TextDecoration.underline,
-                                    decorationColor: AdminColors.statBlue,
+                              const SizedBox(width: 8),
+                              Expanded(
+                                child: InkWell(
+                                  onTap: widget.onOpenDetails,
+                                  child: Text(
+                                    r.id,
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
+                                    style: const TextStyle(
+                                      fontWeight: FontWeight.w900,
+                                      fontSize: 12,
+                                      color: AdminColors.statBlue,
+                                      decoration: TextDecoration.underline,
+                                      decorationColor: AdminColors.statBlue,
+                                    ),
                                   ),
                                 ),
                               ),
-                            ),
-                          ],
+                            ],
+                          ),
+                          align: Alignment.centerLeft,
                         ),
-                        align: Alignment.centerLeft,
-                      ),
-                      _bodyCell(
-                        Row(
-                          children: [
-                            Icon(r.type.icon, size: 18, color: r.type.color),
-                            const SizedBox(width: 6),
-                            Expanded(
-                              child: Text(
-                                r.typeLabel,
-                                maxLines: 1,
-                                overflow: TextOverflow.ellipsis,
-                                style: TextStyle(fontWeight: FontWeight.w800, fontSize: 12, color: r.type.color),
-                              ),
-                            ),
-                          ],
-                        ),
-                        align: Alignment.centerLeft,
-                      ),
-                      _bodyCell(
-                        Text(
-                          r.submittedBy,
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          style: const TextStyle(fontSize: 12.5, fontWeight: FontWeight.w600),
-                        ),
-                        align: Alignment.centerLeft,
-                      ),
-                      _bodyCell(
-                        _badge(r.zone, _zoneColor(r.zone), _zoneColor(r.zone).withValues(alpha: 0.12)),
-                        align: Alignment.centerLeft,
-                      ),
-                      _bodyCell(
-                        Text(
-                          r.submittedOn,
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          style: AdminDateTimeTokens.inlineDateTimeTextStyle(secondary: true),
-                        ),
-                        align: Alignment.centerLeft,
-                      ),
-                      _bodyCell(
-                        _badge('${r.confidencePct}% ${r.confidenceBand}', r.confidenceColor, r.confidenceColor.withValues(alpha: 0.13)),
-                        align: Alignment.centerLeft,
-                      ),
-                      _bodyCell(
-                        _badge(disp.label, st.$1, st.$2),
-                        align: Alignment.centerLeft,
-                      ),
-                      _bodyCell(
-                        Text(
-                          widget.displayReview,
-                          maxLines: 2,
-                          overflow: TextOverflow.ellipsis,
-                          style: TextStyle(fontSize: 12, height: 1.3, color: AdminColors.headerTitle.withValues(alpha: 0.88)),
-                        ),
-                        align: Alignment.centerLeft,
-                      ),
-                      _bodyCell(
-                        Row(
-                          mainAxisAlignment: MainAxisAlignment.end,
-                          mainAxisSize: MainAxisSize.max,
-                          children: [
-                            TextButton(
-                              onPressed: widget.onOpenDetails,
-                              style: TextButton.styleFrom(
-                                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                                minimumSize: Size.zero,
-                                tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                              ),
-                              child: const Text('View', style: TextStyle(fontWeight: FontWeight.w800, fontSize: 11.5)),
-                            ),
-                            if (widget.onReview != null)
-                              TextButton(
-                                onPressed: widget.onReview,
-                                style: TextButton.styleFrom(
-                                  foregroundColor: const Color(0xFFE65100),
-                                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                                  minimumSize: Size.zero,
-                                  tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                        _bodyCell(
+                          Row(
+                            children: [
+                              Icon(r.type.icon, size: 18, color: r.type.color),
+                              const SizedBox(width: 6),
+                              Expanded(
+                                child: Text(
+                                  r.typeLabel,
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                  style: TextStyle(
+                                      fontWeight: FontWeight.w800,
+                                      fontSize: 12,
+                                      color: r.type.color),
                                 ),
-                                child: const Text('Review', style: TextStyle(fontWeight: FontWeight.w800, fontSize: 11.5)),
                               ),
-                          ],
+                            ],
+                          ),
+                          align: Alignment.centerLeft,
                         ),
-                        align: Alignment.centerRight,
-                      ),
-                      _bodyCell(
-                        IconButton(
-                          padding: EdgeInsets.zero,
-                          constraints: const BoxConstraints(minWidth: 36, minHeight: 36),
-                          onPressed: () {},
-                          icon: Icon(Icons.more_vert_rounded, size: 20, color: AdminColors.muted.withValues(alpha: 0.85)),
+                        _bodyCell(
+                          Text(
+                            r.submittedBy,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: const TextStyle(
+                                fontSize: 12.5, fontWeight: FontWeight.w600),
+                          ),
+                          align: Alignment.centerLeft,
                         ),
-                        align: Alignment.center,
-                      ),
-                    ],
-                  ),
-                ],
+                        _bodyCell(
+                          _badge(r.zone, _zoneColor(r.zone),
+                              _zoneColor(r.zone).withValues(alpha: 0.12)),
+                          align: Alignment.centerLeft,
+                        ),
+                        _bodyCell(
+                          Text(
+                            r.submittedOn,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: AdminDateTimeTokens.inlineDateTimeTextStyle(
+                                secondary: true),
+                          ),
+                          align: Alignment.centerLeft,
+                        ),
+                        _bodyCell(
+                          _badge(
+                              '${r.confidencePct}% ${r.confidenceBand}',
+                              r.confidenceColor,
+                              r.confidenceColor.withValues(alpha: 0.13)),
+                          align: Alignment.centerLeft,
+                        ),
+                        _bodyCell(
+                          _badge(disp.label, st.$1, st.$2),
+                          align: Alignment.centerLeft,
+                        ),
+                        _bodyCell(
+                          Text(
+                            widget.displayReview,
+                            maxLines: 2,
+                            overflow: TextOverflow.ellipsis,
+                            style: TextStyle(
+                                fontSize: 12,
+                                height: 1.3,
+                                color: AdminColors.headerTitle
+                                    .withValues(alpha: 0.88)),
+                          ),
+                          align: Alignment.centerLeft,
+                        ),
+                        _bodyCell(
+                          Row(
+                            mainAxisAlignment: MainAxisAlignment.end,
+                            mainAxisSize: MainAxisSize.max,
+                            children: [
+                              TextButton(
+                                onPressed:
+                                    widget.onReview ?? widget.onOpenDetails,
+                                style: TextButton.styleFrom(
+                                  foregroundColor: widget.onReview != null
+                                      ? const Color(0xFFE65100)
+                                      : null,
+                                  padding: const EdgeInsets.symmetric(
+                                      horizontal: 8, vertical: 4),
+                                  minimumSize: Size.zero,
+                                  tapTargetSize:
+                                      MaterialTapTargetSize.shrinkWrap,
+                                ),
+                                child: Text(
+                                    widget.onReview != null ? 'Review' : 'View',
+                                    style: const TextStyle(
+                                        fontWeight: FontWeight.w800,
+                                        fontSize: 11.5)),
+                              ),
+                            ],
+                          ),
+                          align: Alignment.centerRight,
+                        ),
+                        _bodyCell(
+                          IconButton(
+                            padding: EdgeInsets.zero,
+                            constraints: const BoxConstraints(
+                                minWidth: 36, minHeight: 36),
+                            onPressed: () {},
+                            icon: Icon(Icons.more_vert_rounded,
+                                size: 20,
+                                color:
+                                    AdminColors.muted.withValues(alpha: 0.85)),
+                          ),
+                          align: Alignment.center,
+                        ),
+                      ],
+                    ),
+                  ],
+                ),
               ),
             ),
           ),
         ),
-      ),
       ),
     );
   }
@@ -1263,6 +1401,7 @@ class _ReportTableRowState extends State<_ReportTableRow> {
   }
 
   Widget _badge(String text, Color fg, Color bg) {
-    return AdminDataTableBadge(label: text, foreground: fg, background: bg, centerInCell: false);
+    return AdminDataTableBadge(
+        label: text, foreground: fg, background: bg, centerInCell: false);
   }
 }
