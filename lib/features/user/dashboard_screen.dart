@@ -3,15 +3,16 @@ import 'dart:ui' as ui;
 
 import 'package:fl_chart/fl_chart.dart';
 import 'package:flutter/material.dart';
-import 'package:flutter_map/flutter_map.dart';
 import 'package:intl/intl.dart';
-import 'package:latlong2/latlong.dart';
 import 'package:provider/provider.dart';
 
 import '../../core/cots_colors.dart';
 import '../../models/activity_type.dart';
 import '../../models/intervention_assignment_model.dart';
 import '../../models/scan_record_model.dart';
+import '../../models/monitoring_analytics.dart';
+import '../../widgets/monitoring_record_map.dart';
+import '../../widgets/cots_loading_skeleton.dart';
 import '../../providers/auth_provider.dart';
 import '../../services/intervention_assignment_repository.dart';
 import '../../services/scan_record_repository.dart';
@@ -26,7 +27,8 @@ import 'user_bottom_nav.dart';
 import 'user_dashboard_analytics.dart';
 
 class DashboardScreen extends StatelessWidget {
-  const DashboardScreen({super.key});
+  const DashboardScreen({super.key, this.recordsStream});
+  final Stream<List<ScanRecordModel>>? recordsStream;
 
   static const _bg = Color(0xFFF4F6F9);
   static const _horizontalPad = 16.0;
@@ -40,7 +42,8 @@ class DashboardScreen extends StatelessWidget {
           backgroundColor: _bg,
           extendBody: true,
           floatingActionButton: userShellScanFab(context),
-          floatingActionButtonLocation: FloatingActionButtonLocation.centerDocked,
+          floatingActionButtonLocation:
+              FloatingActionButtonLocation.centerDocked,
           bottomNavigationBar: showSidebar
               ? null
               : UserBottomNavBar(
@@ -52,12 +55,15 @@ class DashboardScreen extends StatelessWidget {
           body: SafeArea(
             bottom: false,
             child: StreamBuilder<List<ScanRecordModel>>(
-              stream: ScanRecordRepository.watchAll(),
+              stream: recordsStream ?? ScanRecordRepository.watchAll(),
               builder: (context, snapshot) {
                 if (snapshot.connectionState == ConnectionState.waiting &&
                     !snapshot.hasData) {
-                  return const Center(
-                    child: CircularProgressIndicator(color: kPrimaryTeal),
+                  return SingleChildScrollView(
+                    padding: EdgeInsets.fromLTRB(_horizontalPad, 8,
+                        _horizontalPad, showSidebar ? 28 : 100),
+                    child: const CotsLoadingSkeleton(
+                        layout: CotsSkeletonLayout.dashboard),
                   );
                 }
                 if (snapshot.hasError) {
@@ -74,9 +80,7 @@ class DashboardScreen extends StatelessWidget {
                 }
 
                 final records = snapshot.data ?? [];
-                final analytics = records.isEmpty
-                    ? UserDashboardAnalytics.sample()
-                    : UserDashboardAnalytics.fromRecords(records);
+                final analytics = UserDashboardAnalytics.fromRecords(records);
 
                 return SingleChildScrollView(
                   padding: EdgeInsets.fromLTRB(
@@ -164,7 +168,7 @@ class DashboardScreen extends StatelessWidget {
   void _openAnalytics(BuildContext context, UserDashboardAnalytics analytics) {
     Navigator.of(context).push<void>(
       MaterialPageRoute<void>(
-        builder: (_) => UserAnalyticsOverviewPage(initialAnalytics: analytics),
+        builder: (_) => const UserAnalyticsOverviewPage(),
       ),
     );
   }
@@ -182,6 +186,15 @@ class _AssignedTasksSection extends StatelessWidget {
       stream: InterventionAssignmentRepository.watchForAssignee(user.uid),
       builder: (context, snapshot) {
         if (snapshot.hasError) return const SizedBox.shrink();
+        if (snapshot.connectionState == ConnectionState.waiting &&
+            !snapshot.hasData) {
+          return const Padding(
+            padding: EdgeInsets.only(top: 18),
+            child: CotsLoadingSkeleton(
+                layout: CotsSkeletonLayout.section,
+                label: 'Loading assigned tasks'),
+          );
+        }
         final tasks = (snapshot.data ?? const [])
             .where((task) => !task.isCleared)
             .toList();
@@ -363,7 +376,8 @@ class _DiverSidebarMenu extends StatelessWidget {
                   icon: Icons.map_outlined,
                   label: 'GIS Mapping',
                   onTap: () => Navigator.of(context).push(
-                    MaterialPageRoute<void>(builder: (_) => const CotsMapPage()),
+                    MaterialPageRoute<void>(
+                        builder: (_) => const CotsMapPage()),
                   ),
                 ),
                 _sideItem(
@@ -388,7 +402,8 @@ class _DiverSidebarMenu extends StatelessWidget {
                   icon: Icons.folder_outlined,
                   label: 'Records',
                   onTap: () => Navigator.of(context).push(
-                    MaterialPageRoute<void>(builder: (_) => const RecordsPage()),
+                    MaterialPageRoute<void>(
+                        builder: (_) => const RecordsPage()),
                   ),
                 ),
                 _sideItem(
@@ -396,7 +411,8 @@ class _DiverSidebarMenu extends StatelessWidget {
                   icon: Icons.person_outline_rounded,
                   label: 'Profile / Settings',
                   onTap: () => Navigator.of(context).push(
-                    MaterialPageRoute<void>(builder: (_) => const ProfilePage()),
+                    MaterialPageRoute<void>(
+                        builder: (_) => const ProfilePage()),
                   ),
                 ),
               ],
@@ -434,7 +450,8 @@ class _DiverSidebarMenu extends StatelessWidget {
                   child: Text(
                     label,
                     style: TextStyle(
-                      color: Colors.white.withValues(alpha: selected ? 1 : 0.88),
+                      color:
+                          Colors.white.withValues(alpha: selected ? 1 : 0.88),
                       fontWeight: selected ? FontWeight.w800 : FontWeight.w600,
                       fontSize: 13,
                     ),
@@ -456,8 +473,7 @@ class _RecentMonitoringActivities extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final recent = [...records]
-      ..sort((a, b) {
+    final recent = [...records]..sort((a, b) {
         final ad = a.submittedAt ?? a.dateTaken ?? DateTime(1970);
         final bd = b.submittedAt ?? b.dateTaken ?? DateTime(1970);
         return bd.compareTo(ad);
@@ -505,9 +521,8 @@ class _RecentMonitoringActivities extends StatelessWidget {
 
   Widget _recentActivityRow(ScanRecordModel r) {
     final when = r.submittedAt ?? r.dateTaken;
-    final whenLabel = when == null
-        ? '—'
-        : DateFormat('MMM d, yyyy · h:mm a').format(when);
+    final whenLabel =
+        when == null ? '—' : DateFormat('MMM d, yyyy · h:mm a').format(when);
     final isRemoval = CotsActivityType.isRemoval(r.activityType);
     return Row(
       children: [
@@ -549,15 +564,16 @@ class _RecentMonitoringActivities extends StatelessWidget {
                   color: kMutedGray.withValues(alpha: 0.95),
                 ),
               ),
+              const SizedBox(height: 4),
+              Text(
+                whenLabel,
+                style: TextStyle(
+                  fontSize: 10.5,
+                  fontWeight: FontWeight.w600,
+                  color: kMutedGray.withValues(alpha: 0.9),
+                ),
+              ),
             ],
-          ),
-        ),
-        Text(
-          whenLabel,
-          style: TextStyle(
-            fontSize: 10.5,
-            fontWeight: FontWeight.w600,
-            color: kMutedGray.withValues(alpha: 0.9),
           ),
         ),
       ],
@@ -573,131 +589,141 @@ class _DashboardHeader extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final recordUpdated = analytics.isSampleData ? null : analytics.lastUpdated;
+    final recordUpdated = analytics.lastUpdated;
     final user = context.watch<AuthProvider>().userModel;
     final name = (user?.fullName.trim().isNotEmpty == true)
         ? user!.fullName.trim().split(' ').first
         : 'Diver';
 
-    return Row(
+    final title = Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Expanded(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                'Welcome, $name',
-                style: const TextStyle(
-                  fontSize: 14,
-                  fontWeight: FontWeight.w700,
-                  color: kSuccessGreen,
-                ),
-              ),
-              const SizedBox(height: 4),
-              const Text(
-                'Diver Dashboard',
-                style: TextStyle(
-                  fontSize: 26,
-                  fontWeight: FontWeight.w900,
-                  color: kTextNavy,
-                  letterSpacing: -0.5,
-                  height: 1.1,
-                ),
-              ),
-              const SizedBox(height: 2),
-              const Text(
-                'Crown-of-Thorns Starfish Monitoring',
-                style: TextStyle(
-                  fontSize: 12,
-                  fontWeight: FontWeight.w500,
-                  color: kMutedGray,
-                ),
-              ),
-            ],
+        Text(
+          'Welcome, $name',
+          style: const TextStyle(
+            fontSize: 14,
+            fontWeight: FontWeight.w700,
+            color: kSuccessGreen,
           ),
         ),
-        Column(
-          crossAxisAlignment: CrossAxisAlignment.end,
-          children: [
-            IconButton(
-              tooltip: 'Notifications',
-              padding: EdgeInsets.zero,
-              constraints: const BoxConstraints(minWidth: 36, minHeight: 36),
-              icon: const Icon(
-                Icons.notifications_outlined,
-                color: kTextNavy,
-                size: 22,
-              ),
-              onPressed: () {
-                Navigator.of(context).push<void>(
-                  MaterialPageRoute<void>(
-                    builder: (_) => const NotificationsScreen(),
-                  ),
-                );
-              },
-            ),
-            IconButton(
-              tooltip: 'Sign out',
-              padding: EdgeInsets.zero,
-              constraints: const BoxConstraints(minWidth: 36, minHeight: 36),
-              icon:
-                  const Icon(Icons.logout_rounded, color: kTextNavy, size: 22),
-              onPressed: () => confirmAndSignOut(context),
-            ),
-            const SizedBox(height: 4),
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
-              decoration: BoxDecoration(
-                color: Colors.white,
-                borderRadius: BorderRadius.circular(12),
-                border: Border.all(color: kBorderGray),
-                boxShadow: kSoftCardShadow,
-              ),
-              child: Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Icon(Icons.schedule_rounded,
-                      size: 14, color: kMutedGray.withValues(alpha: 0.9)),
-                  const SizedBox(width: 6),
-                  Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      const Text(
-                        'Current time',
-                        style: TextStyle(
-                          fontSize: 9,
-                          fontWeight: FontWeight.w700,
-                          color: kMutedGray,
-                        ),
-                      ),
-                      _LiveDateTimeText(
-                        style: const TextStyle(
-                          fontSize: 10,
-                          fontWeight: FontWeight.w700,
-                          color: kTextNavy,
-                        ),
-                      ),
-                      if (recordUpdated != null) ...[
-                        const SizedBox(height: 2),
-                        Text(
-                          'Latest record ${DateFormat('MMM d, h:mm a').format(recordUpdated)}',
-                          style: TextStyle(
-                            fontSize: 8.5,
-                            fontWeight: FontWeight.w600,
-                            color: kMutedGray.withValues(alpha: 0.9),
-                          ),
-                        ),
-                      ],
-                    ],
-                  ),
-                ],
-              ),
-            ),
-          ],
+        const SizedBox(height: 4),
+        const Text(
+          'Diver Dashboard',
+          style: TextStyle(
+            fontSize: 26,
+            fontWeight: FontWeight.w900,
+            color: kTextNavy,
+            letterSpacing: -0.5,
+            height: 1.1,
+          ),
+        ),
+        const SizedBox(height: 2),
+        const Text(
+          'Crown-of-Thorns Starfish Monitoring',
+          style: TextStyle(
+            fontSize: 12,
+            fontWeight: FontWeight.w500,
+            color: kMutedGray,
+          ),
         ),
       ],
     );
+    final controls = Column(
+      crossAxisAlignment: CrossAxisAlignment.end,
+      children: [
+        IconButton(
+          tooltip: 'Notifications',
+          padding: EdgeInsets.zero,
+          constraints: const BoxConstraints(minWidth: 36, minHeight: 36),
+          icon: const Icon(
+            Icons.notifications_outlined,
+            color: kTextNavy,
+            size: 22,
+          ),
+          onPressed: () {
+            Navigator.of(context).push<void>(
+              MaterialPageRoute<void>(
+                builder: (_) => const NotificationsScreen(),
+              ),
+            );
+          },
+        ),
+        IconButton(
+          tooltip: 'Sign out',
+          padding: EdgeInsets.zero,
+          constraints: const BoxConstraints(minWidth: 36, minHeight: 36),
+          icon: const Icon(Icons.logout_rounded, color: kTextNavy, size: 22),
+          onPressed: () => confirmAndSignOut(context),
+        ),
+        const SizedBox(height: 4),
+        Container(
+          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+          decoration: BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(12),
+            border: Border.all(color: kBorderGray),
+            boxShadow: kSoftCardShadow,
+          ),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(Icons.schedule_rounded,
+                  size: 14, color: kMutedGray.withValues(alpha: 0.9)),
+              const SizedBox(width: 6),
+              Flexible(
+                  child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Text(
+                    'Current time',
+                    style: TextStyle(
+                      fontSize: 9,
+                      fontWeight: FontWeight.w700,
+                      color: kMutedGray,
+                    ),
+                  ),
+                  const _LiveDateTimeText(
+                    style: TextStyle(
+                      fontSize: 10,
+                      fontWeight: FontWeight.w700,
+                      color: kTextNavy,
+                    ),
+                  ),
+                  if (recordUpdated != null) ...[
+                    const SizedBox(height: 2),
+                    Text(
+                      'Latest record ${DateFormat('MMM d, h:mm a').format(recordUpdated)}',
+                      style: TextStyle(
+                        fontSize: 8.5,
+                        fontWeight: FontWeight.w600,
+                        color: kMutedGray.withValues(alpha: 0.9),
+                      ),
+                    ),
+                  ],
+                ],
+              )),
+            ],
+          ),
+        ),
+      ],
+    );
+    return LayoutBuilder(builder: (context, constraints) {
+      if (constraints.maxWidth < 600 ||
+          MediaQuery.textScalerOf(context).scale(12) > 18) {
+        return Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              title,
+              const SizedBox(height: 12),
+              controls,
+            ]);
+      }
+      return Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        Expanded(child: title),
+        const SizedBox(width: 12),
+        Flexible(child: controls),
+      ]);
+    });
   }
 }
 
@@ -710,23 +736,11 @@ class _MetricsGrid extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final nf = NumberFormat.decimalPattern();
-    final pending = records
-        .where((r) =>
-            r.userStatusLabel == 'Requires Expert Validation' ||
-            r.userStatusLabel == 'Under Review')
-        .length;
-    final confirmed = records
-        .where((r) =>
-            r.adminConfirmed ||
-            r.userStatusLabel == 'Automatically Accepted' ||
-            r.userStatusLabel == 'Accepted')
-        .length;
-    final removed = records
-        .where((r) => CotsActivityType.isRemoval(r.activityType))
-        .length;
-    final captures = records
-        .where((r) => !CotsActivityType.isRemoval(r.activityType))
-        .length;
+    final data = MonitoringAnalytics.fromRecords(records);
+    final pending = data.pending;
+    final confirmed = data.accepted;
+    final removed = data.removalRecords.length;
+    final captures = data.captures.length;
 
     return LayoutBuilder(
       builder: (context, c) {
@@ -743,7 +757,7 @@ class _MetricsGrid extends StatelessWidget {
                     iconColor: kAccentPurple,
                     iconBg: kAccentPurple.withValues(alpha: 0.12),
                     title: 'Total Monitoring Captures',
-                    value: nf.format(captures > 0 ? captures : analytics.totalScans),
+                    value: nf.format(captures),
                     trendPct: analytics.scansTrendPct,
                     period: analytics.periodLabel,
                     sparkline: analytics.dailyTrendValues,
@@ -762,7 +776,7 @@ class _MetricsGrid extends StatelessWidget {
                     value: '$pending',
                     trendPct: null,
                     period: analytics.periodLabel,
-                    sparkline: analytics.dailyTrendValues.map((e) => e / 10).toList(),
+                    sparkline: const [],
                     sparkColor: const Color(0xFFE6A23C),
                     sparkType: _SparkType.dots,
                   ),
@@ -780,9 +794,9 @@ class _MetricsGrid extends StatelessWidget {
                     iconBg: kSuccessGreen.withValues(alpha: 0.12),
                     title: 'Confirmed Detections',
                     value: '$confirmed',
-                    trendPct: analytics.cotsTrendPct,
+                    trendPct: null,
                     period: analytics.periodLabel,
-                    sparkline: analytics.dailyTrendValues,
+                    sparkline: const [],
                     sparkColor: kSuccessGreen,
                     sparkType: _SparkType.line,
                   ),
@@ -794,11 +808,11 @@ class _MetricsGrid extends StatelessWidget {
                     icon: Icons.cleaning_services_outlined,
                     iconColor: kInfoBlue,
                     iconBg: kInfoBlue.withValues(alpha: 0.12),
-                    title: 'Removed Cases',
+                    title: 'Removal Activities',
                     value: '$removed',
-                    trendPct: analytics.clearedTrendPct,
+                    trendPct: null,
                     period: analytics.periodLabel,
-                    sparkline: const [1, 1, 2, 2, 3, 4, 5],
+                    sparkline: const [],
                     sparkColor: kInfoBlue,
                     sparkType: _SparkType.wave,
                   ),
@@ -826,7 +840,6 @@ class _MetricCard extends StatelessWidget {
     required this.sparkColor,
     required this.sparkType,
     this.trendPct,
-    this.badge,
   });
 
   final IconData icon;
@@ -836,7 +849,6 @@ class _MetricCard extends StatelessWidget {
   final String value;
   final double? trendPct;
   final String period;
-  final String? badge;
   final List<double> sparkline;
   final Color sparkColor;
   final _SparkType sparkType;
@@ -901,33 +913,6 @@ class _MetricCard extends StatelessWidget {
                   height: 1,
                 ),
               ),
-              if (badge != null) ...[
-                const SizedBox(width: 8),
-                Container(
-                  padding:
-                      const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-                  decoration: BoxDecoration(
-                    color: kInfoBlue.withValues(alpha: 0.1),
-                    borderRadius: BorderRadius.circular(20),
-                  ),
-                  child: Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Icon(Icons.waves_rounded,
-                          size: 12, color: kInfoBlue.withValues(alpha: 0.9)),
-                      const SizedBox(width: 4),
-                      Text(
-                        badge!,
-                        style: const TextStyle(
-                          fontSize: 10,
-                          fontWeight: FontWeight.w800,
-                          color: kInfoBlue,
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              ],
             ],
           ),
           const SizedBox(height: 6),
@@ -1097,151 +1082,9 @@ class _SparkPainter extends CustomPainter {
 
 class _MonitoredZonesCard extends StatelessWidget {
   const _MonitoredZonesCard({required this.records});
-
   final List<ScanRecordModel> records;
-
-  LatLng _mapCenter() {
-    for (final r in records) {
-      if (r.latitude != null && r.longitude != null) {
-        return LatLng(r.latitude!, r.longitude!);
-      }
-    }
-    return kSampleZones.first.position;
-  }
-
-  String _pinLabel() {
-    if (records.isNotEmpty && records.first.zone.isNotEmpty) {
-      return records.first.zone;
-    }
-    return 'Zone B Reef';
-  }
-
   @override
-  Widget build(BuildContext context) {
-    final center = _mapCenter();
-    return Container(
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: kBorderGray),
-        boxShadow: kSoftCardShadow,
-      ),
-      clipBehavior: Clip.antiAlias,
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          const Padding(
-            padding: EdgeInsets.fromLTRB(14, 14, 14, 8),
-            child: Text(
-              'Monitored Zones',
-              style: TextStyle(
-                fontSize: 14,
-                fontWeight: FontWeight.w800,
-                color: kTextNavy,
-              ),
-            ),
-          ),
-          SizedBox(
-            height: 190,
-            child: Stack(
-              children: [
-                FlutterMap(
-                  options: MapOptions(
-                    initialCenter: center,
-                    initialZoom: 11.5,
-                    interactionOptions: const InteractionOptions(
-                      flags: InteractiveFlag.none,
-                    ),
-                  ),
-                  children: [
-                    TileLayer(
-                      urlTemplate:
-                          'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
-                      userAgentPackageName: 'com.cotsmonitor.app',
-                    ),
-                    if (records.any((r) => r.latitude != null))
-                      MarkerLayer(
-                        markers: [
-                          for (final r in records)
-                            if (r.latitude != null && r.longitude != null)
-                              Marker(
-                                point: LatLng(r.latitude!, r.longitude!),
-                                width: 12,
-                                height: 12,
-                                child: Container(
-                                  decoration: BoxDecoration(
-                                    color: kDangerRed,
-                                    shape: BoxShape.circle,
-                                    border: Border.all(
-                                      color: Colors.white,
-                                      width: 2,
-                                    ),
-                                  ),
-                                ),
-                              ),
-                        ],
-                      )
-                    else
-                      MarkerLayer(
-                        markers: [
-                          Marker(
-                            point: kSampleZones[1].position,
-                            width: 120,
-                            height: 36,
-                            alignment: Alignment.topCenter,
-                            child: Container(
-                              padding: const EdgeInsets.symmetric(
-                                horizontal: 8,
-                                vertical: 4,
-                              ),
-                              decoration: BoxDecoration(
-                                color: Colors.white,
-                                borderRadius: BorderRadius.circular(8),
-                                boxShadow: kSoftCardShadow,
-                              ),
-                              child: Text(
-                                _pinLabel(),
-                                style: const TextStyle(
-                                  fontSize: 10,
-                                  fontWeight: FontWeight.w800,
-                                  color: kTextNavy,
-                                ),
-                              ),
-                            ),
-                          ),
-                        ],
-                      ),
-                  ],
-                ),
-                Positioned(
-                  right: 10,
-                  bottom: 10,
-                  child: Container(
-                    width: 32,
-                    height: 32,
-                    decoration: BoxDecoration(
-                      color: Colors.white,
-                      borderRadius: BorderRadius.circular(8),
-                      boxShadow: kSoftCardShadow,
-                    ),
-                    alignment: Alignment.center,
-                    child: const Text(
-                      '4',
-                      style: TextStyle(
-                        fontWeight: FontWeight.w800,
-                        fontSize: 13,
-                        color: kTextNavy,
-                      ),
-                    ),
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ],
-      ),
-    );
-  }
+  Widget build(BuildContext context) => MonitoringRecordMap(records: records);
 }
 
 class _AnalyticsPreviewCard extends StatelessWidget {
@@ -1269,11 +1112,11 @@ class _AnalyticsPreviewCard extends StatelessWidget {
         children: [
           Row(
             children: [
-              Expanded(
+              const Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    const Text(
+                    Text(
                       'ANALYTICS OVERVIEW',
                       style: TextStyle(
                         fontSize: 10,
@@ -1282,12 +1125,10 @@ class _AnalyticsPreviewCard extends StatelessWidget {
                         color: kMutedGray,
                       ),
                     ),
-                    const SizedBox(height: 2),
+                    SizedBox(height: 2),
                     Text(
-                      analytics.isSampleData
-                          ? 'Last 7 days · sample data'
-                          : 'Last 7 days · live data',
-                      style: const TextStyle(
+                      'Last 7 days - live data',
+                      style: TextStyle(
                         fontSize: 11,
                         fontWeight: FontWeight.w600,
                         color: kTextNavy,
@@ -1330,14 +1171,15 @@ class _AnalyticsPreviewCard extends StatelessWidget {
                   children: [
                     Icon(Icons.show_chart_rounded, size: 16, color: kInfoBlue),
                     SizedBox(width: 8),
-                    Text(
+                    Expanded(
+                        child: Text(
                       'COTS Trend',
                       style: TextStyle(
                         fontSize: 13,
                         fontWeight: FontWeight.w800,
                         color: kTextNavy,
                       ),
-                    ),
+                    )),
                   ],
                 ),
                 const SizedBox(height: 4),
