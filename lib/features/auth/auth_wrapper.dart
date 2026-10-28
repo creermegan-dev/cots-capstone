@@ -1,8 +1,11 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
 import '../../core/cots_colors.dart';
 import '../../providers/auth_provider.dart';
+import '../../services/offline_submission_service.dart';
 import '../expert/screens/expert_shell_screen.dart';
 import '../admin/screens/admin_shell_screen.dart';
 import '../user/dashboard_screen.dart';
@@ -19,6 +22,9 @@ class AuthWrapper extends StatelessWidget {
   Widget build(BuildContext context) {
     return Consumer<AuthProvider>(
       builder: (context, auth, _) {
+        unawaited(
+          OfflineSubmissionService.instance.setActiveUser(auth.userModel?.uid),
+        );
         if (!auth.isAuthenticated) {
           return const LandingPage();
         }

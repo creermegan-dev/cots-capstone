@@ -16,6 +16,7 @@ import 'core/root_scaffold_messenger.dart';
 import 'firebase_options.dart';
 import 'providers/admin_record_review_tracker.dart';
 import 'providers/auth_provider.dart';
+import 'services/offline_submission_service.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -32,6 +33,8 @@ Future<void> main() async {
     }
   }
 
+  await OfflineSubmissionService.instance.initialize();
+
   runApp(const CotsMonitorApp());
 }
 
@@ -47,6 +50,9 @@ class CotsMonitorApp extends StatelessWidget {
         ),
         ChangeNotifierProvider(
           create: (_) => AdminRecordReviewTracker(),
+        ),
+        ChangeNotifierProvider.value(
+          value: OfflineSubmissionService.instance,
         ),
       ],
       child: MaterialApp(

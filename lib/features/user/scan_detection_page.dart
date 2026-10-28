@@ -30,7 +30,7 @@ import '../../services/capture_repository.dart';
 import '../../services/follow_up_monitoring_repository.dart';
 import '../../services/follow_up_reassignment_repository.dart';
 import '../../models/follow_up_reassignment.dart';
-import '../../services/scan_record_service.dart';
+import '../../services/offline_submission_service.dart';
 import '../../services/zone_assignment_service.dart';
 import 'cots_map_page.dart';
 import 'profile_page.dart';
@@ -1828,6 +1828,7 @@ class _ScanDetectionPageState extends State<ScanDetectionPage> {
 
     setState(() => _isBusy = true);
     var submitted = 0;
+    var queued = 0;
     final captureIds = <String>[];
     final submissionWarnings = <String>[];
     try {
@@ -1854,7 +1855,7 @@ class _ScanDetectionPageState extends State<ScanDetectionPage> {
 
       for (var i = 0; i < ready.length; i++) {
         final img = ready[i];
-        if (!isRemoval && img.savedCaptureId != null) {
+        if (img.savedCaptureId != null) {
           if (_isFollowUp) captureIds.add(img.savedCaptureId!);
           submitted++;
           continue;
@@ -1867,16 +1868,15 @@ class _ScanDetectionPageState extends State<ScanDetectionPage> {
             ? (_isBatch ? img.detection!.count : removedSingle)
             : null;
 
-        final captureId = await ScanRecordService.submit(
+        final result = await OfflineSubmissionService.instance.submitRecord(
           onWarning: submissionWarnings.add,
-          submissionId: isRemoval ? null : img.submissionId,
+          submissionId: img.submissionId,
           followUpSurveyId: _isFollowUp ? _followUpSurveyId : null,
           followUpSurveyDate: _isFollowUp ? _surveyDate : null,
           followUpAssignment: widget.followUpAssignment,
           uid: uid,
           submittedBy: user.fullName,
           imageName: img.fileName,
-          imagePath: img.file.path,
           imageBytes: img.bytes,
           activityType: _activityType,
           detection: img.detection!,
@@ -1894,14 +1894,16 @@ class _ScanDetectionPageState extends State<ScanDetectionPage> {
           linkedCaptureId: _linkedCaptureId,
           isFollowUp: _isFollowUp,
         );
-        if (_isFollowUp && captureId != null) captureIds.add(captureId);
-        if (!isRemoval) img.savedCaptureId = captureId;
+        final captureId = result.recordId;
+        if (result.isPending) queued++;
+        if (_isFollowUp) captureIds.add(captureId);
+        img.savedCaptureId = captureId;
         submitted++;
       }
 
       if (_isFollowUp) {
         final assignment = widget.followUpAssignment!;
-        await FollowUpMonitoringRepository.submitSurvey(
+        final surveyPending = await OfflineSubmissionService.instance.submitSurvey(
           surveyId: _followUpSurveyId,
           areaId: assignment.areaId,
           areaName: assignment.areaName,
@@ -1921,7 +1923,9 @@ class _ScanDetectionPageState extends State<ScanDetectionPage> {
               double.tryParse(_surveyedAreaController.text.trim()),
           eliminationMethod: _followUpRemovalMethod ?? '',
           notes: _notesController.text.trim(),
+          deferUpload: queued > 0,
         );
+        if (surveyPending) queued++;
       }
 
       if (!mounted) return;
@@ -1929,7 +1933,9 @@ class _ScanDetectionPageState extends State<ScanDetectionPage> {
         SnackBar(
           backgroundColor: kPrimaryTeal,
           content: Text(
-            _isFollowUp
+            queued > 0
+                ? '$queued submission${queued == 1 ? '' : 's'} saved on this device and pending synchronization.'
+                : _isFollowUp
                 ? 'Follow-up survey and $submitted image record(s) saved.'
                 : submissionWarnings.isNotEmpty
                     ? submissionWarnings.first

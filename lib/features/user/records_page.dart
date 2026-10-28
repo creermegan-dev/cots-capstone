@@ -9,6 +9,7 @@ import '../../models/cots_confidence_policy.dart';
 import '../../models/scan_record_model.dart';
 import '../../providers/auth_provider.dart';
 import '../../services/scan_record_repository.dart';
+import '../../services/offline_submission_service.dart';
 import 'cots_map_page.dart';
 import 'profile_page.dart';
 import 'user_bottom_nav.dart';
@@ -284,6 +285,53 @@ class _RecordsPageState extends State<RecordsPage> {
                       color: Colors.grey.shade700,
                       height: 1.35,
                     ),
+                  ),
+                  Consumer<OfflineSubmissionService>(
+                    builder: (context, offline, _) {
+                      if (offline.pendingCount == 0 && !offline.isSyncing) {
+                        return const SizedBox.shrink();
+                      }
+                      return Padding(
+                        padding: const EdgeInsets.only(top: 12),
+                        child: Container(
+                          padding: const EdgeInsets.all(12),
+                          decoration: BoxDecoration(
+                            color: const Color(0xFFFFF7E6),
+                            borderRadius: BorderRadius.circular(12),
+                            border: Border.all(color: const Color(0xFFF2C66D)),
+                          ),
+                          child: Row(
+                            children: [
+                              Icon(
+                                offline.isSyncing
+                                    ? Icons.sync_rounded
+                                    : Icons.cloud_upload_outlined,
+                                color: const Color(0xFF8A5A00),
+                              ),
+                              const SizedBox(width: 10),
+                              Expanded(
+                                child: Text(
+                                  offline.isSyncing
+                                      ? 'Synchronizing pending submissions…'
+                                      : '${offline.pendingCount} submission${offline.pendingCount == 1 ? '' : 's'} pending synchronization',
+                                  style: const TextStyle(
+                                    color: Color(0xFF684500),
+                                    fontWeight: FontWeight.w700,
+                                    fontSize: 12,
+                                  ),
+                                ),
+                              ),
+                              TextButton(
+                                onPressed: offline.isSyncing
+                                    ? null
+                                    : () => offline.syncPending(),
+                                child: const Text('Retry'),
+                              ),
+                            ],
+                          ),
+                        ),
+                      );
+                    },
                   ),
                   const SizedBox(height: 16),
                   _summaryRow(),
