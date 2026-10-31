@@ -5,19 +5,33 @@ import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 
 import '../core/cots_colors.dart';
+import '../core/supabase_config.dart';
+import '../models/cots_tally.dart';
+import '../services/supabase_record_service.dart';
 import '../models/cots_confidence_policy.dart';
 import '../models/monitoring_analytics.dart';
 import '../models/scan_record_model.dart';
 import '../services/scan_record_repository.dart';
 import 'cots_loading_skeleton.dart';
 
+/// Loads confirmed COTS per removal method for the selected dates and zone.
+typedef RemovalMethodLoader = Future<List<RemovalMethodCount>> Function(
+    DateTime from, DateTime to, String? zone);
+
 /// A live record subscription shared by Admin and Diver analytics.
 class MonitoringAnalyticsPanel extends StatefulWidget {
   const MonitoringAnalyticsPanel(
-      {super.key, this.recordsStream, this.now, this.trailingBuilder});
+      {super.key,
+      this.recordsStream,
+      this.now,
+      this.trailingBuilder,
+      this.removalMethodLoader});
   final Stream<List<ScanRecordModel>>? recordsStream;
   final DateTime? now;
   final Widget Function(BuildContext, List<ScanRecordModel>)? trailingBuilder;
+
+  /// Stage 3: defaults to the database summary (Supabase only).
+  final RemovalMethodLoader? removalMethodLoader;
 
   @override
   State<MonitoringAnalyticsPanel> createState() =>
@@ -137,19 +151,19 @@ class _MonitoringAnalyticsPanelState extends State<MonitoringAnalyticsPanel> {
                       (constraints.maxWidth - (columns - 1) * 12) / columns;
                   final metrics = <(String, String, String)>[
                     (
-                      'Total COTS detections',
-                      '${data.totalCots}',
-                      'Image observations; repeated sightings may occur.'
-                    ),
-                    (
-                      'Accepted COTS detections',
+                      HonestReport.confirmedLabel,
                       '${data.accepted}',
-                      'AI auto-acceptance or Expert confirmation.'
+                      'Every COTS found is removed. COTS the Expert rejected are not counted.'
                     ),
                     (
-                      'COTS awaiting Expert review',
+                      HonestReport.waitingLabel,
                       '${data.pending}',
-                      '${data.pendingRecords} monitoring record(s).'
+                      '${data.pendingRecords} record(s), including other Divers\' records in assigned zones.'
+                    ),
+                    (
+                      HonestReport.notAcceptedLabel,
+                      '${data.rejected}',
+                      'Rejected by the Expert or below 20% confidence.'
                     ),
                     (
                       'Monitoring captures',
@@ -192,7 +206,7 @@ class _MonitoringAnalyticsPanelState extends State<MonitoringAnalyticsPanel> {
                 }),
                 const SizedBox(height: 16),
                 _card(
-                    'COTS detection trend',
+                    'Confirmed COTS trend',
                     Column(
                         crossAxisAlignment: CrossAxisAlignment.stretch,
                         children: [
@@ -214,16 +228,16 @@ class _MonitoringAnalyticsPanelState extends State<MonitoringAnalyticsPanel> {
                           if (points.isNotEmpty) _trendChart(points),
                         ])),
                 const SizedBox(height: 16),
-                _card('COTS detections by zone', _zoneChart(data)),
+                _card('Confirmed COTS by zone', _zoneChart(data)),
                 const SizedBox(height: 16),
                 _card(
                     'Verification status',
                     Column(children: [
-                      _countRow('Accepted', data.accepted, data.totalCots,
+                      _countRow('Confirmed', data.accepted, data.totalCots,
                           kSuccessGreen),
-                      _countRow('Awaiting Expert review', data.pending,
+                      _countRow(HonestReport.waitingLabel, data.pending,
                           data.totalCots, kWarningOrange),
-                      _countRow('Rejected / retake required', data.rejected,
+                      _countRow(HonestReport.notAcceptedLabel, data.rejected,
                           data.totalCots, kDangerRed),
                     ])),
                 const SizedBox(height: 16),
@@ -251,22 +265,18 @@ class _MonitoringAnalyticsPanelState extends State<MonitoringAnalyticsPanel> {
                     ])),
                 const SizedBox(height: 16),
                 _card(
-                    'Removal activity',
-                    Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                              '${data.removalRecords.length} recorded removal activities'),
-                          Text(
-                              'Reported eliminated quantity: ${data.removalRecords.isNotEmpty && data.unreportedRemovals == data.removalRecords.length ? 'Not reported' : data.reportedEliminated}'),
-                          if (data.unreportedRemovals > 0)
-                            Text(
-                                '${data.unreportedRemovals} activity record(s) have no reported eliminated quantity.'),
-                          const SizedBox(height: 8),
-                          const Text(
-                              'Area clearance and COTS density are unavailable without a verified area survey.',
-                              style: TextStyle(color: kMutedGray)),
-                        ])),
+                    'Removal methods',
+                    _RemovalMethods(
+                      from: _range.start,
+                      to: _range.end,
+                      zone: selectedZone,
+                      loader: widget.removalMethodLoader ??
+                          (SupabaseConfig.isConfigured
+                              ? (from, to, zone) =>
+                                  SupabaseRecordService.removalMethodSummary(
+                                      from: from, to: to, zone: zone)
+                              : null),
+                    )),
                 if (widget.trailingBuilder != null)
                   widget.trailingBuilder!(context, data.captures),
               ]);
@@ -328,7 +338,7 @@ class _MonitoringAnalyticsPanelState extends State<MonitoringAnalyticsPanel> {
   Widget _zoneChart(MonitoringAnalytics data) {
     final entries = data.byZone.entries.where((e) => e.value > 0).toList()
       ..sort((a, b) => b.value.compareTo(a.value));
-    if (entries.isEmpty) return const Text('No COTS detections to display.');
+    if (entries.isEmpty) return const Text('No confirmed COTS to display.');
     const colors = [
       kPrimaryTeal,
       kInfoBlue,
@@ -348,7 +358,7 @@ class _MonitoringAnalyticsPanelState extends State<MonitoringAnalyticsPanel> {
                   title: '')
           ]))),
       for (var i = 0; i < entries.length; i++)
-        _countRow(entries[i].key, entries[i].value, data.totalCots,
+        _countRow(entries[i].key, entries[i].value, data.accepted,
             colors[i % colors.length]),
     ]);
   }
@@ -382,4 +392,159 @@ class _MonitoringAnalyticsPanelState extends State<MonitoringAnalyticsPanel> {
           child,
         ]),
       );
+}
+
+/// Stage 3: confirmed COTS per removal method, as a pie with the numbers
+/// listed under it (COTS, share and number of removals).
+class _RemovalMethods extends StatefulWidget {
+  const _RemovalMethods({
+    required this.from,
+    required this.to,
+    required this.zone,
+    required this.loader,
+  });
+
+  final DateTime from;
+  final DateTime to;
+  final String? zone;
+  final RemovalMethodLoader? loader;
+
+  @override
+  State<_RemovalMethods> createState() => _RemovalMethodsState();
+}
+
+class _RemovalMethodsState extends State<_RemovalMethods> {
+  static const _colors = {
+    RemovalMethodCount.manualLabel: kInfoBlue,
+    RemovalMethodCount.vinegarLabel: kWarningOrange,
+    RemovalMethodCount.oxBileLabel: kSuccessGreen,
+    RemovalMethodCount.otherLabel: kMutedGray,
+  };
+
+  Future<List<RemovalMethodCount>>? _future;
+
+  @override
+  void initState() {
+    super.initState();
+    _load();
+  }
+
+  @override
+  void didUpdateWidget(_RemovalMethods oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.from != widget.from ||
+        oldWidget.to != widget.to ||
+        oldWidget.zone != widget.zone) {
+      _load();
+    }
+  }
+
+  void _load() {
+    final loader = widget.loader;
+    _future = loader == null
+        ? null
+        : loader(widget.from, widget.to, widget.zone)
+            .then(RemovalMethodCount.group);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    const note = Text(
+        'Confirmed COTS only: records waiting for the Expert count after '
+        'approval. Zones are never marked cleared; density is calculated for '
+        'each monthly visit.',
+        style: TextStyle(color: kMutedGray, fontSize: 12));
+    final future = _future;
+    if (future == null) {
+      return const Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text('Removal method counts are available with the Supabase '
+                'backend.'),
+            SizedBox(height: 8),
+            note,
+          ]);
+    }
+    return FutureBuilder<List<RemovalMethodCount>>(
+      future: future,
+      builder: (context, snapshot) {
+        if (snapshot.hasError) {
+          return Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Text('Could not load removal methods.'),
+                TextButton.icon(
+                    onPressed: () => setState(_load),
+                    icon: const Icon(Icons.refresh),
+                    label: const Text('Retry')),
+              ]);
+        }
+        if (!snapshot.hasData) {
+          return const Padding(
+              padding: EdgeInsets.all(12),
+              child: Center(child: CircularProgressIndicator()));
+        }
+        final rows = snapshot.data!;
+        final total = rows.fold<int>(0, (sum, row) => sum + row.cots);
+        if (total == 0) {
+          return const Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text('No confirmed removals for these dates and zone.',
+                    key: ValueKey('removal-methods-empty')),
+                SizedBox(height: 8),
+                note,
+              ]);
+        }
+        int percent(int cots) => (cots * 100 / total).round();
+        return Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              SizedBox(
+                  height: 200,
+                  child: PieChart(PieChartData(
+                      centerSpaceRadius: 0,
+                      sectionsSpace: 2,
+                      sections: [
+                        for (final row in rows)
+                          PieChartSectionData(
+                              value: row.cots.toDouble(),
+                              color: _colors[row.method] ?? kMutedGray,
+                              radius: 90,
+                              title: percent(row.cots) >= 8
+                                  ? '${percent(row.cots)}%'
+                                  : '',
+                              titleStyle: const TextStyle(
+                                  color: Colors.white,
+                                  fontSize: 12,
+                                  fontWeight: FontWeight.w700)),
+                      ]))),
+              const SizedBox(height: 12),
+              for (final row in rows)
+                Padding(
+                  padding: const EdgeInsets.symmetric(vertical: 4),
+                  child: Row(children: [
+                    Container(
+                        width: 12,
+                        height: 12,
+                        decoration: BoxDecoration(
+                            color: _colors[row.method] ?? kMutedGray,
+                            borderRadius: BorderRadius.circular(3))),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: Text(
+                        '${row.method}: ${row.cots} COTS · '
+                        '${percent(row.cots)}% · ${row.removals} '
+                        'removal${row.removals == 1 ? '' : 's'}',
+                        key: ValueKey('removal-method-${row.method}'),
+                      ),
+                    ),
+                  ]),
+                ),
+              const SizedBox(height: 8),
+              note,
+            ]);
+      },
+    );
+  }
 }

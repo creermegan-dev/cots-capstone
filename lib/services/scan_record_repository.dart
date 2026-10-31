@@ -110,6 +110,7 @@ abstract final class ScanRecordRepository {
               : RemovalRecordRepository.watchForUser(uid))
           .map((list) => list.map(ScanRecordModel.fromRemovalRecord).toList()),
       followUps: Stream.value(const <ScanRecordModel>[]),
+      pairByLinkedCapture: true,
     );
   }
 
@@ -231,6 +232,7 @@ abstract final class ScanRecordRepository {
     required Stream<List<ScanRecordModel>> captures,
     required Stream<List<ScanRecordModel>> removals,
     required Stream<List<ScanRecordModel>> followUps,
+    bool pairByLinkedCapture = false,
   }) {
     final controller = StreamController<List<ScanRecordModel>>();
     List<ScanRecordModel> legacyList = const [];
@@ -247,6 +249,7 @@ abstract final class ScanRecordRepository {
           captures: captureList,
           removals: removalList,
           followUps: followUpList,
+          pairByLinkedCapture: pairByLinkedCapture,
         ),
       );
     }
@@ -287,6 +290,7 @@ abstract final class ScanRecordRepository {
     required List<ScanRecordModel> captures,
     required List<ScanRecordModel> removals,
     List<ScanRecordModel> followUps = const [],
+    bool pairByLinkedCapture = false,
   }) {
     final merged = <ScanRecordModel>[
       ...followUps.map((record) => ScanRecordModel.fromFollowUpSurvey(
@@ -298,7 +302,8 @@ abstract final class ScanRecordRepository {
                     .whereType<CaptureModel>()
                     .toList()),
           )),
-      ...mergeCaptureRemovalRecords(captures, removals),
+      ...mergeCaptureRemovalRecords(captures, removals,
+          pairByLinkedCapture: pairByLinkedCapture),
       ...legacy,
     ];
     merged.sort(_submittedDesc);
@@ -307,12 +312,24 @@ abstract final class ScanRecordRepository {
 
   /// A new encounter has one capture and its deterministic removal companion.
   /// Present them as one submission; keep historical separate removals intact.
+  ///
+  /// Stage 3: with Supabase ([pairByLinkedCapture]) each encounter's removal
+  /// record links to its first photo, so it is shown on that photo's row and
+  /// never adds COTS a second time.
   static List<ScanRecordModel> mergeCaptureRemovalRecords(
-      List<ScanRecordModel> captures, List<ScanRecordModel> removals) {
+      List<ScanRecordModel> captures, List<ScanRecordModel> removals,
+      {bool pairByLinkedCapture = false}) {
     final companions = <String, ScanRecordModel>{};
     final byId = {for (final removal in removals) removal.id: removal};
+    final byLinkedCapture = <String, ScanRecordModel>{
+      if (pairByLinkedCapture)
+        for (final removal in removals)
+          if (removal.linkedCaptureId?.isNotEmpty ?? false)
+            removal.linkedCaptureId!: removal,
+    };
     for (final capture in captures) {
-      final removal = byId['${capture.id}_removal'];
+      final removal =
+          byId['${capture.id}_removal'] ?? byLinkedCapture[capture.id];
       if (removal != null &&
           removal.linkedCaptureId == capture.id &&
           removal.uid == capture.uid &&

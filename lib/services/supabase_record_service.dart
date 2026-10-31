@@ -6,6 +6,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import '../models/cots_confidence_policy.dart';
 import '../models/cots_detection_result.dart';
 import '../models/capture_model.dart';
+import '../models/cots_tally.dart';
 import '../models/removal_record_model.dart';
 import '../models/activity_type.dart';
 import 'cots_yolo_detector.dart';
@@ -399,7 +400,7 @@ abstract final class SupabaseRecordService {
     var query = _client.from('captures').select(
           '*,monitoring_areas(code,name,municipality,barangay,geographic_reference),detection_items(*),'
           'expert_decisions(decision,item_decisions,decision_sequence,expert_id,decided_at),'
-          'zone_review_assigned_to',
+          'zone_review_assigned_to,confirmed_cots,waiting_cots',
         );
     if (ownerId != null) query = query.eq('owner_id', ownerId);
     final rows = await query.order('submitted_at', ascending: false);
@@ -428,7 +429,7 @@ abstract final class SupabaseRecordService {
         .select(
           '*,monitoring_areas(code,name,municipality,barangay,geographic_reference),detection_items(*),'
           'expert_decisions(decision,item_decisions,decision_sequence,expert_id,decided_at),'
-          'zone_review_assigned_to',
+          'zone_review_assigned_to,confirmed_cots,waiting_cots',
         )
         .eq('id', captureId)
         .maybeSingle();
@@ -629,7 +630,35 @@ abstract final class SupabaseRecordService {
       adminReviewedAt: review.reviewedAt,
       adminCotsDecisions: review.itemDecisions,
       zoneAssignedTo: row['zone_review_assigned_to']?.toString() ?? '',
+      confirmedCount: (row['confirmed_cots'] as num?)?.round(),
+      waitingCount: (row['waiting_cots'] as num?)?.round(),
     );
+  }
+
+  /// Stage 3: confirmed COTS and number of removals per removal method
+  /// (Experts and Administrators). [zone] is the monitoring area name.
+  static Future<List<RemovalMethodCount>> removalMethodSummary({
+    DateTime? from,
+    DateTime? to,
+    String? zone,
+  }) async {
+    String? day(DateTime? value) => value == null
+        ? null
+        : '${value.year.toString().padLeft(4, '0')}-'
+            '${value.month.toString().padLeft(2, '0')}-'
+            '${value.day.toString().padLeft(2, '0')}';
+    final result = await _client.rpc<dynamic>(
+      'removal_method_summary',
+      params: <String, dynamic>{
+        'from_date': day(from),
+        'to_date': day(to),
+        'area_name': zone,
+      },
+    );
+    return [
+      for (final row in (result as List?) ?? const [])
+        RemovalMethodCount.fromJson(Map<String, dynamic>.from(row as Map)),
+    ];
   }
 
   /// Stage 2: the Diver the zone is assigned to when this submission is

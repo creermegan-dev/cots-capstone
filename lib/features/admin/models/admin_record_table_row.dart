@@ -2,6 +2,7 @@ import '../../../models/cots_confidence_policy.dart';
 import '../../../models/cots_detection_result.dart';
 import '../../../models/record_collection.dart';
 import '../../../models/zone_review.dart';
+import '../../../models/cots_tally.dart';
 
 /// Row model for the Records / Submissions table (shared with details navigation).
 ///
@@ -46,6 +47,7 @@ class AdminRecordTableRow {
     this.linkedCaptureDisplayId,
     this.ownerUid = '',
     this.zoneAssignedTo = '',
+    this.cotsTally = CotsTally.zero,
   });
 
   final int number;
@@ -87,6 +89,10 @@ class AdminRecordTableRow {
   /// Stage 2: the Diver the zone is assigned to when this is another Diver's
   /// record in an assigned zone; empty otherwise.
   final String zoneAssignedTo;
+
+  /// Stage 3: confirmed, waiting and not-accepted COTS (zero for removal
+  /// records and visit summaries, whose photos are counted separately).
+  final CotsTally cotsTally;
 
   int get displayAiCount => aiCount ?? cotsCount;
 
@@ -166,6 +172,7 @@ class AdminRecordTableRow {
       linkedCaptureDisplayId: linkedCaptureDisplayId,
       ownerUid: ownerUid,
       zoneAssignedTo: zoneAssignedTo,
+      cotsTally: cotsTally,
     );
   }
 }

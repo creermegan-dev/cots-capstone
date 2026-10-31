@@ -58,8 +58,8 @@ class MonitoringRecordMap extends StatelessWidget {
                           width: 48,
                           height: 48,
                           child: Tooltip(
-                              message:
-                                  '${r.zone}: ${r.aiDetectedCount} COTS detections',
+                              message: '${r.zone}: ${r.cotsTally.confirmed} '
+                                  'confirmed COTS${r.cotsTally.waiting > 0 ? ' · ${r.cotsTally.waiting} waiting' : ''}',
                               child: const Icon(Icons.location_on,
                                   color: kPrimaryTeal, size: 36)))
                   ]),

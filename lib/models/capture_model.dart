@@ -40,6 +40,8 @@ class CaptureModel {
     this.adminCotsDecisions = const [],
     this.storedDisplayRecordId = '',
     this.zoneAssignedTo = '',
+    this.confirmedCount,
+    this.waitingCount,
   });
 
   final String id;
@@ -75,6 +77,11 @@ class CaptureModel {
   /// Stage 2: the Diver the zone is assigned to when this is another Diver's
   /// record in an assigned zone (needs Expert approval); empty otherwise.
   final String zoneAssignedTo;
+
+  /// Stage 3: confirmed and waiting COTS as counted by the database (null
+  /// for Firebase records, which are counted in the app as before).
+  final int? confirmedCount;
+  final int? waitingCount;
 
   factory CaptureModel.fromFirestore(
     DocumentSnapshot<Map<String, dynamic>> doc,

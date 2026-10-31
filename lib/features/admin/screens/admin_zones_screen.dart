@@ -111,8 +111,8 @@ class _AdminZonesScreenState extends State<AdminZonesScreen> {
       return _ZoneSummary(
         zone: entry.key,
         reports: sorted.length,
-        detections: analytics.totalCots,
-        pending: analytics.pendingRecords,
+        detections: analytics.accepted,
+        pending: analytics.pending,
         lastActivity: sorted.first.submittedAt ?? sorted.first.dateTaken,
       );
     }).toList()
@@ -185,8 +185,8 @@ class _ZoneSummaryCard extends StatelessWidget {
                     color: AdminColors.headerTitle)),
           ),
           _metric('Reports', '${summary.reports}'),
-          _metric('AI detections', '${summary.detections}'),
-          _metric('Pending review', '${summary.pending}'),
+          _metric('Confirmed COTS', '${summary.detections}'),
+          _metric('Waiting for Expert', '${summary.pending}'),
           _metric(
             'Last activity',
             summary.lastActivity == null

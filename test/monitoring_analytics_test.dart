@@ -121,13 +121,14 @@ void main() {
         to: DateTime(2026, 10, 22),
         zone: 'Reef A');
     expect(data.totalCots, 2);
+    // Stage 3: the trend counts confirmed COTS (the 40% one still waits).
     for (final mode in ['Daily', 'Weekly', 'Monthly']) {
       expect(
           data
               .trend(DateTime(2026, 10, 22), DateTime(2026, 10, 22), mode)
               .single
               .count,
-          2);
+          1);
     }
   });
   test(
@@ -174,18 +175,19 @@ void main() {
       expect(
           tester
               .widget<Text>(
-                  find.byKey(const ValueKey('metric-Total COTS detections')))
+                  find.byKey(const ValueKey('metric-COTS found and removed (confirmed)')))
               .data,
           '0');
       controller.add([record('a')]);
       await tester.pumpAndSettle();
       expect(find.byKey(const ValueKey('analytics-empty')), findsNothing);
+      // Stage 3: 1 confirmed (90%); the 40% COTS waits for the Expert.
       expect(
           tester
               .widget<Text>(
-                  find.byKey(const ValueKey('metric-Total COTS detections')))
+                  find.byKey(const ValueKey('metric-COTS found and removed (confirmed)')))
               .data,
-          '2');
+          '1');
       controller.add([
         record('a'),
         record('b', zone: 'Reef B', scores: [.9, .8, .7])
@@ -195,16 +197,17 @@ void main() {
       await tester.pumpAndSettle();
       await tester.tap(find.text('Reef B').last);
       await tester.pumpAndSettle();
+      // 90% and 80% are confirmed; 70% waits.
       expect(
           tester
               .widget<Text>(
-                  find.byKey(const ValueKey('metric-Total COTS detections')))
+                  find.byKey(const ValueKey('metric-COTS found and removed (confirmed)')))
               .data,
-          '3');
+          '2');
       controller.addError(StateError('connection lost'));
       await tester.pumpAndSettle();
       expect(find.text('Analytics unavailable'), findsOneWidget);
-      expect(find.byKey(const ValueKey('metric-Total COTS detections')),
+      expect(find.byKey(const ValueKey('metric-COTS found and removed (confirmed)')),
           findsNothing);
       expect(tester.takeException(), isNull);
       await tester.pumpWidget(const SizedBox.shrink());

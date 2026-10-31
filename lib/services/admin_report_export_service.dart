@@ -17,7 +17,9 @@ class AdminReportExportService {
     'Submitted By',
     'Zone',
     'Submitted On',
-    'COTS Count',
+    'COTS confirmed',
+    'COTS waiting',
+    'COTS not accepted',
     'Confidence',
     'Status',
   ];
@@ -107,7 +109,10 @@ class AdminReportExportService {
         row.submittedBy,
         row.zone,
         row.dateUploaded.isNotEmpty ? row.dateUploaded : row.dateTime,
-        '${row.displayAiCount}',
+        // Stage 3: honest counts (removal rows and visit summaries add none).
+        '${row.cotsTally.confirmed}',
+        '${row.cotsTally.waiting}',
+        '${row.cotsTally.notAccepted}',
         '${row.confidencePercent}%',
         row.displayStatusLabel,
       ];

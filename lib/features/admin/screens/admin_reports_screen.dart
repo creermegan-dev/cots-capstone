@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../../../models/cots_tally.dart';
 import '../../../services/admin_report_export_service.dart';
 import '../../../services/scan_record_repository.dart';
 import '../../../widgets/cots_loading_skeleton.dart';
@@ -446,7 +447,9 @@ class _AdminReportsScreenState extends State<AdminReportsScreen> {
   }
 
   Widget _statCards(List<_ReportRow> rows) {
-    final detectionCount = rows.fold<int>(0, (sum, row) => sum + row.cotsCount);
+    // Stage 3: confirmed COTS; removal rows and visit summaries add none.
+    final tally = rows.fold<CotsTally>(
+        CotsTally.zero, (sum, row) => sum + row.source.cotsTally);
     final underReview =
         rows.where((r) => r.status == _RepStatus.forReview).length;
     final accepted =
@@ -458,9 +461,9 @@ class _AdminReportsScreenState extends State<AdminReportsScreen> {
       _StatSpec(
           0,
           Icons.pest_control_outlined,
-          'Total Detections',
-          '$detectionCount',
-          'COTS across ${rows.length} reports',
+          HonestReport.confirmedLabel,
+          '${tally.confirmed}',
+          '${tally.waiting} waiting · ${tally.notAccepted} not accepted',
           AdminColors.statBlue),
       _StatSpec(1, Icons.rate_review_outlined, 'Pending Review', '$underReview',
           'Reports needing expert review', AdminColors.statGreen),
@@ -1058,7 +1061,7 @@ class _ReportRow {
       record.confidencePercent,
       status,
       review,
-      record.displayAiCount,
+      record.cotsTally.confirmed,
       record,
     );
   }

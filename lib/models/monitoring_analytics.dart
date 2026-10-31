@@ -5,7 +5,9 @@ import 'cots_confidence_policy.dart';
 import 'record_collection.dart';
 import 'scan_record_model.dart';
 
-/// Counts image observations, not unique animals or confirmed area clearance.
+/// Stage 3: honest totals. Each COTS is photographed once, so photo counts add
+/// up; totals use CONFIRMED COTS, with the rest waiting or not accepted.
+/// Zones are never marked cleared.
 class MonitoringAnalytics {
   MonitoringAnalytics.fromRecords(
     Iterable<ScanRecordModel> input, {
@@ -52,30 +54,17 @@ class MonitoringAnalytics {
             included(r))
         .toList();
     for (final r in captures) {
+      final tally = r.cotsTally;
       totalCots += math.max(0, r.aiDetectedCount);
-      byZone.update(zoneName(r), (value) => value + r.aiDetectedCount,
-          ifAbsent: () => r.aiDetectedCount);
-      final items = r.detectionReviewItems;
-      for (var i = 0; i < items.length; i++) {
-        final item = items[i];
+      accepted += tally.confirmed;
+      pending += tally.waiting;
+      rejected += tally.notAccepted;
+      if (tally.waiting > 0) pendingRecords++;
+      byZone.update(zoneName(r), (value) => value + tally.confirmed,
+          ifAbsent: () => tally.confirmed);
+      for (final item in r.detectionReviewItems) {
         confidenceSum += item.confidencePercent;
         confidenceBands[item.band.index]++;
-        final decision = r.adminRejected
-            ? PerCotsAdminDecision.rejected
-            : i < r.adminCotsDecisions.length
-                ? r.adminCotsDecisions[i]
-                : r.adminConfirmed
-                    ? PerCotsAdminDecision.confirmed
-                    : CotsConfidencePolicy.initialDecisionForPercent(
-                        item.confidencePercent);
-        switch (decision) {
-          case PerCotsAdminDecision.confirmed:
-            accepted++;
-          case PerCotsAdminDecision.pending:
-            pending++;
-          case PerCotsAdminDecision.rejected:
-            rejected++;
-        }
       }
     }
   }
@@ -86,7 +75,11 @@ class MonitoringAnalytics {
   final Map<String, int> byZone = {};
   final List<int> confidenceBands =
       List.filled(CotsVerificationBand.values.length, 0);
+  /// [totalCots] is everything the AI detected; [accepted] (confirmed),
+  /// [pending] (waiting for the Expert) and [rejected] (not accepted) add up
+  /// to it. [byZone] and the trend use confirmed COTS.
   int totalCots = 0, accepted = 0, pending = 0, rejected = 0;
+  int pendingRecords = 0;
   double confidenceSum = 0;
   double? get averageConfidence =>
       totalCots == 0 ? null : confidenceSum / totalCots;
@@ -94,16 +87,6 @@ class MonitoringAnalytics {
       removalRecords.fold(0, (sum, r) => sum + (r.removedQuantity ?? 0));
   int get unreportedRemovals =>
       removalRecords.where((r) => r.removedQuantity == null).length;
-  int get pendingRecords => captures.where((r) {
-        if (r.adminConfirmed || r.adminRejected) return false;
-        final items = r.detectionReviewItems;
-        return List.generate(items.length, (i) => i).any((i) =>
-            (i < r.adminCotsDecisions.length
-                ? r.adminCotsDecisions[i]
-                : CotsConfidencePolicy.initialDecisionForPercent(
-                    items[i].confidencePercent)) ==
-            PerCotsAdminDecision.pending);
-      }).length;
 
   static bool isCapture(ScanRecordModel r) =>
       r.recordCollection == RecordCollection.captures ||
@@ -139,8 +122,9 @@ class MonitoringAnalytics {
           day(when).isAfter(last)) {
         continue;
       }
-      counts.update(bucket(when), (v) => v + r.aiDetectedCount,
-          ifAbsent: () => r.aiDetectedCount);
+      final confirmed = r.cotsTally.confirmed;
+      counts.update(bucket(when), (v) => v + confirmed,
+          ifAbsent: () => confirmed);
     }
     final dates = counts.keys.toList()..sort();
     return [for (final d in dates) MonitoringTrendPoint(d, counts[d]!)];

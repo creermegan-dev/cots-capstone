@@ -10,6 +10,7 @@ import 'follow_up_monitoring_model.dart';
 import 'record_collection.dart';
 import 'removal_record_model.dart';
 import 'zone_review.dart';
+import 'cots_tally.dart';
 import '../utils/scan_record_image.dart';
 
 /// Firestore `scan_records/{id}` citizen science submission.
@@ -339,6 +340,7 @@ class ScanRecordModel {
       linkedCaptureDisplayId: linkedCaptureDisplayId,
       ownerUid: uid,
       zoneAssignedTo: zoneAssignedTo,
+      cotsTally: cotsTally,
     );
   }
 
@@ -373,6 +375,49 @@ class ScanRecordModel {
         imageWidth: imageWidth > 0 ? imageWidth : 1920,
         imageHeight: imageHeight > 0 ? imageHeight : 1080,
       );
+
+  /// Stage 3: confirmed, waiting and not-accepted COTS in this photo record.
+  /// Supabase supplies the numbers (one rule for every screen); Firebase
+  /// records are counted from their per-COTS decisions as before. Removal
+  /// records and visit summaries add no COTS: their photos are counted.
+  CotsTally get cotsTally {
+    final countsPhotos = recordCollection == RecordCollection.captures ||
+        (recordCollection == RecordCollection.legacyScanRecords &&
+            !CotsActivityType.isRemoval(activityType));
+    if (!countsPhotos) return CotsTally.zero;
+    final capture = sourceCapture;
+    final confirmed = capture?.confirmedCount;
+    if (capture != null && confirmed != null) {
+      final waiting = capture.waitingCount ?? 0;
+      final rest = aiDetectedCount - confirmed - waiting;
+      return CotsTally(
+          confirmed: confirmed,
+          waiting: waiting,
+          notAccepted: rest < 0 ? 0 : rest);
+    }
+    var accepted = 0, pending = 0, rejected = 0;
+    final items = detectionReviewItems;
+    for (var i = 0; i < items.length; i++) {
+      final decision = adminRejected
+          ? PerCotsAdminDecision.rejected
+          : i < adminCotsDecisions.length
+              ? adminCotsDecisions[i]
+              : adminConfirmed
+                  ? PerCotsAdminDecision.confirmed
+                  : CotsConfidencePolicy.initialDecisionForPercent(
+                      items[i].confidencePercent);
+      switch (decision) {
+        case PerCotsAdminDecision.confirmed:
+          accepted++;
+        case PerCotsAdminDecision.pending:
+          pending++;
+        case PerCotsAdminDecision.rejected:
+          rejected++;
+      }
+    }
+    return CotsTally(
+        confirmed: accepted, waiting: pending, notAccepted: rejected);
+  }
 
   /// Stage 2: who the zone is assigned to, for another Diver's record.
   String get zoneAssignedTo => sourceCapture?.zoneAssignedTo ?? '';

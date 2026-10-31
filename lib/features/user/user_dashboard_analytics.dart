@@ -17,9 +17,10 @@ class UserDashboardAnalytics {
     final previous = MonitoringAnalytics.fromRecords(records,
         from: start.subtract(const Duration(days: 7)),
         to: start.subtract(const Duration(days: 1)));
-    totalCots = data.totalCots;
+    // Stage 3: confirmed COTS, not the raw AI count.
+    totalCots = data.accepted;
     totalScans = data.captures.length;
-    cotsTrendPct = _change(current.totalCots, previous.totalCots);
+    cotsTrendPct = _change(current.accepted, previous.accepted);
     scansTrendPct = _change(current.captures.length, previous.captures.length);
     periodLabel =
         '${DateFormat('MMM d').format(start)} – ${DateFormat('MMM d').format(end)}';

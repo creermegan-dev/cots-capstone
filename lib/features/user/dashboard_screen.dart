@@ -796,7 +796,7 @@ class _MetricsGrid extends StatelessWidget {
                     icon: Icons.verified_rounded,
                     iconColor: kSuccessGreen,
                     iconBg: kSuccessGreen.withValues(alpha: 0.12),
-                    title: 'Confirmed Detections',
+                    title: 'COTS removed (confirmed)',
                     value: '$confirmed',
                     trendPct: null,
                     period: analytics.periodLabel,
