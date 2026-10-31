@@ -23,25 +23,24 @@ abstract final class RemovalMethod {
   static const manual = 'Manual Removal';
   static const vinegar = 'Vinegar Injection';
   static const oxBile = 'Ox Bile / Bile Salts Injection';
+  /// Older records only; no longer offered (Stage 5). Old records keep them.
   static const communityCleanup = 'Community Cleanup';
   static const researchCollection = 'Research Collection';
 
   /// Older records only; no longer offered (use vinegar or ox bile instead).
   static const injection = 'Injection Method';
 
-  /// Methods a Diver can choose for new records. "Community Cleanup" and
-  /// "Research Collection" will be removed later (agreed); old records keep
+  /// Methods a Diver can choose for new records (Stage 5, agreed): manual
+  /// removal, vinegar injection and ox bile injection. Old records keep
   /// whatever method they already store.
   static const options = [
     manual,
     vinegar,
     oxBile,
-    communityCleanup,
-    researchCollection,
   ];
 
-  /// Injections need 1-2 days to kill COTS (used by the later follow-up
-  /// reminder stage).
+  /// Injections need up to 2 days to kill COTS. The database decides the
+  /// early-visit flag and excused months from the stored method (Stage 5).
   static bool isInjection(String method) =>
       method == vinegar || method == oxBile || method == injection;
 }

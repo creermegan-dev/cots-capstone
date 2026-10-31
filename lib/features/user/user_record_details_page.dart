@@ -9,6 +9,7 @@ import '../../models/scan_record_model.dart';
 import '../../models/capture_model.dart';
 import '../../services/capture_repository.dart';
 import '../../widgets/cots_detection_image_overlay.dart';
+import '../../widgets/early_visit_flag.dart';
 import 'cots_map_page.dart';
 import '../../widgets/cots_loading_skeleton.dart';
 
@@ -225,6 +226,9 @@ class UserRecordDetailsPage extends StatelessWidget {
             'Actual monitoring date',
             _dateFmt.format(survey.surveyDate),
           ),
+          // Stage 5: visit within 2 days of an injection.
+          if (survey.earlyVisitNote != null)
+            EarlyVisitFlag(note: survey.earlyVisitNote!),
           _kv(
             'GPS reference',
             survey.latitude == null || survey.longitude == null

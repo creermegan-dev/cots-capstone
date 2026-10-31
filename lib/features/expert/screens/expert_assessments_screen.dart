@@ -6,6 +6,7 @@ import '../../../models/cots_density.dart';
 import '../../../models/follow_up_monitoring_model.dart';
 import '../../../services/auth_service.dart';
 import '../../../services/supabase_follow_up_service.dart';
+import '../../../widgets/early_visit_flag.dart';
 import '../../admin/theme/admin_theme.dart';
 
 typedef ConfirmAssessment = Future<void> Function({
@@ -149,6 +150,9 @@ class _ExpertAssessmentsScreenState extends State<ExpertAssessmentsScreen> {
                                     fontWeight: FontWeight.w700, fontSize: 16)),
                             Text(
                                 '${_dateFormat.format(visit.surveyDate)} · ${visit.submittedBy}'),
+                            // Stage 5: visit within 2 days of an injection.
+                            if (visit.earlyVisitNote != null)
+                              EarlyVisitFlag(note: visit.earlyVisitNote!),
                             const SizedBox(height: 8),
                             Text(
                                 '${followUpCountSummary(visit)}\n'

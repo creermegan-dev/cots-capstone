@@ -15,10 +15,20 @@ class AdminNotificationsScreen extends StatefulWidget {
     super.key,
     this.notificationsStream,
     this.recipientUid,
+    this.showHeader = true,
+    this.emptyMessage =
+        'New activities assigned to this administrator will appear here.',
+    this.loadingLabel = 'Loading administrator notifications',
   });
 
   final Stream<List<AppNotification>>? notificationsStream;
   final String? recipientUid;
+
+  /// False when the list sits inside another page with its own title
+  /// (the Expert's Notifications tab).
+  final bool showHeader;
+  final String emptyMessage;
+  final String loadingLabel;
 
   @override
   State<AdminNotificationsScreen> createState() =>
@@ -55,7 +65,7 @@ class _AdminNotificationsScreenState extends State<AdminNotificationsScreen> {
         _notificationsStream = NotificationRepository.watchForUser(uid);
       });
     }
-    _showMessage('Notifications refreshed from Firebase.');
+    _showMessage('Notifications refreshed.');
   }
 
   Future<void> _markRead(AppNotification notification) async {
@@ -121,17 +131,20 @@ class _AdminNotificationsScreenState extends State<AdminNotificationsScreen> {
         final notifications = snapshot.data ?? const <AppNotification>[];
         final unread = notifications.where((item) => !item.isRead).length;
         return SingleChildScrollView(
-          padding: EdgeInsets.fromLTRB(pagePad.left, 22, pagePad.right, 28),
+          padding: EdgeInsets.fromLTRB(
+              pagePad.left, widget.showHeader ? 22 : 8, pagePad.right, 28),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              AdminDashboardHeader(
-                title: 'Notifications',
-                subtitle:
-                    'Real system activities, assignments, and review updates.',
-                onRefreshTap: _onRefresh,
-              ),
-              const SizedBox(height: 18),
+              if (widget.showHeader) ...[
+                AdminDashboardHeader(
+                  title: 'Notifications',
+                  subtitle:
+                      'Real system activities, assignments, and review updates.',
+                  onRefreshTap: _onRefresh,
+                ),
+                const SizedBox(height: 18),
+              ],
               if (stream == null)
                 _messageCard(
                   icon: Icons.lock_outline_rounded,
@@ -150,9 +163,9 @@ class _AdminNotificationsScreenState extends State<AdminNotificationsScreen> {
                   ),
                 )
               else if (!snapshot.hasData)
-                const CotsLoadingSkeleton(
+                CotsLoadingSkeleton(
                   layout: CotsSkeletonLayout.list,
-                  label: 'Loading administrator notifications',
+                  label: widget.loadingLabel,
                 )
               else ...[
                 Row(
@@ -184,8 +197,7 @@ class _AdminNotificationsScreenState extends State<AdminNotificationsScreen> {
                   _messageCard(
                     icon: Icons.notifications_none_rounded,
                     title: 'No notifications yet',
-                    message:
-                        'New activities assigned to this administrator will appear here.',
+                    message: widget.emptyMessage,
                   )
                 else
                   for (var i = 0; i < notifications.length; i++) ...[

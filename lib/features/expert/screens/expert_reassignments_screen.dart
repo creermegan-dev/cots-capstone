@@ -1,12 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import '../../../core/supabase_config.dart';
-import '../../../models/app_notification.dart';
 import '../../../models/follow_up_monitoring_model.dart';
 import '../../../models/follow_up_reassignment.dart';
 import '../../../services/follow_up_monitoring_repository.dart';
 import '../../../services/follow_up_reassignment_repository.dart';
-import '../../../services/notification_repository.dart';
 import '../../../widgets/follow_up_reassignment_controls.dart';
 import '../../../widgets/area_handover_controls.dart';
 import '../../admin/theme/admin_theme.dart';
@@ -64,26 +62,8 @@ class _ExpertReassignmentsScreenState extends State<ExpertReassignmentsScreen> {
                     const Text('Include accepted, cancelled and past requests'),
                 value: _showHistory,
                 onChanged: (value) => setState(() => _showHistory = value)),
-            StreamBuilder<List<AppNotification>>(
-                stream: NotificationRepository.watchForUser('experts'),
-                builder: (context, notifications) => ExpansionTile(
-                        title: const Text('Workflow notifications'),
-                        children: [
-                          if (notifications.hasError)
-                            Text(
-                                'Could not load notifications: ${notifications.error}'),
-                          if (!notifications.hasData && !notifications.hasError)
-                            const CotsLoadingSkeleton(
-                                layout: CotsSkeletonLayout.section),
-                          for (final n
-                              in (notifications.data ?? <AppNotification>[])
-                                  .take(10))
-                            ListTile(
-                                title: Text(n.title),
-                                subtitle: Text(n.body),
-                                onTap: () => showReassignmentDetails(
-                                    context, n.relatedRecordId)),
-                        ])),
+            // The old "Workflow notifications" list moved to the Expert's
+            // Notifications tab (All notices).
             if (requests.isEmpty)
               const Padding(
                   padding: EdgeInsets.all(24),

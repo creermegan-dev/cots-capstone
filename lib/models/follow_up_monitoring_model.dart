@@ -189,6 +189,7 @@ class FollowUpSurveyModel {
     this.assessedLevel,
     this.confirmedCount,
     this.waitingCount,
+    this.earlyVisitNote,
   });
 
   final String id;
@@ -224,6 +225,11 @@ class FollowUpSurveyModel {
   /// counted), and COTS still waiting for the Expert. Supabase only.
   final int? confirmedCount;
   final int? waitingCount;
+
+  /// Stage 5: set by Supabase when the visit was made within 2 days after an
+  /// injection in the zone ("Visit within 2 days of an injection on ...").
+  /// Null otherwise and for Firebase visits.
+  final String? earlyVisitNote;
 
   factory FollowUpSurveyModel.fromFirestore(
     DocumentSnapshot<Map<String, dynamic>> doc,
@@ -268,6 +274,9 @@ class FollowUpSurveyModel {
       assessedLevel: map['assessed_level'] as String?,
       confirmedCount: _nullableIntFromDynamic(map['confirmed_count']),
       waitingCount: _nullableIntFromDynamic(map['waiting_count']),
+      earlyVisitNote: (map['early_visit_note'] as String?)?.trim().isEmpty ?? true
+          ? null
+          : (map['early_visit_note'] as String).trim(),
     );
   }
 
