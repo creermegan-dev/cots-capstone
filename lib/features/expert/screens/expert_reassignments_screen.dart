@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
+import '../../../core/supabase_config.dart';
 import '../../../models/app_notification.dart';
 import '../../../models/follow_up_monitoring_model.dart';
 import '../../../models/follow_up_reassignment.dart';
@@ -7,6 +8,7 @@ import '../../../services/follow_up_monitoring_repository.dart';
 import '../../../services/follow_up_reassignment_repository.dart';
 import '../../../services/notification_repository.dart';
 import '../../../widgets/follow_up_reassignment_controls.dart';
+import '../../../widgets/area_handover_controls.dart';
 import '../../admin/theme/admin_theme.dart';
 import '../../../widgets/cots_loading_skeleton.dart';
 
@@ -54,6 +56,8 @@ class _ExpertReassignmentsScreenState extends State<ExpertReassignmentsScreen> {
                     color: AdminColors.headerTitle)),
             const Text(
                 'Review monthly follow-up requests and propose verified replacement divers.'),
+            // Stage 4: area handovers and areas with 5+ missed months.
+            if (SupabaseConfig.isConfigured) const ExpertHandoversSection(),
             SwitchListTile(
                 contentPadding: EdgeInsets.zero,
                 title:

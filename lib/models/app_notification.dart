@@ -30,6 +30,10 @@ class AppNotification {
   static const zoneReviewWaiting = 'zone_review_waiting';
   static const zoneRecordApproved = 'zone_record_approved';
 
+  /// Stage 4: area handover notices all start with this.
+  static const handoverPrefix = 'handover_';
+  bool get isHandover => type.startsWith(handoverPrefix);
+
   final String id;
   final String recipientUid;
   final String type;

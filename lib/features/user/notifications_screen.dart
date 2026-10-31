@@ -66,7 +66,8 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
       if (notification.type == 'follow_up_reassignment') {
         await showReassignmentDetails(context, notification.relatedRecordId);
       } else if (notification.type == AppNotification.interventionAssigned ||
-          notification.type == AppNotification.zoneRecordApproved) {
+          notification.type == AppNotification.zoneRecordApproved ||
+          notification.isHandover) {
         await Navigator.of(context).push<void>(
           MaterialPageRoute<void>(builder: (_) => const FollowUpPage()),
         );

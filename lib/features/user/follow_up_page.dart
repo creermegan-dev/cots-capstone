@@ -4,6 +4,7 @@ import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
 
 import '../../core/cots_colors.dart';
+import '../../core/supabase_config.dart';
 import '../../models/activity_type.dart';
 import '../../models/capture_model.dart';
 import '../../models/cots_density.dart';
@@ -14,6 +15,7 @@ import '../../providers/auth_provider.dart';
 import '../../services/capture_repository.dart';
 import '../../services/follow_up_monitoring_repository.dart';
 import '../../widgets/follow_up_reassignment_controls.dart';
+import '../../widgets/area_handover_controls.dart';
 import '../../services/scan_record_repository.dart';
 import 'cots_map_page.dart';
 import 'profile_page.dart';
@@ -251,6 +253,11 @@ class _FollowUpPageState extends State<FollowUpPage> {
         padding: const EdgeInsets.fromLTRB(16, 16, 16, 104),
         children: [
           _pageIntro(),
+          // Stage 4: handover offers made to this Diver.
+          if (SupabaseConfig.isConfigured) ...[
+            const SizedBox(height: 12),
+            HandoverOffersCard(onChanged: _retryReconciliation),
+          ],
           if (_isReconciling) ...[
             const SizedBox(height: 12),
             const LinearProgressIndicator(color: kPrimaryTeal),
@@ -423,6 +430,13 @@ class _FollowUpPageState extends State<FollowUpPage> {
               onStart: () => _openSurvey(
                   assignment: assignment, previousSurvey: latestSurvey),
             ),
+            // Stage 4: only the main Diver can hand over the area.
+            if (SupabaseConfig.isConfigured &&
+                assignment.primaryDiverUid ==
+                    context.read<AuthProvider>().userModel?.uid) ...[
+              const SizedBox(height: 8),
+              AreaHandoverButton(assignment: assignment),
+            ],
             const SizedBox(height: 8),
             ExpansionTile(
               tilePadding: EdgeInsets.zero,

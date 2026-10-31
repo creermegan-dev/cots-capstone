@@ -265,6 +265,10 @@ class _NotificationTile extends StatelessWidget {
           Icons.swap_horiz_rounded,
           AdminColors.statPurple
         ),
+      _ when notification.isHandover => (
+          Icons.swap_horiz_rounded,
+          AdminColors.statPurple
+        ),
       _ => (Icons.description_outlined, AdminColors.statBlue),
     };
     final createdAt = notification.createdAt;
