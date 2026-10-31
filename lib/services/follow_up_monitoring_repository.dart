@@ -6,6 +6,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:http/http.dart' as http;
 
 import '../core/firebase_bootstrap.dart';
+import '../core/supabase_config.dart';
 import '../firebase_options.dart';
 import '../models/capture_model.dart';
 import '../models/cots_confidence_policy.dart';
@@ -21,6 +22,8 @@ import 'windows_auth_rest_service.dart';
 import 'zone_assignment_service.dart';
 import 'follow_up_reassignment_repository.dart';
 import 'follow_up_workflow_store.dart';
+import 'supabase_follow_up_service.dart';
+import 'supabase_record_service.dart';
 import '../models/follow_up_reassignment.dart';
 
 abstract final class FollowUpMonitoringRepository {
@@ -38,6 +41,11 @@ abstract final class FollowUpMonitoringRepository {
   static Stream<List<FollowUpAssignmentModel>> watchAssignmentsForDiver(
     String uid,
   ) async* {
+    if (SupabaseConfig.isConfigured) {
+      // The caller's areas: original Diver, or this month's replacement.
+      yield* SupabaseFollowUpService.poll(SupabaseFollowUpService.assignments);
+      return;
+    }
     Future<List<FollowUpAssignmentModel>> load() async {
       final primary = (await FollowUpReassignmentRepository.store
               .query(_assignments, field: 'primary_diver_uid', value: uid))
@@ -75,6 +83,12 @@ abstract final class FollowUpMonitoringRepository {
   static Stream<List<FollowUpAssignmentModel>> watchPrimaryAssignmentsForDiver(
     String uid,
   ) {
+    if (SupabaseConfig.isConfigured) {
+      return SupabaseFollowUpService.poll(() async =>
+          (await SupabaseFollowUpService.assignments())
+              .where((a) => a.primaryDiverUid == uid)
+              .toList());
+    }
     if (deferFirebaseUntilFirstUse) {
       final token = ScanRecordRepository.windowsIdToken;
       if (token == null) {
@@ -106,6 +120,10 @@ abstract final class FollowUpMonitoringRepository {
   }
 
   static Stream<List<FollowUpSurveyModel>> watchSurveysForDiver(String uid) {
+    if (SupabaseConfig.isConfigured) {
+      return SupabaseFollowUpService.poll(
+          () => SupabaseFollowUpService.surveys(mineOnly: true));
+    }
     if (deferFirebaseUntilFirstUse) {
       final token = ScanRecordRepository.windowsIdToken;
       if (token == null) {
@@ -130,6 +148,11 @@ abstract final class FollowUpMonitoringRepository {
 
   static Stream<List<FollowUpSurveyModel>> watchMonitoringHistory(
       String uid) async* {
+    if (SupabaseConfig.isConfigured) {
+      // The caller's visits plus all visits in the caller's areas.
+      yield* SupabaseFollowUpService.poll(SupabaseFollowUpService.surveys);
+      return;
+    }
     Future<List<FollowUpSurveyModel>> load() async {
       final own = await querySurveysForDiver(uid);
       final assignments = await watchAssignmentsForDiver(uid).first;
@@ -156,6 +179,9 @@ abstract final class FollowUpMonitoringRepository {
     String uid, {
     String? idToken,
   }) async {
+    if (SupabaseConfig.isConfigured) {
+      return SupabaseFollowUpService.surveys(mineOnly: true);
+    }
     if (deferFirebaseUntilFirstUse) {
       final token = idToken ?? ScanRecordRepository.windowsIdToken;
       if (token == null) {
@@ -184,6 +210,9 @@ abstract final class FollowUpMonitoringRepository {
     required String currentDiverUid,
     bool allowOtherDivers = false,
   }) async {
+    // Supabase creates the original Diver's assignment itself when the first
+    // detection in an area is confirmed.
+    if (SupabaseConfig.isConfigured) return const [];
     final byArea =
         <String, List<({CaptureModel capture, GulfCoastalBarangay area})>>{};
     final ambiguousCaptureIds = <String>[];
@@ -268,6 +297,7 @@ abstract final class FollowUpMonitoringRepository {
     required int? imageWidth,
     required int? imageHeight,
   }) async {
+    if (SupabaseConfig.isConfigured) return false;
     if (_acceptedDetectionCount(
           detection: detection,
           imageWidth: imageWidth,
@@ -290,6 +320,7 @@ abstract final class FollowUpMonitoringRepository {
   static Future<void> considerExpertValidatedCapture(
     CaptureModel capture,
   ) async {
+    if (SupabaseConfig.isConfigured) return;
     if (capture.submittedAt == null || capture.followUpSurveyId.isNotEmpty) {
       return;
     }
@@ -306,6 +337,7 @@ abstract final class FollowUpMonitoringRepository {
 
   static Future<List<CaptureModel>> loadDetectionHistory() async {
     final captures = await CaptureRepository.watchAll().first;
+    if (SupabaseConfig.isConfigured) return captures;
     final records = await ScanRecordRepository.watchAll().first;
     return [
       ...captures,
@@ -349,6 +381,8 @@ abstract final class FollowUpMonitoringRepository {
         'A valid area, diver, capture, and COTS count are required.',
       );
     }
+    // Supabase creates assignments itself; the app never writes them.
+    if (SupabaseConfig.isConfigured) return false;
 
     if (deferFirebaseUntilFirstUse) {
       final token = ScanRecordRepository.windowsIdToken;
@@ -408,6 +442,53 @@ abstract final class FollowUpMonitoringRepository {
     if (areaId.trim().isEmpty || uid.trim().isEmpty) {
       throw ArgumentError(
           'A monitoring area and signed-in diver are required.');
+    }
+    if (SupabaseConfig.isConfigured) {
+      final id = surveyId ?? newSurveyId();
+      // Queued visits come back as UTC; use the phone's calendar day.
+      final local = surveyDate.isUtc ? surveyDate.toLocal() : surveyDate;
+      final day = DateTime(local.year, local.month, local.day);
+      // The database checks the month's responsible Diver, the dates, the
+      // linked detection records and the counts.
+      final status = await SupabaseFollowUpService.submitSurvey(
+        surveyId: id,
+        areaCode: areaId,
+        visitDate: day,
+        observed: fieldObservedCount,
+        eliminated: fieldEliminatedCount,
+        method: eliminationMethod,
+        surveyedSquareMeters: surveyedAreaSquareMeters,
+        // The app tracks photos by submission ID; Supabase stores each
+        // detection record under an ID derived from it.
+        captureIds: [
+          for (final id in captureIds)
+            SupabaseRecordService.stableUuid('capture', id)
+        ],
+        latitude: latitude,
+        longitude: longitude,
+        notes: notes,
+      );
+      return FollowUpSurveyModel(
+        id: id,
+        areaId: areaId,
+        areaName: areaName,
+        barangay: barangay,
+        municipality: municipality,
+        uid: uid,
+        submittedBy: submittedBy,
+        surveyDate: day,
+        fieldObservedCount: fieldObservedCount,
+        fieldEliminatedCount: fieldEliminatedCount,
+        captureIds: List.unmodifiable(captureIds),
+        submittedAt: DateTime.now(),
+        latitude: latitude,
+        longitude: longitude,
+        surveyedAreaSquareMeters: surveyedAreaSquareMeters,
+        eliminationMethod: eliminationMethod,
+        notes: notes,
+        aiDetectedCount: aiDetectedCount,
+        serverStatus: status,
+      );
     }
     final assignmentDoc =
         await FollowUpReassignmentRepository.store.get('$_assignments/$areaId');
@@ -827,7 +908,52 @@ abstract final class FollowUpMonitoringRepository {
     return null;
   }
 
+  /// Looks up one area's assignment (null when the area has none or the
+  /// caller may not see it).
+  static Future<FollowUpAssignmentModel?> assignmentForArea(
+      String areaId) async {
+    if (SupabaseConfig.isConfigured) {
+      final list = await SupabaseFollowUpService.assignments(areaCode: areaId);
+      return list.isEmpty ? null : list.first;
+    }
+    final doc =
+        await FollowUpReassignmentRepository.store.get('$_assignments/$areaId');
+    return doc == null
+        ? null
+        : FollowUpAssignmentModel.fromMap(FollowUpWorkflowStore.data(doc),
+            areaId: areaId);
+  }
+
+  /// One area's visits and detection records, for the Expert's summary.
+  static Future<
+      ({
+        List<FollowUpSurveyModel> surveys,
+        List<CaptureModel> captures
+      })> loadAreaHistory(String areaId) async {
+    if (SupabaseConfig.isConfigured) {
+      // Visit status comes from the database, so records are not needed.
+      return (
+        surveys: await SupabaseFollowUpService.surveys(areaCode: areaId),
+        captures: const <CaptureModel>[],
+      );
+    }
+    final store = FollowUpReassignmentRepository.store;
+    final docs = await store.query(_surveys, field: 'area_id', value: areaId);
+    final captures = (await store.query('captures',
+            field: 'monitoring_area_id', value: areaId))
+        .map(CaptureModel.fromRestDocument)
+        .toList();
+    final surveys = docs
+        .map((doc) => FollowUpSurveyModel.fromMap(
+            FollowUpWorkflowStore.data(doc),
+            id: (doc['name'] as String).split('/').last))
+        .toList();
+    return (surveys: surveys, captures: captures);
+  }
+
   static String newSurveyId() {
+    // Supabase visit IDs are UUIDs.
+    if (SupabaseConfig.isConfigured) return SupabaseFollowUpService.newId();
     final random = math.Random.secure();
     final suffix = List.generate(
       20,

@@ -2,8 +2,10 @@ import 'dart:io';
 import 'dart:typed_data';
 
 import 'package:http/http.dart' as http;
+import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../core/firebase_bootstrap.dart';
+import '../core/supabase_config.dart';
 import '../models/record_collection.dart';
 import '../utils/scan_record_image.dart';
 import 'capture_image_store.dart';
@@ -11,6 +13,7 @@ import 'removal_record_image_store.dart';
 import 'scan_record_image_store.dart';
 import 'scan_record_repository.dart';
 import 'storage_service.dart';
+import 'supabase_evidence_service.dart';
 import 'windows_storage_rest_service.dart';
 
 /// Loads submitted scan images from Firestore, local path, URL, or Storage.
@@ -24,6 +27,28 @@ abstract final class ScanRecordImageLoader {
   }) async {
     final local = _loadLocal(imagePath);
     if (local != null) return local;
+
+    if (SupabaseConfig.isConfigured) {
+      final path = storageObjectPath?.trim() ?? '';
+      if (path.isEmpty) return null;
+      final bucket = switch (recordCollection) {
+        RecordCollection.captures => 'detection-evidence',
+        RecordCollection.removalRecords => 'elimination-evidence',
+        _ => null,
+      };
+      if (bucket == null) return null;
+      final client = Supabase.instance.client;
+      String? sessionKey() {
+        final session = client.auth.currentSession;
+        if (session == null) return null;
+        return '${session.user.id}:${session.accessToken}';
+      }
+
+      return PrivateEvidenceSessionGuard.download(
+        sessionKey: sessionKey,
+        downloader: () => client.storage.from(bucket).download(path),
+      );
+    }
 
     if (recordId != null && recordId.trim().isNotEmpty) {
       final fromFirestore = await _loadFromFirestore(

@@ -48,3 +48,14 @@ app.*.map.json
 /build_old*/
 /build_stale*/
 /runs/
+
+# Local database backups (contain personal data; never commit)
+/backups/
+# Firebase admin keys (never commit)
+*firebase-adminsdk*.json
+
+# Local file backups made before each change (never commit)
+/.backup_before_*/
+# Local test, build, database and Git command output
+/tool/last_*
+/tool/*.unused

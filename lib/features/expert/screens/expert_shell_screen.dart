@@ -3,7 +3,9 @@ import 'package:flutter/material.dart';
 import '../../auth/auth_navigation.dart';
 import '../../admin/screens/admin_records_submissions_screen.dart';
 import '../../admin/theme/admin_theme.dart';
+import 'expert_assessments_screen.dart';
 import 'expert_reassignments_screen.dart';
+import 'expert_users_screen.dart';
 
 /// Expert-only shell — records verification (approve / reject submissions).
 class ExpertShellScreen extends StatelessWidget {
@@ -18,7 +20,7 @@ class ExpertShellScreen extends StatelessWidget {
     return adminThemedSubtree(
       context,
       child: DefaultTabController(
-          length: 2,
+          length: 4,
           child: Scaffold(
             backgroundColor: AdminColors.contentBg,
             appBar: AppBar(
@@ -39,11 +41,15 @@ class ExpertShellScreen extends StatelessWidget {
                 const SizedBox(width: 8),
               ],
               bottom: const TabBar(
+                  // Four tabs: scroll on narrow phones instead of squeezing.
+                  isScrollable: true,
                   labelColor: Colors.white,
                   unselectedLabelColor: Colors.white70,
                   tabs: [
                     Tab(text: 'Verification'),
-                    Tab(text: 'Reassignments')
+                    Tab(text: 'Reassignments'),
+                    Tab(text: 'Assessments'),
+                    Tab(text: 'Users'),
                   ]),
             ),
             body: const TabBarView(children: [
@@ -51,7 +57,9 @@ class ExpertShellScreen extends StatelessWidget {
                 viewOnly: false,
                 expertContext: true,
               ),
-              ExpertReassignmentsScreen()
+              ExpertReassignmentsScreen(),
+              ExpertAssessmentsScreen(),
+              ExpertUsersScreen(),
             ]),
           )),
     );

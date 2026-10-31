@@ -3,6 +3,7 @@ import 'dart:typed_data';
 import 'package:cloud_firestore/cloud_firestore.dart';
 
 import '../core/firebase_bootstrap.dart';
+import '../core/supabase_config.dart';
 import '../models/capture_model.dart';
 import '../models/cots_confidence_policy.dart';
 import '../models/cots_detection_result.dart';
@@ -12,6 +13,8 @@ import 'capture_image_store.dart';
 import 'cots_size_estimator.dart';
 import 'processed_detection_payload.dart';
 import 'scan_record_repository.dart';
+import 'supabase_record_service.dart';
+import 'supabase_evidence_service.dart';
 import 'windows_capture_rest_service.dart';
 import 'zone_assignment_service.dart';
 
@@ -36,7 +39,11 @@ abstract final class CaptureService {
     required double? depth,
     required bool? measurementReferenceVisible,
     required CotsSizeEstimate? sizeEstimate,
+    bool? gpsFromPhoto,
+    EvidenceImagePayload? evidence,
+    EvidenceProgressCallback? onEvidenceProgress,
     String? submissionId,
+    String? encounterId,
     String? followUpSurveyId,
     DateTime? followUpSurveyDate,
     FollowUpAssignmentModel? followUpAssignment,
@@ -81,6 +88,31 @@ abstract final class CaptureService {
         data['follow_up_year'] = followUpSurveyDate.year;
         data['follow_up_month'] = followUpSurveyDate.month;
       }
+    }
+    if (SupabaseConfig.isConfigured) {
+      if (submissionId == null || submissionId.trim().isEmpty) {
+        throw ArgumentError('A stable submission ID is required.');
+      }
+      if (evidence == null) {
+        throw StateError('Prepared detection evidence is required.');
+      }
+      return SupabaseRecordService.submitCapture(
+        submissionId: submissionId,
+        encounterId: encounterId,
+        uid: uid,
+        imageName: imageName,
+        imageBytes: imageBytes,
+        evidence: evidence,
+        detection: detection,
+        latitude: latitude,
+        longitude: longitude,
+        dateTaken: dateTaken,
+        imageWidth: imageWidth,
+        imageHeight: imageHeight,
+        notes: notes,
+        gpsFromPhoto: gpsFromPhoto,
+        onEvidenceProgress: onEvidenceProgress,
+      );
     }
     if (deferFirebaseUntilFirstUse) {
       final idToken = ScanRecordRepository.windowsIdToken;
@@ -165,9 +197,22 @@ abstract final class CaptureService {
     required bool adminRejected,
     required String reviewedBy,
     required List<PerCotsAdminDecision> cotsDecisions,
+    String reason = '',
   }) async {
     if (captureId.isEmpty) {
       throw ArgumentError('captureId is required');
+    }
+
+    if (SupabaseConfig.isConfigured) {
+      // The server records the Expert's identity and time; reviewedBy is
+      // display-only in this path.
+      await SupabaseRecordService.recordExpertDecision(
+        captureId: captureId,
+        approve: adminConfirmed && !adminRejected,
+        itemDecisions: cotsDecisions,
+        reason: reason,
+      );
+      return;
     }
 
     final payload = <String, dynamic>{

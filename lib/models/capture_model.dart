@@ -14,6 +14,7 @@ class CaptureModel {
     required this.uid,
     required this.submittedBy,
     required this.imageName,
+    this.storageObjectPath = '',
     required this.aiDetectedCount,
     required this.confidence,
     required this.captureSource,
@@ -44,6 +45,7 @@ class CaptureModel {
   final String uid;
   final String submittedBy;
   final String imageName;
+  final String storageObjectPath;
   final int aiDetectedCount;
   final double confidence;
   final String captureSource;
@@ -219,6 +221,7 @@ class CaptureModel {
       captureSource: captureSource,
       documentId: id,
       imageName: imageName,
+      storageObjectPath: storageObjectPath,
       notes: notes,
       dateCaptured: dateTaken != null ? fmt.format(dateTaken!) : 'Unknown',
       dateUploaded:

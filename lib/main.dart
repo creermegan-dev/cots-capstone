@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
 import 'core/firebase_bootstrap.dart';
+import 'core/supabase_config.dart';
 import 'features/admin/admin_routes.dart';
 import 'features/admin/screens/admin_shell_screen.dart';
 import 'features/auth/auth_routes.dart';
@@ -21,7 +22,8 @@ import 'services/offline_submission_service.dart';
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
-  if (!deferFirebaseUntilFirstUse) {
+  final useSupabase = await SupabaseConfig.initializeIfConfigured();
+  if (!useSupabase && !deferFirebaseUntilFirstUse) {
     try {
       await Firebase.initializeApp(
         options: DefaultFirebaseOptions.currentPlatform,

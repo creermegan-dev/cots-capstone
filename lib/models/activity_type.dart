@@ -21,14 +21,27 @@ abstract final class CaptureSource {
 
 abstract final class RemovalMethod {
   static const manual = 'Manual Removal';
-  static const injection = 'Injection Method';
+  static const vinegar = 'Vinegar Injection';
+  static const oxBile = 'Ox Bile / Bile Salts Injection';
   static const communityCleanup = 'Community Cleanup';
   static const researchCollection = 'Research Collection';
 
+  /// Older records only; no longer offered (use vinegar or ox bile instead).
+  static const injection = 'Injection Method';
+
+  /// Methods a Diver can choose for new records. "Community Cleanup" and
+  /// "Research Collection" will be removed later (agreed); old records keep
+  /// whatever method they already store.
   static const options = [
     manual,
-    injection,
+    vinegar,
+    oxBile,
     communityCleanup,
     researchCollection,
   ];
+
+  /// Injections need 1-2 days to kill COTS (used by the later follow-up
+  /// reminder stage).
+  static bool isInjection(String method) =>
+      method == vinegar || method == oxBile || method == injection;
 }

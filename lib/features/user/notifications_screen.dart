@@ -136,19 +136,28 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
     final today = DateUtils.isSameDay(createdAt, DateTime.now());
     final category = switch (notification.type) {
       AppNotification.interventionAssigned => NotificationCategory.reminders,
-      AppNotification.reviewRejected => NotificationCategory.alerts,
+      AppNotification.reviewRejected ||
+      AppNotification.recordRejected =>
+        NotificationCategory.alerts,
       _ => NotificationCategory.updates,
     };
     final accent = switch (notification.type) {
       AppNotification.interventionAssigned => kWarningOrange,
-      AppNotification.reviewAccepted => kSuccessGreen,
-      AppNotification.reviewRejected => kDangerRed,
+      AppNotification.reviewAccepted ||
+      AppNotification.recordFinalized =>
+        kSuccessGreen,
+      AppNotification.reviewRejected || AppNotification.recordRejected =>
+        kDangerRed,
       _ => kAccentPurple,
     };
     final icon = switch (notification.type) {
       AppNotification.interventionAssigned => Icons.event_note_rounded,
-      AppNotification.reviewAccepted => Icons.check_circle_outline_rounded,
-      AppNotification.reviewRejected => Icons.warning_amber_rounded,
+      AppNotification.reviewAccepted ||
+      AppNotification.recordFinalized =>
+        Icons.check_circle_outline_rounded,
+      AppNotification.reviewRejected ||
+      AppNotification.recordRejected =>
+        Icons.warning_amber_rounded,
       _ => Icons.event_available_rounded,
     };
     return NotificationListItem(

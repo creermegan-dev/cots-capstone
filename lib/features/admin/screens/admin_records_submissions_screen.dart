@@ -5,6 +5,7 @@ import 'package:provider/provider.dart';
 import '../../../models/cots_confidence_policy.dart';
 import '../../../providers/admin_record_review_tracker.dart';
 import '../../../providers/auth_provider.dart';
+import '../../../services/auth_service.dart';
 import '../../../services/scan_record_service.dart';
 import '../../../services/scan_record_repository.dart';
 import '../../../services/notification_repository.dart';
@@ -113,7 +114,7 @@ class _AdminRecordsSubmissionsScreenState
     ScaffoldMessenger.of(context).showSnackBar(
       const SnackBar(
         behavior: SnackBarBehavior.floating,
-        content: Text('Records refreshed from Firestore.'),
+        content: Text('Records refreshed.'),
       ),
     );
   }
@@ -175,7 +176,7 @@ class _AdminRecordsSubmissionsScreenState
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
           behavior: SnackBarBehavior.floating,
-          content: Text('Cannot save review — missing Firestore record ID.'),
+          content: Text('Cannot save review — missing record ID.'),
         ),
       );
       return;
@@ -219,8 +220,8 @@ class _AdminRecordsSubmissionsScreenState
           behavior: SnackBarBehavior.floating,
           content: Text(
             confirmed
-                ? '${row.recordId} verified — saved to Firestore.'
-                : '${row.recordId} rejected — saved to Firestore.',
+                ? '${row.recordId} verified. Review saved.'
+                : '${row.recordId} rejected. Review saved.',
           ),
         ),
       );
@@ -229,7 +230,9 @@ class _AdminRecordsSubmissionsScreenState
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           behavior: SnackBarBehavior.floating,
-          content: Text('Could not save expert review: $e'),
+          content: Text(
+            'Could not save the review. ${AuthService.messageFor(e)}',
+          ),
         ),
       );
     }

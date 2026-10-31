@@ -1,4 +1,17 @@
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:supabase_flutter/supabase_flutter.dart' as supabase;
+
+class TotpEnrollment {
+  const TotpEnrollment({
+    required this.secret,
+    required this.qrCodeUrl,
+  });
+
+  final TotpSecret secret;
+  final String qrCodeUrl;
+
+  String get secretKey => secret.secretKey;
+}
 
 /// Firebase Authentication wrapper — keeps UI free of SDK details.
 class AuthService {
@@ -30,6 +43,60 @@ class AuthService {
       email: email.trim(),
       password: password,
     );
+  }
+
+  Future<bool> isTotpEnabled() async {
+    final user = _auth.currentUser;
+    if (user == null) throw StateError('Not signed in.');
+    final factors = await user.multiFactor.getEnrolledFactors();
+    return factors.any((factor) => factor is TotpMultiFactorInfo);
+  }
+
+  Future<TotpEnrollment> beginTotpEnrollment({
+    required String accountName,
+  }) async {
+    final user = _auth.currentUser;
+    if (user == null) throw StateError('Not signed in.');
+    if (!user.emailVerified) {
+      throw StateError(
+        'Verify your email address before enabling two-factor authentication.',
+      );
+    }
+    final session = await user.multiFactor.getSession();
+    final secret = await TotpMultiFactorGenerator.generateSecret(session);
+    final qrCodeUrl = await secret.generateQrCodeUrl(
+      accountName: accountName,
+      issuer: 'COTS Monitor',
+    );
+    return TotpEnrollment(secret: secret, qrCodeUrl: qrCodeUrl);
+  }
+
+  Future<void> confirmTotpEnrollment({
+    required TotpEnrollment enrollment,
+    required String code,
+  }) async {
+    final user = _auth.currentUser;
+    if (user == null) throw StateError('Not signed in.');
+    final assertion = await TotpMultiFactorGenerator.getAssertionForEnrollment(
+      enrollment.secret,
+      code,
+    );
+    await user.multiFactor.enroll(
+      assertion,
+      displayName: 'Authenticator app',
+    );
+  }
+
+  Future<void> disableTotp() async {
+    final user = _auth.currentUser;
+    if (user == null) throw StateError('Not signed in.');
+    final factors = await user.multiFactor.getEnrolledFactors();
+    for (final factor in factors) {
+      if (factor is TotpMultiFactorInfo) {
+        await user.multiFactor.unenroll(factorUid: factor.uid);
+        return;
+      }
+    }
   }
 
   Future<void> signOut() => _auth.signOut();
@@ -66,6 +133,55 @@ class AuthService {
 
   /// Maps Firebase errors to UI-safe messages (Auth, Firestore, Storage).
   static String messageFor(Object error) {
+    if (error is supabase.AuthException) {
+      switch (error.code) {
+        case 'user_already_exists':
+        case 'email_exists':
+          return 'This email is already registered. Try signing in instead.';
+        case 'weak_password':
+          return 'Password is too weak. Use at least 8 characters with a mix of characters.';
+        case 'email_not_confirmed':
+          return 'Enter the code we emailed you to verify your email.';
+        case 'otp_expired':
+        case 'flow_state_expired':
+          return 'This code is incorrect or has expired. Check the newest email or send a new code.';
+        case 'flow_state_not_found':
+        case 'bad_code_verifier':
+        case 'validation_failed':
+          return 'This code is invalid or was already used. Send a new code and try again.';
+        case 'request_timeout':
+        case 'network_error':
+          return 'Network error. Check your connection and try again.';
+        case 'invalid_credentials':
+          return 'Incorrect email or password.';
+        case 'over_request_rate_limit':
+        case 'over_email_send_rate_limit':
+          return 'Too many attempts. Try again later.';
+        case 'signup_disabled':
+        case 'email_provider_disabled':
+          return 'Account registration is currently unavailable. Contact the Administrator.';
+      }
+      return 'Authentication could not be completed. Try again or contact the Administrator.';
+    }
+    if (error is supabase.PostgrestException) {
+      if (error.message.contains('Expert required')) {
+        return 'Only the Expert account can record review decisions.';
+      }
+      if (error.message.contains('review-band COTS')) {
+        return 'Review every uncertain COTS (20–79%) first. COTS below 20% '
+            'can only be rejected.';
+      }
+      if (error.message.contains('Invalid capture decision')) {
+        return 'This detection can no longer be reviewed. Reload and try again.';
+      }
+      if (error.message.contains('device_verification_required')) {
+        return 'Verify this device with the code sent to your email. Sign in again to receive a code.';
+      }
+      if (error.code == '42501') {
+        return 'You are not authorized to perform this action.';
+      }
+      return 'Could not access account data. Check your connection and try again.';
+    }
     if (error is FirebaseAuthException) {
       switch (error.code) {
         case 'email-already-in-use':
@@ -115,6 +231,7 @@ class AuthService {
               : '${error.plugin}: ${error.code}';
       }
     }
+    if (error is StateError) return error.message;
     return error.toString();
   }
 }

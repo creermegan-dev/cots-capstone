@@ -1,9 +1,11 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 
 import '../core/firebase_bootstrap.dart';
+import '../core/supabase_config.dart';
 import '../models/capture_model.dart';
 import '../models/record_collection.dart';
 import 'scan_record_repository.dart';
+import 'supabase_record_service.dart';
 import 'windows_capture_rest_service.dart';
 
 /// Reads processed detection captures from Firestore `captures`.
@@ -15,6 +17,9 @@ abstract final class CaptureRepository {
       FirebaseFirestore.instance.collection(RecordCollection.captures);
 
   static Stream<List<CaptureModel>> watchAll() {
+    if (SupabaseConfig.isConfigured) {
+      return SupabaseRecordService.watchCaptures();
+    }
     if (deferFirebaseUntilFirstUse) {
       final token = ScanRecordRepository.windowsIdToken;
       if (token == null) {
@@ -35,6 +40,9 @@ abstract final class CaptureRepository {
   }
 
   static Stream<List<CaptureModel>> watchForUser(String uid) {
+    if (SupabaseConfig.isConfigured) {
+      return SupabaseRecordService.watchCaptures(ownerId: uid);
+    }
     if (deferFirebaseUntilFirstUse) {
       final token = ScanRecordRepository.windowsIdToken;
       if (token == null) {
@@ -56,6 +64,10 @@ abstract final class CaptureRepository {
 
   static Future<CaptureModel?> getById(String captureId) async {
     if (captureId.trim().isEmpty) return null;
+
+    if (SupabaseConfig.isConfigured) {
+      return SupabaseRecordService.getCapture(captureId);
+    }
 
     if (deferFirebaseUntilFirstUse) {
       final token = ScanRecordRepository.windowsIdToken;

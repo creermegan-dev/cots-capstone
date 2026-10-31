@@ -243,13 +243,17 @@ class _NotificationTile extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final (icon, color) = switch (notification.type) {
-      AppNotification.reviewAccepted => (
+      AppNotification.reviewAccepted || AppNotification.recordFinalized => (
           Icons.check_circle_outline_rounded,
           AdminColors.statGreen
         ),
-      AppNotification.reviewRejected => (
+      AppNotification.reviewRejected || AppNotification.recordRejected => (
           Icons.warning_amber_rounded,
           AdminColors.statRed
+        ),
+      AppNotification.reviewNeeded => (
+          Icons.rate_review_outlined,
+          AdminColors.statYellow
         ),
       AppNotification.interventionAssigned => (
           Icons.assignment_ind_outlined,

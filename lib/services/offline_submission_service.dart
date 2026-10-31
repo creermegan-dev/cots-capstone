@@ -7,13 +7,16 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/widgets.dart';
 import 'package:http/http.dart' as http;
 import 'package:path_provider/path_provider.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 
+import '../core/supabase_config.dart';
 import '../models/cots_detection_result.dart';
 import '../models/follow_up_monitoring_model.dart';
 import 'cots_size_estimator.dart';
 import 'follow_up_monitoring_repository.dart';
 import 'offline_sync_monitor.dart';
 import 'scan_record_service.dart';
+import 'supabase_evidence_service.dart';
 
 typedef OfflineDirectoryProvider = Future<Directory> Function();
 typedef OfflineRecordUploader = Future<void> Function(
@@ -24,11 +27,25 @@ typedef OfflineSurveyUploader = Future<void> Function(
   Map<String, dynamic> task,
 );
 
+enum OfflineSubmitState {
+  synchronized,
+  awaitingVerification,
+  networkPending,
+  uploadPending,
+  authorizationBlocked,
+}
+
 class OfflineSubmitResult {
-  const OfflineSubmitResult({required this.recordId, required this.isPending});
+  const OfflineSubmitResult({required this.recordId, required this.state});
 
   final String recordId;
-  final bool isPending;
+  final OfflineSubmitState state;
+
+  bool get isPending => const {
+        OfflineSubmitState.networkPending,
+        OfflineSubmitState.uploadPending,
+        OfflineSubmitState.authorizationBlocked,
+      }.contains(state);
 }
 
 /// Durably stores reviewed submissions and retries them after connectivity returns.
@@ -113,15 +130,23 @@ class OfflineSubmissionService extends ChangeNotifier
     required CotsSizeEstimate? sizeEstimate,
     required String submissionId,
     String? linkedCaptureId,
+    String? encounterId,
     bool isFollowUp = false,
     String? followUpSurveyId,
     DateTime? followUpSurveyDate,
     FollowUpAssignmentModel? followUpAssignment,
     void Function(String message)? onWarning,
+    bool? gpsFromPhoto,
   }) async {
     _activeUserId = uid.trim();
+    final evidence = SupabaseConfig.isConfigured
+        ? EvidenceImagePayload.prepare(
+            originalBytes: imageBytes,
+            originalName: imageName,
+          )
+        : null;
     final task = <String, dynamic>{
-      'version': 1,
+      'version': evidence == null ? 1 : 2,
       'kind': 'record',
       'id': submissionId,
       'created_at': DateTime.now().toUtc().toIso8601String(),
@@ -136,6 +161,7 @@ class OfflineSubmissionService extends ChangeNotifier
       },
       'latitude': latitude,
       'longitude': longitude,
+      'gps_from_photo': gpsFromPhoto,
       'date_taken': dateTaken?.toUtc().toIso8601String(),
       'image_width': imageWidth,
       'image_height': imageHeight,
@@ -154,6 +180,8 @@ class OfflineSubmissionService extends ChangeNotifier
               'confidence_score': sizeEstimate.confidenceScore,
             },
       'linked_capture_id': linkedCaptureId,
+      // Groups the photos of one encounter (null for older queued tasks).
+      'encounter_id': encounterId,
       'is_follow_up': isFollowUp,
       'follow_up_survey_id': followUpSurveyId,
       'follow_up_survey_date': followUpSurveyDate?.toUtc().toIso8601String(),
@@ -172,23 +200,37 @@ class OfflineSubmissionService extends ChangeNotifier
               'initial_detected_count': followUpAssignment.initialDetectedCount,
               'initial_collection': followUpAssignment.initialCollection,
             },
+      if (evidence != null) 'evidence': evidence.toMetadata(),
+      if (evidence != null)
+        'evidence_prepared_at': DateTime.now().toUtc().toIso8601String(),
     };
-    final directory = await _writeTask(task, imageBytes: imageBytes);
+    final directory = await _writeTask(
+      task,
+      imageBytes: imageBytes,
+      evidenceBytes: evidence?.bytes,
+    );
     try {
       await _sendRecord(
         task,
         File('${directory.path}${Platform.pathSeparator}image.jpg'),
+        directory: directory,
         onWarning: onWarning,
       );
       await _deleteTask(directory);
-      return OfflineSubmitResult(recordId: submissionId, isPending: false);
+      return OfflineSubmitResult(
+        recordId: submissionId,
+        state: SupabaseConfig.isConfigured
+            ? OfflineSubmitState.awaitingVerification
+            : OfflineSubmitState.synchronized,
+      );
     } catch (error) {
-      if (!_isConnectivityError(error)) {
-        await _deleteTask(directory);
+      final pendingState = _pendingState(error);
+      if (pendingState == null) {
+        await _refreshCount();
         rethrow;
       }
       await _refreshCount();
-      return OfflineSubmitResult(recordId: submissionId, isPending: true);
+      return OfflineSubmitResult(recordId: submissionId, state: pendingState);
     }
   }
 
@@ -242,7 +284,7 @@ class OfflineSubmissionService extends ChangeNotifier
       await _deleteTask(directory);
       return false;
     } catch (error) {
-      if (!_isConnectivityError(error)) {
+      if (_pendingState(error) != OfflineSubmitState.networkPending) {
         await _deleteTask(directory);
         rethrow;
       }
@@ -272,8 +314,11 @@ class OfflineSubmissionService extends ChangeNotifier
           );
           if (task['uid'] != activeUserId) continue;
           if (task['kind'] == 'record') {
-            await _sendRecord(task,
-                File('${directory.path}${Platform.pathSeparator}image.jpg'));
+            await _sendRecord(
+              task,
+              File('${directory.path}${Platform.pathSeparator}image.jpg'),
+              directory: directory,
+            );
           } else if (task['kind'] == 'survey') {
             await _sendSurvey(task);
           } else {
@@ -281,7 +326,7 @@ class OfflineSubmissionService extends ChangeNotifier
           }
           await _deleteTask(directory);
         } catch (error) {
-          if (_isConnectivityError(error)) break;
+          if (_pendingState(error) == OfflineSubmitState.networkPending) break;
           // Invalid tasks remain for manual retry and diagnosis.
         }
       }
@@ -293,7 +338,7 @@ class OfflineSubmissionService extends ChangeNotifier
   }
 
   Future<Directory> _writeTask(Map<String, dynamic> task,
-      {Uint8List? imageBytes}) async {
+      {Uint8List? imageBytes, Uint8List? evidenceBytes}) async {
     final root = await _queueRoot();
     final safeId =
         (task['id'] as String).replaceAll(RegExp(r'[^a-zA-Z0-9_-]'), '_');
@@ -305,6 +350,10 @@ class OfflineSubmissionService extends ChangeNotifier
     if (imageBytes != null) {
       await File('${directory.path}${Platform.pathSeparator}image.jpg')
           .writeAsBytes(imageBytes, flush: true);
+    }
+    if (evidenceBytes != null) {
+      await File('${directory.path}${Platform.pathSeparator}evidence.jpg')
+          .writeAsBytes(evidenceBytes, flush: true);
     }
     await File('${directory.path}${Platform.pathSeparator}metadata.json')
         .writeAsString(jsonEncode(task), flush: true);
@@ -350,10 +399,16 @@ class OfflineSubmissionService extends ChangeNotifier
   Future<void> _sendRecord(
     Map<String, dynamic> task,
     File image, {
+    Directory? directory,
     void Function(String message)? onWarning,
   }) =>
       _recordUploaderOverride?.call(task, image) ??
-      _uploadRecord(task, image, onWarning: onWarning);
+      _uploadRecord(
+        task,
+        image,
+        directory: directory,
+        onWarning: onWarning,
+      );
 
   Future<void> _sendSurvey(Map<String, dynamic> task) =>
       _surveyUploaderOverride?.call(task) ?? _uploadSurvey(task);
@@ -361,6 +416,7 @@ class OfflineSubmissionService extends ChangeNotifier
   Future<void> _uploadRecord(
     Map<String, dynamic> task,
     File image, {
+    Directory? directory,
     void Function(String message)? onWarning,
   }) async {
     if (!image.existsSync()) {
@@ -372,6 +428,9 @@ class OfflineSubmissionService extends ChangeNotifier
         : null;
     final assignmentMap = task['follow_up_assignment'] is Map
         ? Map<String, dynamic>.from(task['follow_up_assignment'] as Map)
+        : null;
+    final evidence = SupabaseConfig.isConfigured
+        ? await _loadOrPrepareEvidence(task, image, directory)
         : null;
     await ScanRecordService.submit(
       submissionId: task['id'] as String,
@@ -396,6 +455,7 @@ class OfflineSubmissionService extends ChangeNotifier
       ),
       latitude: _double(task['latitude']),
       longitude: _double(task['longitude']),
+      gpsFromPhoto: task['gps_from_photo'] as bool?,
       dateTaken: _date(task['date_taken']),
       imageWidth: (task['image_width'] as num?)?.round(),
       imageHeight: (task['image_height'] as num?)?.round(),
@@ -418,9 +478,81 @@ class OfflineSubmissionService extends ChangeNotifier
               confidenceScore: _double(sizeMap['confidence_score'])!,
             ),
       linkedCaptureId: task['linked_capture_id'] as String?,
+      encounterId: task['encounter_id'] as String?,
       isFollowUp: task['is_follow_up'] as bool? ?? false,
       onWarning: onWarning,
+      evidence: evidence,
+      onEvidenceProgress: directory == null
+          ? null
+          : (purpose, stage) => _saveEvidenceProgress(
+                directory,
+                task,
+                purpose,
+                stage,
+              ),
     );
+  }
+
+  Future<EvidenceImagePayload> _loadOrPrepareEvidence(
+    Map<String, dynamic> task,
+    File original,
+    Directory? directory,
+  ) async {
+    if (directory == null) {
+      throw StateError('The pending evidence directory is unavailable.');
+    }
+    final evidenceFile = File(
+      '${directory.path}${Platform.pathSeparator}evidence.jpg',
+    );
+    final rawMetadata = task['evidence'];
+    if (rawMetadata is Map && evidenceFile.existsSync()) {
+      return EvidenceImagePayload.fromMetadata(
+        Map<String, dynamic>.from(rawMetadata),
+        await evidenceFile.readAsBytes(),
+      );
+    }
+
+    final prepared = EvidenceImagePayload.prepare(
+      originalBytes: await original.readAsBytes(),
+      originalName: task['image_name']?.toString() ?? 'evidence.jpg',
+    );
+    if (rawMetadata is Map &&
+        rawMetadata['sha256']?.toString() != prepared.sha256Hex) {
+      throw const EvidenceReservationConflictException(
+        'The saved evidence manifest cannot be reproduced; the local photo was preserved.',
+      );
+    }
+    await evidenceFile.writeAsBytes(prepared.bytes, flush: true);
+    task['version'] = 2;
+    task['evidence'] = prepared.toMetadata();
+    task['evidence_prepared_at'] = DateTime.now().toUtc().toIso8601String();
+    await _persistTask(directory, task);
+    return prepared;
+  }
+
+  Future<void> _saveEvidenceProgress(
+    Directory directory,
+    Map<String, dynamic> task,
+    EvidencePurpose purpose,
+    EvidenceUploadStage stage,
+  ) async {
+    final progress = task['evidence_progress'] is Map
+        ? Map<String, dynamic>.from(task['evidence_progress'] as Map)
+        : <String, dynamic>{};
+    progress[purpose.name] = {
+      'stage': stage.name,
+      'updated_at': DateTime.now().toUtc().toIso8601String(),
+    };
+    task['evidence_progress'] = progress;
+    await _persistTask(directory, task);
+  }
+
+  Future<void> _persistTask(
+    Directory directory,
+    Map<String, dynamic> task,
+  ) {
+    return File('${directory.path}${Platform.pathSeparator}metadata.json')
+        .writeAsString(jsonEncode(task), flush: true);
   }
 
   Future<void> _uploadSurvey(Map<String, dynamic> task) async {
@@ -445,26 +577,43 @@ class OfflineSubmissionService extends ChangeNotifier
     );
   }
 
-  bool _isConnectivityError(Object error) {
+  OfflineSubmitState? _pendingState(Object error) {
+    if (error is EvidenceAuthorizationException) {
+      return OfflineSubmitState.authorizationBlocked;
+    }
+    if (error is EvidenceUploadException) {
+      return OfflineSubmitState.uploadPending;
+    }
+    if (error is EvidenceNetworkException) {
+      return OfflineSubmitState.networkPending;
+    }
+    if (error is PostgrestException && error.code == '42501') {
+      return OfflineSubmitState.authorizationBlocked;
+    }
     if (error is SocketException ||
         error is TimeoutException ||
         error is http.ClientException) {
-      return true;
+      return OfflineSubmitState.networkPending;
     }
     if (error is FirebaseException) {
-      return const {
+      if (const {
         'unavailable',
         'deadline-exceeded',
         'network-request-failed',
         'unknown',
-      }.contains(error.code);
+      }.contains(error.code)) {
+        return OfflineSubmitState.networkPending;
+      }
     }
     final message = error.toString().toLowerCase();
-    return message.contains('socket') ||
+    if (message.contains('socket') ||
         message.contains('network') ||
         message.contains('connection') ||
         message.contains('timed out') ||
-        message.contains('failed host lookup');
+        message.contains('failed host lookup')) {
+      return OfflineSubmitState.networkPending;
+    }
+    return null;
   }
 
   static DateTime? _date(Object? value) =>

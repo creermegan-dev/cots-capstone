@@ -3,10 +3,12 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
+import 'package:qr_flutter/qr_flutter.dart';
 
 import '../../../models/admin_preferences.dart';
 import '../../../providers/auth_provider.dart';
 import '../../../services/admin_preferences_repository.dart';
+import '../../../services/auth_service.dart';
 import '../../../widgets/cots_loading_skeleton.dart';
 import '../layout/admin_breakpoints.dart';
 import '../theme/admin_theme.dart';
@@ -101,14 +103,23 @@ class _AdminSettingsScreenState extends State<AdminSettingsScreen> {
       _preferencesError = null;
     });
     try {
+      final auth = context.read<AuthProvider>();
       final preferences = await _preferencesStore.load(uid);
+      var actualTwoFactor = preferences.twoFactorAuth;
+      try {
+        actualTwoFactor =
+            auth.supportsTotpMfa ? await auth.isTotpEnabled() : false;
+      } catch (_) {
+        // Keep the saved preference when the live auth service is temporarily
+        // unavailable. Enrollment changes still require the live service.
+      }
       if (!mounted) return;
       setState(() {
         _emailNotifications = preferences.emailNotifications;
         _highRiskAlerts = preferences.highRiskAlerts;
         _systemUpdates = preferences.systemUpdates;
         _weeklyReports = preferences.weeklyReports;
-        _twoFactorAuth = preferences.twoFactorAuth;
+        _twoFactorAuth = actualTwoFactor;
         _loginAlerts = preferences.loginAlerts;
         _sessionTimeout = preferences.sessionTimeout;
       });
@@ -120,6 +131,127 @@ class _AdminSettingsScreenState extends State<AdminSettingsScreen> {
       });
     } finally {
       if (mounted) setState(() => _loadingPreferences = false);
+    }
+  }
+
+  Future<void> _changeTwoFactor(bool enable) async {
+    final auth = context.read<AuthProvider>();
+    if (!auth.supportsTotpMfa) {
+      _snack(
+        'Set up authenticator 2FA from the Android app. It is not supported by the Windows Firebase REST build.',
+      );
+      return;
+    }
+    setState(() => _savingPreferences = true);
+    try {
+      if (enable) {
+        final enrollment = await auth.beginTotpEnrollment();
+        if (!mounted) return;
+        final code = await _showTotpEnrollment(enrollment);
+        if (code == null) return;
+        await auth.confirmTotpEnrollment(enrollment, code);
+        if (!mounted) return;
+        setState(() => _twoFactorAuth = true);
+        _snack('Two-factor authentication enabled.');
+      } else {
+        final confirmed = await showDialog<bool>(
+              context: context,
+              builder: (dialogContext) => AlertDialog(
+                title: const Text('Disable two-factor authentication?'),
+                content: const Text(
+                  'Your account will return to password-only sign in.',
+                ),
+                actions: [
+                  TextButton(
+                    onPressed: () => Navigator.pop(dialogContext, false),
+                    child: const Text('Cancel'),
+                  ),
+                  FilledButton(
+                    onPressed: () => Navigator.pop(dialogContext, true),
+                    child: const Text('Disable'),
+                  ),
+                ],
+              ),
+            ) ??
+            false;
+        if (!confirmed) return;
+        await auth.disableTotp();
+        if (!mounted) return;
+        setState(() => _twoFactorAuth = false);
+        _snack('Two-factor authentication disabled.');
+      }
+      await _savePreferences();
+    } catch (error) {
+      _snack('Could not update two-factor authentication: $error');
+    } finally {
+      if (mounted) setState(() => _savingPreferences = false);
+    }
+  }
+
+  Future<String?> _showTotpEnrollment(TotpEnrollment enrollment) async {
+    final controller = TextEditingController();
+    try {
+      return await showDialog<String>(
+        context: context,
+        barrierDismissible: false,
+        builder: (dialogContext) => AlertDialog(
+          title: const Text('Set up authenticator app'),
+          content: SingleChildScrollView(
+            child: SizedBox(
+              width: 360,
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  const Text(
+                    'Scan this QR code using Google Authenticator, Microsoft Authenticator, or another TOTP app.',
+                  ),
+                  const SizedBox(height: 16),
+                  Center(
+                    child: QrImageView(
+                      data: enrollment.qrCodeUrl,
+                      size: 190,
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+                  SelectableText(
+                    'Manual key: ${enrollment.secretKey}',
+                    textAlign: TextAlign.center,
+                    style: const TextStyle(fontSize: 12),
+                  ),
+                  const SizedBox(height: 16),
+                  TextField(
+                    controller: controller,
+                    keyboardType: TextInputType.number,
+                    maxLength: 6,
+                    decoration: const InputDecoration(
+                      labelText: '6-digit verification code',
+                      border: OutlineInputBorder(),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(dialogContext),
+              child: const Text('Cancel'),
+            ),
+            FilledButton(
+              onPressed: () {
+                final code = controller.text.trim();
+                if (RegExp(r'^\d{6}$').hasMatch(code)) {
+                  Navigator.pop(dialogContext, code);
+                }
+              },
+              child: const Text('Enable 2FA'),
+            ),
+          ],
+        ),
+      );
+    } finally {
+      controller.dispose();
     }
   }
 
@@ -525,9 +657,7 @@ class _AdminSettingsScreenState extends State<AdminSettingsScreen> {
             title: 'Two-Factor Authentication',
             subtitle: 'Require a second step when signing in',
             value: _twoFactorAuth,
-            onChanged: _savingPreferences
-                ? null
-                : (v) => setState(() => _twoFactorAuth = v),
+            onChanged: _savingPreferences ? null : _changeTwoFactor,
           ),
           const Divider(height: 22),
           _toggleTile(

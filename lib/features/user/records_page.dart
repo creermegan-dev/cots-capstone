@@ -94,14 +94,15 @@ class _RecordsPageState extends State<RecordsPage> {
   }
 
   int get _total => _allRecords.length;
-  int get _countAccepted =>
-      _allRecords.where((r) =>
-          r.status == 'Accepted' ||
-          r.status == 'Automatically Accepted').length;
-  int get _countUnderReview =>
-      _allRecords.where((r) =>
+  int get _countAccepted => _allRecords
+      .where(
+          (r) => r.status == 'Accepted' || r.status == 'Automatically Accepted')
+      .length;
+  int get _countUnderReview => _allRecords
+      .where((r) =>
           r.status == 'Under Review' ||
-          r.status == 'Requires Expert Validation').length;
+          r.status == 'Requires Expert Validation')
+      .length;
   int get _countRetake =>
       _allRecords.where((r) => r.status == 'Retake Photo').length;
 
@@ -113,8 +114,8 @@ class _RecordsPageState extends State<RecordsPage> {
     return _allRecords.where((r) {
       if (_statusFilter != null && r.status != _statusFilter) return false;
       if (q.isEmpty) return true;
-      final hay =
-          '${r.displayId} ${r.submittedBy} ${r.activityType} ${r.zone}'.toLowerCase();
+      final hay = '${r.displayId} ${r.submittedBy} ${r.activityType} ${r.zone}'
+          .toLowerCase();
       return hay.contains(q);
     }).toList();
   }
@@ -146,8 +147,10 @@ class _RecordsPageState extends State<RecordsPage> {
                 runSpacing: 8,
                 children: [
                   _filterChip('All', null),
-                  _filterChip('Automatically Accepted', 'Automatically Accepted'),
-                  _filterChip('Requires Expert Validation', 'Requires Expert Validation'),
+                  _filterChip(
+                      'Automatically Accepted', 'Automatically Accepted'),
+                  _filterChip('Requires Expert Validation',
+                      'Requires Expert Validation'),
                   _filterChip('Retake Photo', 'Retake Photo'),
                   _filterChip('Submitted', 'Submitted'),
                   _filterChip('Pending Validation', 'Pending Validation'),
@@ -185,8 +188,11 @@ class _RecordsPageState extends State<RecordsPage> {
 
   @override
   Widget build(BuildContext context) {
-    final uid = context.watch<AuthProvider>().userModel?.uid ??
-        FirebaseAuth.instance.currentUser?.uid;
+    final authProvider = context.watch<AuthProvider>();
+    final uid = authProvider.userModel?.uid ??
+        (authProvider.usesSupabase
+            ? null
+            : FirebaseAuth.instance.currentUser?.uid);
 
     return Scaffold(
       backgroundColor: kGray,
@@ -260,178 +266,174 @@ class _RecordsPageState extends State<RecordsPage> {
     final hasMore = _visibleCount < filtered.length;
 
     return SafeArea(
-        bottom: false,
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            Expanded(
-              child: ListView(
-                padding: const EdgeInsets.fromLTRB(16, 8, 16, 100),
-                children: [
-                  const Text(
-                    'RECORDS PAGE',
-                    style: TextStyle(
-                      fontSize: 12,
-                      fontWeight: FontWeight.w800,
-                      color: kGreen,
-                      letterSpacing: 0.8,
-                    ),
+      bottom: false,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Expanded(
+            child: ListView(
+              padding: const EdgeInsets.fromLTRB(16, 8, 16, 100),
+              children: [
+                const Text(
+                  'RECORDS PAGE',
+                  style: TextStyle(
+                    fontSize: 12,
+                    fontWeight: FontWeight.w800,
+                    color: kGreen,
+                    letterSpacing: 0.8,
                   ),
-                  const SizedBox(height: 6),
-                  Text(
-                    'View your GoPro detection submissions and verification status.',
-                    style: TextStyle(
-                      fontSize: 13,
-                      color: Colors.grey.shade700,
-                      height: 1.35,
-                    ),
+                ),
+                const SizedBox(height: 6),
+                Text(
+                  'View your GoPro detection submissions and verification status.',
+                  style: TextStyle(
+                    fontSize: 13,
+                    color: Colors.grey.shade700,
+                    height: 1.35,
                   ),
-                  Consumer<OfflineSubmissionService>(
-                    builder: (context, offline, _) {
-                      if (offline.pendingCount == 0 && !offline.isSyncing) {
-                        return const SizedBox.shrink();
-                      }
-                      return Padding(
-                        padding: const EdgeInsets.only(top: 12),
-                        child: Container(
-                          padding: const EdgeInsets.all(12),
-                          decoration: BoxDecoration(
-                            color: const Color(0xFFFFF7E6),
-                            borderRadius: BorderRadius.circular(12),
-                            border: Border.all(color: const Color(0xFFF2C66D)),
-                          ),
-                          child: Row(
-                            children: [
-                              Icon(
+                ),
+                Consumer<OfflineSubmissionService>(
+                  builder: (context, offline, _) {
+                    if (offline.pendingCount == 0 && !offline.isSyncing) {
+                      return const SizedBox.shrink();
+                    }
+                    return Padding(
+                      padding: const EdgeInsets.only(top: 12),
+                      child: Container(
+                        padding: const EdgeInsets.all(12),
+                        decoration: BoxDecoration(
+                          color: const Color(0xFFFFF7E6),
+                          borderRadius: BorderRadius.circular(12),
+                          border: Border.all(color: const Color(0xFFF2C66D)),
+                        ),
+                        child: Row(
+                          children: [
+                            Icon(
+                              offline.isSyncing
+                                  ? Icons.sync_rounded
+                                  : Icons.cloud_upload_outlined,
+                              color: const Color(0xFF8A5A00),
+                            ),
+                            const SizedBox(width: 10),
+                            Expanded(
+                              child: Text(
                                 offline.isSyncing
-                                    ? Icons.sync_rounded
-                                    : Icons.cloud_upload_outlined,
-                                color: const Color(0xFF8A5A00),
-                              ),
-                              const SizedBox(width: 10),
-                              Expanded(
-                                child: Text(
-                                  offline.isSyncing
-                                      ? 'Synchronizing pending submissions…'
-                                      : '${offline.pendingCount} submission${offline.pendingCount == 1 ? '' : 's'} pending synchronization',
-                                  style: const TextStyle(
-                                    color: Color(0xFF684500),
-                                    fontWeight: FontWeight.w700,
-                                    fontSize: 12,
-                                  ),
+                                    ? 'Synchronizing pending submissions…'
+                                    : '${offline.pendingCount} submission${offline.pendingCount == 1 ? '' : 's'} pending synchronization',
+                                style: const TextStyle(
+                                  color: Color(0xFF684500),
+                                  fontWeight: FontWeight.w700,
+                                  fontSize: 12,
                                 ),
                               ),
-                              TextButton(
-                                onPressed: offline.isSyncing
-                                    ? null
-                                    : () => offline.syncPending(),
-                                child: const Text('Retry'),
-                              ),
-                            ],
-                          ),
-                        ),
-                      );
-                    },
-                  ),
-                  const SizedBox(height: 16),
-                  _summaryRow(),
-                  const SizedBox(height: 16),
-                  Row(
-                    children: [
-                      Expanded(
-                        child: TextField(
-                          controller: _search,
-                          onChanged: (_) =>
-                              setState(() => _visibleCount = 8),
-                          decoration: InputDecoration(
-                            hintText: 'Search by record ID or activity',
-                            hintStyle: TextStyle(
-                              fontSize: 13,
-                              color: Colors.grey.shade500,
                             ),
-                            prefixIcon: Icon(Icons.search,
-                                color: Colors.grey.shade600, size: 22),
-                            filled: true,
-                            fillColor: Colors.white,
-                            contentPadding: const EdgeInsets.symmetric(
-                              horizontal: 12,
-                              vertical: 12,
+                            TextButton(
+                              onPressed: offline.isSyncing
+                                  ? null
+                                  : () => offline.syncPending(),
+                              child: const Text('Retry'),
                             ),
-                            border: OutlineInputBorder(
-                              borderRadius: BorderRadius.circular(12),
-                              borderSide:
-                                  BorderSide(color: Colors.grey.shade300),
-                            ),
-                            enabledBorder: OutlineInputBorder(
-                              borderRadius: BorderRadius.circular(12),
-                              borderSide:
-                                  BorderSide(color: Colors.grey.shade300),
-                            ),
-                            focusedBorder: OutlineInputBorder(
-                              borderRadius: BorderRadius.circular(12),
-                              borderSide:
-                                  const BorderSide(color: kGreen, width: 1.5),
-                            ),
-                          ),
+                          ],
                         ),
                       ),
-                      const SizedBox(width: 10),
-                      OutlinedButton.icon(
-                        onPressed: _openFilters,
-                        icon: Icon(Icons.filter_list,
-                            size: 18, color: Colors.grey.shade800),
-                        label: Text(
-                          'Filters',
-                          style: TextStyle(
-                            color: Colors.grey.shade800,
-                            fontWeight: FontWeight.w600,
+                    );
+                  },
+                ),
+                const SizedBox(height: 16),
+                _summaryRow(),
+                const SizedBox(height: 16),
+                Row(
+                  children: [
+                    Expanded(
+                      child: TextField(
+                        controller: _search,
+                        onChanged: (_) => setState(() => _visibleCount = 8),
+                        decoration: InputDecoration(
+                          hintText: 'Search by record ID or activity',
+                          hintStyle: TextStyle(
                             fontSize: 13,
+                            color: Colors.grey.shade500,
                           ),
-                        ),
-                        style: OutlinedButton.styleFrom(
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: 14,
+                          prefixIcon: Icon(Icons.search,
+                              color: Colors.grey.shade600, size: 22),
+                          filled: true,
+                          fillColor: Colors.white,
+                          contentPadding: const EdgeInsets.symmetric(
+                            horizontal: 12,
                             vertical: 12,
                           ),
-                          side: BorderSide(color: Colors.grey.shade300),
-                          shape: RoundedRectangleBorder(
+                          border: OutlineInputBorder(
                             borderRadius: BorderRadius.circular(12),
+                            borderSide: BorderSide(color: Colors.grey.shade300),
+                          ),
+                          enabledBorder: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(12),
+                            borderSide: BorderSide(color: Colors.grey.shade300),
+                          ),
+                          focusedBorder: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(12),
+                            borderSide:
+                                const BorderSide(color: kGreen, width: 1.5),
                           ),
                         ),
                       ),
-                    ],
-                  ),
-                  if (_statusFilter != null) ...[
-                    const SizedBox(height: 8),
-                    Align(
-                      alignment: Alignment.centerLeft,
-                      child: TextButton.icon(
-                        onPressed: () =>
-                            setState(() => _statusFilter = null),
-                        icon: const Icon(Icons.close, size: 18),
-                        label: Text(
-                          'Clear filter: $_statusFilter',
-                          style: const TextStyle(fontSize: 12),
+                    ),
+                    const SizedBox(width: 10),
+                    OutlinedButton.icon(
+                      onPressed: _openFilters,
+                      icon: Icon(Icons.filter_list,
+                          size: 18, color: Colors.grey.shade800),
+                      label: Text(
+                        'Filters',
+                        style: TextStyle(
+                          color: Colors.grey.shade800,
+                          fontWeight: FontWeight.w600,
+                          fontSize: 13,
+                        ),
+                      ),
+                      style: OutlinedButton.styleFrom(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 14,
+                          vertical: 12,
+                        ),
+                        side: BorderSide(color: Colors.grey.shade300),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(12),
                         ),
                       ),
                     ),
                   ],
-                  const SizedBox(height: 14),
-                  if (shown.isEmpty)
-                    Container(
-                      padding: const EdgeInsets.all(20),
-                      decoration: BoxDecoration(
-                        color: Colors.white,
-                        borderRadius: BorderRadius.circular(12),
-                        border: Border.all(color: Colors.grey.shade200),
+                ),
+                if (_statusFilter != null) ...[
+                  const SizedBox(height: 8),
+                  Align(
+                    alignment: Alignment.centerLeft,
+                    child: TextButton.icon(
+                      onPressed: () => setState(() => _statusFilter = null),
+                      icon: const Icon(Icons.close, size: 18),
+                      label: Text(
+                        'Clear filter: $_statusFilter',
+                        style: const TextStyle(fontSize: 12),
                       ),
-                      child: const Text(
-                        'No submissions yet. Tap + to upload a GoPro detection.',
-                        style: TextStyle(color: kNavy, height: 1.4),
-                      ),
-                    )
-                  else
-                    ...shown.map((r) => Padding(
+                    ),
+                  ),
+                ],
+                const SizedBox(height: 14),
+                if (shown.isEmpty)
+                  Container(
+                    padding: const EdgeInsets.all(20),
+                    decoration: BoxDecoration(
+                      color: Colors.white,
+                      borderRadius: BorderRadius.circular(12),
+                      border: Border.all(color: Colors.grey.shade200),
+                    ),
+                    child: const Text(
+                      'No submissions yet. Tap + to upload a GoPro detection.',
+                      style: TextStyle(color: kNavy, height: 1.4),
+                    ),
+                  )
+                else
+                  ...shown.map((r) => Padding(
                         padding: const EdgeInsets.only(bottom: 12),
                         child: _RecordCard(
                           record: r,
@@ -454,23 +456,23 @@ class _RecordsPageState extends State<RecordsPage> {
                           },
                         ),
                       )),
-                  if (hasMore)
-                    Center(
-                      child: TextButton.icon(
-                        onPressed: () => setState(
-                          () => _visibleCount += 8,
-                        ),
-                        icon: const Icon(Icons.expand_more_rounded),
-                        label: const Text('Load more'),
+                if (hasMore)
+                  Center(
+                    child: TextButton.icon(
+                      onPressed: () => setState(
+                        () => _visibleCount += 8,
                       ),
+                      icon: const Icon(Icons.expand_more_rounded),
+                      label: const Text('Load more'),
                     ),
-                  const SizedBox(height: 20),
-                  _statusGuideFooter(),
-                ],
-              ),
+                  ),
+                const SizedBox(height: 20),
+                _statusGuideFooter(),
+              ],
             ),
-          ],
-        ),
+          ),
+        ],
+      ),
     );
   }
 
@@ -593,11 +595,14 @@ class _RecordsPageState extends State<RecordsPage> {
             ),
           ),
           const SizedBox(height: 10),
-          _guideRow(kLow, 'Automatically Accepted', 'AI detection confidence is 80%–100%. Automatically accepted as an official monitoring record.'),
+          _guideRow(kLow, 'Automatically Accepted',
+              'AI detection confidence is 80%–100%. Automatically accepted as an official monitoring record.'),
           const SizedBox(height: 6),
-          _guideRow(kModerate, 'Requires Expert Validation', 'AI detection confidence is below 80%. Forwarded to the Expert for manual verification.'),
+          _guideRow(kModerate, 'Requires Expert Validation',
+              'AI detection confidence is below 80%. Forwarded to the Expert for manual verification.'),
           const SizedBox(height: 6),
-          _guideRow(kHigh, 'Retake Photo', 'Confidence too low (0–${CotsConfidencePolicy.adminReviewMin - 1}%) — capture a clearer GoPro image.'),
+          _guideRow(kHigh, 'Retake Photo',
+              'Confidence too low (0–${CotsConfidencePolicy.adminReviewMin - 1}%) — capture a clearer GoPro image.'),
           const SizedBox(height: 12),
           Row(
             crossAxisAlignment: CrossAxisAlignment.start,
@@ -635,11 +640,13 @@ class _RecordsPageState extends State<RecordsPage> {
         Expanded(
           child: RichText(
             text: TextSpan(
-              style: TextStyle(fontSize: 12, color: Colors.grey.shade800, height: 1.35),
+              style: TextStyle(
+                  fontSize: 12, color: Colors.grey.shade800, height: 1.35),
               children: [
                 TextSpan(
                   text: '$title: ',
-                  style: const TextStyle(fontWeight: FontWeight.w700, color: kNavy),
+                  style: const TextStyle(
+                      fontWeight: FontWeight.w700, color: kNavy),
                 ),
                 TextSpan(text: text),
               ],

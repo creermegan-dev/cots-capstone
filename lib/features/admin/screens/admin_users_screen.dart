@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
 
+import '../../../core/supabase_config.dart';
 import '../../../models/user_model.dart';
 import '../../../providers/auth_provider.dart';
 import '../../../services/personnel_repository.dart';
@@ -640,8 +641,10 @@ class _PersonnelVerificationPanelState
         verified: verified,
         verifiedBy: admin?.uid ?? '',
       );
-      await FollowUpReassignmentRepository.publishPersonnel(
-          [user.copyWith(fieldPersonnelVerified: verified)]);
+      if (!SupabaseConfig.isConfigured) {
+        await FollowUpReassignmentRepository.publishPersonnel(
+            [user.copyWith(fieldPersonnelVerified: verified)]);
+      }
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
@@ -658,6 +661,82 @@ class _PersonnelVerificationPanelState
         SnackBar(content: Text('Could not update verification: $error')),
       );
     } finally {
+      if (mounted) setState(() => _savingUid = null);
+    }
+  }
+
+  Future<void> _beginRecovery(UserModel user) async {
+    final controller = TextEditingController();
+    try {
+      final reference = await showDialog<String>(
+        context: context,
+        builder: (dialogContext) => AlertDialog(
+          title: const Text('Approve supervised recovery?'),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                'Confirm that ${user.fullName.isEmpty ? user.email : user.fullName} '
+                'passed your identity check. This approval expires after 15 minutes.',
+              ),
+              const SizedBox(height: 16),
+              TextField(
+                controller: controller,
+                autofocus: true,
+                maxLength: 200,
+                decoration: const InputDecoration(
+                  labelText: 'Verification reference',
+                  hintText: 'Example: in-person ID check',
+                ),
+              ),
+            ],
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(dialogContext),
+              child: const Text('Cancel'),
+            ),
+            FilledButton(
+              onPressed: () {
+                final value = controller.text.trim();
+                if (value.isNotEmpty) Navigator.pop(dialogContext, value);
+              },
+              child: const Text('Approve'),
+            ),
+          ],
+        ),
+      );
+      if (reference == null || !mounted) return;
+      setState(() => _savingUid = user.uid);
+      final requestId = await PersonnelRepository.beginSupervisedRecovery(
+        userId: user.uid,
+        verificationReference: reference,
+      );
+      if (!mounted) return;
+      await showDialog<void>(
+        context: context,
+        builder: (dialogContext) => AlertDialog(
+          title: const Text('Recovery approved'),
+          content: SelectableText(
+            'Request ID: $requestId\n\nUse the owner recovery tool within '
+            '15 minutes. Enter the new password privately in that tool.',
+          ),
+          actions: [
+            FilledButton(
+              onPressed: () => Navigator.pop(dialogContext),
+              child: const Text('Done'),
+            ),
+          ],
+        ),
+      );
+    } catch (error) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Could not approve recovery: $error')),
+      );
+    } finally {
+      controller.dispose();
       if (mounted) setState(() => _savingUid = null);
     }
   }
@@ -727,33 +806,36 @@ class _PersonnelVerificationPanelState
               }
               return Column(
                 children: [
-                  OutlinedButton.icon(
-                    icon: const Icon(Icons.publish_outlined),
-                    label: const Text('Publish follow-up personnel directory'),
-                    onPressed: _savingUid != null
-                        ? null
-                        : () async {
-                            setState(() => _savingUid = 'directory');
-                            try {
-                              await FollowUpReassignmentRepository
-                                  .publishPersonnel(snapshot.data ?? []);
-                              if (context.mounted) {
-                                ScaffoldMessenger.of(context).showSnackBar(
-                                    const SnackBar(
-                                        content: Text(
-                                            'Follow-up personnel directory published.')));
+                  if (!SupabaseConfig.isConfigured)
+                    OutlinedButton.icon(
+                      icon: const Icon(Icons.publish_outlined),
+                      label:
+                          const Text('Publish follow-up personnel directory'),
+                      onPressed: _savingUid != null
+                          ? null
+                          : () async {
+                              setState(() => _savingUid = 'directory');
+                              try {
+                                await FollowUpReassignmentRepository
+                                    .publishPersonnel(snapshot.data ?? []);
+                                if (context.mounted) {
+                                  ScaffoldMessenger.of(context).showSnackBar(
+                                      const SnackBar(
+                                          content: Text(
+                                              'Follow-up personnel directory published.')));
+                                }
+                              } catch (error) {
+                                if (context.mounted) {
+                                  ScaffoldMessenger.of(context).showSnackBar(
+                                      SnackBar(
+                                          content: Text(
+                                              'Could not publish directory: $error')));
+                                }
+                              } finally {
+                                if (mounted) setState(() => _savingUid = null);
                               }
-                            } catch (error) {
-                              if (context.mounted) {
-                                ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-                                    content: Text(
-                                        'Could not publish directory: $error')));
-                              }
-                            } finally {
-                              if (mounted) setState(() => _savingUid = null);
-                            }
-                          },
-                  ),
+                            },
+                    ),
                   for (var index = 0; index < users.length; index++) ...[
                     if (index > 0) const Divider(height: 18),
                     _personnelRow(users[index]),
@@ -805,25 +887,37 @@ class _PersonnelVerificationPanelState
           ),
         ),
         const SizedBox(width: 10),
-        OutlinedButton.icon(
-          onPressed: busy ? null : () => _setVerified(user, !verified),
-          icon: busy
-              ? const SizedBox(
-                  width: 16,
-                  height: 16,
-                  child: CircularProgressIndicator(strokeWidth: 2),
-                )
-              : Icon(
-                  verified
-                      ? Icons.verified_user_outlined
-                      : Icons.fact_check_outlined,
-                  size: 18,
-                ),
-          label: Text(verified ? 'Verified' : 'Verify'),
-          style: OutlinedButton.styleFrom(
-            foregroundColor:
-                verified ? AdminColors.statGreen : AdminColors.statBlue,
-          ),
+        Wrap(
+          spacing: 8,
+          runSpacing: 8,
+          children: [
+            if (SupabaseConfig.isConfigured)
+              IconButton.outlined(
+                onPressed: busy ? null : () => _beginRecovery(user),
+                tooltip: 'Approve supervised password recovery',
+                icon: const Icon(Icons.key_rounded, size: 18),
+              ),
+            OutlinedButton.icon(
+              onPressed: busy ? null : () => _setVerified(user, !verified),
+              icon: busy
+                  ? const SizedBox(
+                      width: 16,
+                      height: 16,
+                      child: CircularProgressIndicator(strokeWidth: 2),
+                    )
+                  : Icon(
+                      verified
+                          ? Icons.verified_user_outlined
+                          : Icons.fact_check_outlined,
+                      size: 18,
+                    ),
+              label: Text(verified ? 'Verified' : 'Verify'),
+              style: OutlinedButton.styleFrom(
+                foregroundColor:
+                    verified ? AdminColors.statGreen : AdminColors.statBlue,
+              ),
+            ),
+          ],
         ),
       ],
     );

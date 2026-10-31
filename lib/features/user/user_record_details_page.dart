@@ -191,32 +191,25 @@ class UserRecordDetailsPage extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           _metricBox(
-            'Field-observed COTS',
-            '${survey.fieldObservedCount} individuals',
-            const Color(0xFF1565C0),
+            'COTS found and removed',
+            followUpCountValue(survey),
+            kGreen,
           ),
           const SizedBox(height: 10),
           Text(record.userStatusLabel,
               style: const TextStyle(fontWeight: FontWeight.w700)),
-          const SizedBox(height: 10),
-          _metricBox(
-            'Field-reported eliminated',
-            '${survey.fieldEliminatedCount} individuals',
-            kGreen,
-          ),
           const SizedBox(height: 12),
           for (final capture in linkedCaptures)
             Padding(
               padding: const EdgeInsets.only(bottom: 8),
               child: Text(
-                  '${capture.displayRecordId}: Expert-confirmed image detections: '
-                  '${capture.adminCotsDecisions.isNotEmpty ? capture.adminCotsDecisions.where((decision) => decision == PerCotsAdminDecision.confirmed).length : capture.adminConfirmed ? capture.aiDetectedCount : 'Not yet validated'}. '
-                  'These are image detections, not a unique survey count.'),
+                  '${capture.displayRecordId}: confirmed COTS in this photo: '
+                  '${capture.adminCotsDecisions.isNotEmpty ? capture.adminCotsDecisions.where((decision) => decision == PerCotsAdminDecision.confirmed).length : capture.adminConfirmed ? capture.aiDetectedCount : 'Not yet validated'}.'),
             ),
           Text(
-            'AI image detections: ${survey.aiDetectedCount} across '
-            '${survey.captureIds.length} image record(s). Counts across '
-            'images are not treated as unique individuals.',
+            'Counted from the COTS the AI found in '
+            '${survey.captureIds.length} photo(s). Each COTS appears in '
+            'only one photo.',
             style: TextStyle(
               fontSize: 12,
               color: Colors.grey.shade700,
@@ -246,7 +239,7 @@ class UserRecordDetailsPage extends StatelessWidget {
                 : '${survey.surveyedAreaSquareMeters!.toStringAsFixed(2)} m²',
           ),
           if (survey.fieldEliminatedCount > 0)
-            _kv('Elimination method', survey.eliminationMethod),
+            _kv('Removal method', survey.eliminationMethod),
           if (survey.notes.trim().isNotEmpty)
             _kv('Field notes', survey.notes.trim()),
         ],

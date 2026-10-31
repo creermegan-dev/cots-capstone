@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../../../services/admin_report_export_service.dart';
 import '../../../services/scan_record_repository.dart';
 import '../../../widgets/cots_loading_skeleton.dart';
 import '../models/admin_record_table_row.dart';
@@ -24,6 +25,9 @@ class _AdminReportsScreenState extends State<AdminReportsScreen> {
   String _zone = 'All Zones';
   int _page = 0;
   int _rowsPerPage = 10;
+  bool _exporting = false;
+
+  final _exportService = const AdminReportExportService();
 
   /// Last-used summary stat card (0–4); `null` if filters were changed manually and no preset matches.
   int? _selectedStatIndex;
@@ -42,6 +46,40 @@ class _AdminReportsScreenState extends State<AdminReportsScreen> {
       ),
     );
     setState(() => _refreshGeneration++);
+  }
+
+  Future<void> _exportReports(
+    List<_ReportRow> rows, {
+    required bool asPdf,
+  }) async {
+    if (rows.isEmpty || _exporting) return;
+    setState(() => _exporting = true);
+    try {
+      final records = rows.map((row) => row.source).toList(growable: false);
+      final path = asPdf
+          ? await _exportService.savePdf(records)
+          : await _exportService.saveCsv(records);
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          behavior: SnackBarBehavior.floating,
+          content: Text(
+            '${asPdf ? 'PDF' : 'CSV'} report saved${path == null || path.isEmpty ? '.' : ' to $path'}',
+          ),
+        ),
+      );
+    } catch (error) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          behavior: SnackBarBehavior.floating,
+          backgroundColor: AdminColors.statRed,
+          content: Text('Could not export reports: $error'),
+        ),
+      );
+    } finally {
+      if (mounted) setState(() => _exporting = false);
+    }
   }
 
   @override
@@ -202,7 +240,7 @@ class _AdminReportsScreenState extends State<AdminReportsScreen> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          _header(zoneOptions),
+          _header(zoneOptions, filtered),
           const SizedBox(height: 18),
           _statCards(rows),
           const SizedBox(height: 18),
@@ -271,7 +309,7 @@ class _AdminReportsScreenState extends State<AdminReportsScreen> {
     );
   }
 
-  Widget _header(List<String> zoneOptions) {
+  Widget _header(List<String> zoneOptions, List<_ReportRow> filteredRows) {
     return LayoutBuilder(
       builder: (context, c) {
         final narrow = c.maxWidth < 780;
@@ -314,7 +352,9 @@ class _AdminReportsScreenState extends State<AdminReportsScreen> {
           ),
           const SizedBox(width: 10),
           OutlinedButton.icon(
-            onPressed: null,
+            onPressed: filteredRows.isEmpty || _exporting
+                ? null
+                : () => _exportReports(filteredRows, asPdf: true),
             icon: const Icon(Icons.picture_as_pdf_outlined, size: 18),
             label: const Text('Export PDF'),
             style: OutlinedButton.styleFrom(
@@ -326,9 +366,11 @@ class _AdminReportsScreenState extends State<AdminReportsScreen> {
           ),
           const SizedBox(width: 10),
           OutlinedButton.icon(
-            onPressed: null,
+            onPressed: filteredRows.isEmpty || _exporting
+                ? null
+                : () => _exportReports(filteredRows, asPdf: false),
             icon: const Icon(Icons.table_view_outlined, size: 18),
-            label: const Text('Export Excel'),
+            label: const Text('Export CSV'),
             style: OutlinedButton.styleFrom(
               foregroundColor: AdminColors.statGreen,
               side: BorderSide(

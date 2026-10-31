@@ -288,7 +288,7 @@ class _ProfileOptionTile extends StatelessWidget {
   }
 }
 
-// ─── Sub pages ─────────────────────────────────────────────────────────────
+// â”€â”€â”€ Sub pages â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 class _SubScaffold extends StatelessWidget {
   const _SubScaffold({required this.title, required this.child});
@@ -360,7 +360,8 @@ class _PersonalInformationPageState extends State<PersonalInformationPage> {
       _phone.text = user.phoneNumber;
       _assignedArea.text = user.assignedArea;
       _role = user.role.trim().isNotEmpty ? user.role : _kRoleOptions.first;
-      _organization = user.organization.trim().isEmpty ? null : user.organization;
+      _organization =
+          user.organization.trim().isEmpty ? null : user.organization;
     }
     _initialized = true;
   }
@@ -460,7 +461,8 @@ class _PersonalInformationPageState extends State<PersonalInformationPage> {
           child: ListView(
             padding: const EdgeInsets.fromLTRB(16, 12, 16, 110),
             children: [
-              _PersonalHeaderCard(user: context.watch<AuthProvider>().userModel),
+              _PersonalHeaderCard(
+                  user: context.watch<AuthProvider>().userModel),
               const SizedBox(height: 14),
               _PersonalFormCard(
                 children: [
@@ -472,9 +474,8 @@ class _PersonalInformationPageState extends State<PersonalInformationPage> {
                       controller: _fullName,
                       icon: Icons.person_outline,
                       hintText: 'Enter full name',
-                      validator: (v) => (v == null || v.trim().isEmpty)
-                          ? 'Required'
-                          : null,
+                      validator: (v) =>
+                          (v == null || v.trim().isEmpty) ? 'Required' : null,
                     ),
                   ),
                   _LabeledField(
@@ -483,8 +484,7 @@ class _PersonalInformationPageState extends State<PersonalInformationPage> {
                       value: _role,
                       icon: Icons.badge_outlined,
                       items: _optionsIncludingCurrent(_role, _kRoleOptions),
-                      onChanged: (v) =>
-                          setState(() => _role = v ?? _role),
+                      onChanged: (v) => setState(() => _role = v ?? _role),
                     ),
                   ),
                   _LabeledField(
@@ -519,8 +519,7 @@ class _PersonalInformationPageState extends State<PersonalInformationPage> {
                         _kOrgOptions,
                       ),
                       hint: 'Select organization',
-                      onChanged: (v) =>
-                          setState(() => _organization = v),
+                      onChanged: (v) => setState(() => _organization = v),
                     ),
                   ),
                   _LabeledField(
@@ -541,10 +540,8 @@ class _PersonalInformationPageState extends State<PersonalInformationPage> {
                               : () => Navigator.of(context).pop(),
                           style: OutlinedButton.styleFrom(
                             foregroundColor: kNavy,
-                            side: const BorderSide(
-                                color: Color(0xFFD1D5DB)),
-                            padding:
-                                const EdgeInsets.symmetric(vertical: 14),
+                            side: const BorderSide(color: Color(0xFFD1D5DB)),
+                            padding: const EdgeInsets.symmetric(vertical: 14),
                             shape: RoundedRectangleBorder(
                               borderRadius: BorderRadius.circular(10),
                             ),
@@ -566,8 +563,7 @@ class _PersonalInformationPageState extends State<PersonalInformationPage> {
                             backgroundColor: kGreen,
                             foregroundColor: Colors.white,
                             elevation: 0,
-                            padding:
-                                const EdgeInsets.symmetric(vertical: 14),
+                            padding: const EdgeInsets.symmetric(vertical: 14),
                             shape: RoundedRectangleBorder(
                               borderRadius: BorderRadius.circular(10),
                             ),
@@ -793,11 +789,9 @@ InputDecoration _fieldDecoration({
       padding: const EdgeInsets.only(left: 12, right: 8),
       child: Icon(icon, size: 18, color: const Color(0xFF6B7280)),
     ),
-    prefixIconConstraints:
-        const BoxConstraints(minWidth: 0, minHeight: 0),
+    prefixIconConstraints: const BoxConstraints(minWidth: 0, minHeight: 0),
     isDense: true,
-    contentPadding:
-        const EdgeInsets.symmetric(horizontal: 0, vertical: 12),
+    contentPadding: const EdgeInsets.symmetric(horizontal: 0, vertical: 12),
     filled: true,
     fillColor: Colors.white,
     enabledBorder: border,
@@ -875,8 +869,8 @@ class _DropdownInput<T> extends StatelessWidget {
       iconSize: 22,
       icon: const Padding(
         padding: EdgeInsets.only(right: 10),
-        child: Icon(Icons.keyboard_arrow_down_rounded,
-            color: Color(0xFF6B7280)),
+        child:
+            Icon(Icons.keyboard_arrow_down_rounded, color: Color(0xFF6B7280)),
       ),
       style: const TextStyle(
         color: kNavy,
@@ -977,8 +971,8 @@ class _ChangesSavedDialog extends StatelessWidget {
                   borderRadius: BorderRadius.circular(12),
                   border: Border.all(color: const Color(0xFFE5E7EB)),
                 ),
-                padding: const EdgeInsets.symmetric(
-                    horizontal: 12, vertical: 6),
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
                 child: Column(
                   children: [
                     _SummaryDialogRow(
@@ -1174,8 +1168,7 @@ class _ChangePasswordPageState extends State<ChangePasswordPage> {
               controller: _current,
               show: _showCurrent,
               onToggle: () => setState(() => _showCurrent = !_showCurrent),
-              validator: (v) =>
-                  (v == null || v.isEmpty) ? 'Required' : null,
+              validator: (v) => (v == null || v.isEmpty) ? 'Required' : null,
             ),
             const SizedBox(height: 12),
             _passwordField(
@@ -1366,19 +1359,23 @@ class AboutPage extends StatelessWidget {
                 SizedBox(height: 12),
                 _SystemBullet(
                   title: 'Machine Learning Detection',
-                  body: 'Upload GoPro images to detect COTS with confidence scores.',
+                  body:
+                      'Upload GoPro images to detect COTS with confidence scores.',
                 ),
                 _SystemBullet(
                   title: 'GIS Mapping',
-                  body: 'Visualize reef zones and infestation levels on interactive maps.',
+                  body:
+                      'Visualize reef zones and infestation levels on interactive maps.',
                 ),
                 _SystemBullet(
                   title: 'Expert Validation',
-                  body: 'Experts approve or reject uncertain detections before action.',
+                  body:
+                      'Experts approve or reject uncertain detections before action.',
                 ),
                 _SystemBullet(
                   title: 'Removal Evidence',
-                  body: 'Submit removal photos to close the monitoring–intervention loop.',
+                  body:
+                      'Submit removal photos to close the monitoring–intervention loop.',
                 ),
               ],
             ),
@@ -1438,7 +1435,8 @@ class AboutPage extends StatelessWidget {
                   value: 'Meariell Deace Bantillo',
                 ),
                 const _AboutDivider(),
-                const _AboutRow(label: 'Platform', value: 'Flutter (Windows / Mobile)'),
+                const _AboutRow(
+                    label: 'Platform', value: 'Flutter (Windows / Mobile)'),
                 const _AboutDivider(),
                 const _AboutRow(label: 'License', value: 'Internal / Academic'),
               ],

@@ -7,6 +7,7 @@ import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
 
 import '../../core/cots_colors.dart';
+import '../../core/supabase_config.dart';
 import '../../models/activity_type.dart';
 import '../../models/intervention_assignment_model.dart';
 import '../../models/scan_record_model.dart';
@@ -180,7 +181,10 @@ class _AssignedTasksSection extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final user = context.watch<AuthProvider>().userModel;
-    if (user == null) return const SizedBox.shrink();
+    // Scheduled removal tasks exist only in the Firebase version.
+    if (user == null || SupabaseConfig.isConfigured) {
+      return const SizedBox.shrink();
+    }
 
     return StreamBuilder<List<InterventionAssignmentModel>>(
       stream: InterventionAssignmentRepository.watchForAssignee(user.uid),

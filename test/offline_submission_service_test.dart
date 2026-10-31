@@ -4,6 +4,7 @@ import 'dart:typed_data';
 import 'package:cots_monitor/models/activity_type.dart';
 import 'package:cots_monitor/models/cots_detection_result.dart';
 import 'package:cots_monitor/services/offline_submission_service.dart';
+import 'package:cots_monitor/services/supabase_evidence_service.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
@@ -81,8 +82,7 @@ void main() {
     expect(service.pendingCount, 0);
   });
 
-  test('invalid submissions are not retained as retryable network work',
-      () async {
+  test('invalid submissions remain retained for manual diagnosis', () async {
     final service = OfflineSubmissionService(
       directoryProvider: () async => temporaryDirectory,
       recordUploader: (task, image) async => throw StateError('invalid'),
@@ -94,7 +94,35 @@ void main() {
       _submit(service, id: 'record-3', uid: 'diver-a'),
       throwsStateError,
     );
-    expect(service.pendingCount, 0);
+    expect(service.pendingCount, 1);
+  });
+
+  test('authorization and upload failures remain queued with distinct states',
+      () async {
+    final authorization = OfflineSubmissionService(
+      directoryProvider: () async => temporaryDirectory,
+      recordUploader: (task, image) async =>
+          throw const EvidenceAuthorizationException('denied'),
+      enableAutomaticSync: false,
+    );
+    await authorization.initialize();
+    final blocked =
+        await _submit(authorization, id: 'record-4', uid: 'diver-a');
+    expect(blocked.state, OfflineSubmitState.authorizationBlocked);
+    expect(authorization.pendingCount, 1);
+
+    await temporaryDirectory.delete(recursive: true);
+    await temporaryDirectory.create(recursive: true);
+    final upload = OfflineSubmissionService(
+      directoryProvider: () async => temporaryDirectory,
+      recordUploader: (task, image) async =>
+          throw const EvidenceUploadException('failed'),
+      enableAutomaticSync: false,
+    );
+    await upload.initialize();
+    final pending = await _submit(upload, id: 'record-5', uid: 'diver-a');
+    expect(pending.state, OfflineSubmitState.uploadPending);
+    expect(upload.pendingCount, 1);
   });
 }
 

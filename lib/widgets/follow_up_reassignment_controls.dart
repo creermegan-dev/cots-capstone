@@ -7,7 +7,6 @@ import '../models/follow_up_reassignment.dart';
 import '../models/follow_up_infestation_assessment.dart';
 import '../providers/auth_provider.dart';
 import '../services/follow_up_reassignment_repository.dart';
-import '../services/follow_up_workflow_store.dart';
 import 'cots_loading_skeleton.dart';
 
 class FollowUpAssessmentLabel extends StatefulWidget {
@@ -271,13 +270,12 @@ class _ReassignmentDetailsState extends State<ReassignmentDetails> {
   bool _busy = false;
   String? _error;
   Future<FollowUpReassignment> _load() async {
-    final doc = await FollowUpReassignmentRepository.store
-        .get('follow_up_reassignments/${widget.requestId}');
-    if (doc == null) {
+    final request =
+        await FollowUpReassignmentRepository.getRequest(widget.requestId);
+    if (request == null) {
       throw StateError('This reassignment request no longer exists.');
     }
-    return FollowUpReassignment(
-        widget.requestId, FollowUpWorkflowStore.data(doc));
+    return request;
   }
 
   Future<void> _run(Future<void> Function() operation) async {
@@ -288,7 +286,9 @@ class _ReassignmentDetailsState extends State<ReassignmentDetails> {
     });
     try {
       await operation();
-      if (mounted) setState(() => _request = _load());
+      if (mounted) setState(() {
+        _request = _load();
+      });
     } catch (error) {
       if (mounted) setState(() => _error = '$error');
     } finally {
@@ -361,7 +361,9 @@ class _ReassignmentDetailsState extends State<ReassignmentDetails> {
                     layout: CotsSkeletonLayout.section,
                     label: 'Loading request'),
               TextButton(
-                  onPressed: () => setState(() => _request = _load()),
+                  onPressed: () => setState(() {
+        _request = _load();
+      }),
                   child: const Text('Retry')),
               if (widget.closeable)
                 TextButton(
@@ -470,7 +472,9 @@ class _ReassignmentDetailsState extends State<ReassignmentDetails> {
                     ]),
                 TextButton(
                     onPressed:
-                        _busy ? null : () => setState(() => _request = _load()),
+                        _busy ? null : () => setState(() {
+        _request = _load();
+      }),
                     child: const Text('Refresh')),
                 if (widget.closeable)
                   TextButton(

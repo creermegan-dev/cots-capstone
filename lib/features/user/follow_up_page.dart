@@ -6,6 +6,7 @@ import 'package:provider/provider.dart';
 import '../../core/cots_colors.dart';
 import '../../models/activity_type.dart';
 import '../../models/capture_model.dart';
+import '../../models/cots_density.dart';
 import '../../models/follow_up_monitoring_model.dart';
 import '../../models/follow_up_reassignment.dart';
 import '../../models/scan_record_model.dart';
@@ -502,9 +503,9 @@ class _FollowUpPageState extends State<FollowUpPage> {
                 child: Text(
                   '${_dateFormat.format(survey.surveyDate)} · '
                   '${survey.submittedBy} · ${followUpSurveyStatusLabel(followUpSurveyStatus(survey, captures))} · '
-                  'Field observed ${survey.fieldObservedCount}, '
-                  'eliminated ${survey.fieldEliminatedCount}, '
-                  'AI detections ${survey.aiDetectedCount}',
+                  '${followUpCountSummary(survey)}'
+                  '${survey.calculatedLevel == null ? '' : ' · ${CotsDensity.describe(survey.densityPerHectare, survey.calculatedLevel)}'}'
+                  '${survey.assessedLevel == null ? '' : ' · Expert: ${survey.assessedLevel}'}',
                   style: const TextStyle(color: kMutedGray, fontSize: 12),
                 ),
               ),

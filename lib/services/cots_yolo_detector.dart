@@ -6,13 +6,18 @@ import '../models/cots_detection_result.dart';
 import 'yolo_image_preprocess.dart';
 import 'yolo_postprocess.dart';
 
-/// On-device COTS detector using YOLOv8 / RT-DETR ONNX via flutter_onnxruntime.
+/// On-device COTS detector using YOLO26s, with a build-time YOLO11 fallback.
 class CotsYoloDetector {
   CotsYoloDetector._();
 
   static final CotsYoloDetector instance = CotsYoloDetector._();
 
-  static const modelAssetPath = 'assets/models/yolov8_best.onnx';
+  static const modelName =
+      String.fromEnvironment('COTS_MODEL', defaultValue: 'yolo26');
+  static const _usesYolo11 = modelName == 'yolo11';
+  static const modelAssetPath = _usesYolo11
+      ? 'assets/models/yolov8_best.onnx'
+      : 'assets/models/yolo26_best.onnx';
 
   final _preprocessor = const YoloImagePreprocessor();
   final _postprocessor = const YoloPostprocessor();
@@ -21,26 +26,32 @@ class CotsYoloDetector {
   OrtSession? _session;
   String? _inputName;
   String? _outputName;
-  bool _initializing = false;
+  Future<void>? _initialization;
 
   Future<void> _ensureSession() async {
-    if (_session != null || _initializing) {
-      while (_initializing) {
-        await Future<void>.delayed(const Duration(milliseconds: 50));
-      }
-      return;
-    }
-
-    _initializing = true;
+    if (_session != null) return;
+    final pending = _initialization ??= _loadSession();
     try {
-      _session = await _runtime.createSessionFromAsset(modelAssetPath);
-      final inputs = await _session!.getInputInfo();
-      final outputs = await _session!.getOutputInfo();
+      await pending;
+    } finally {
+      if (identical(_initialization, pending)) _initialization = null;
+    }
+  }
+
+  Future<void> _loadSession() async {
+    if (modelName != 'yolo26' && modelName != 'yolo11') {
+      throw ArgumentError('COTS_MODEL must be yolo26 or yolo11.');
+    }
+    final session = await _runtime.createSessionFromAsset(modelAssetPath);
+    try {
+      final inputs = await session.getInputInfo();
+      final outputs = await session.getOutputInfo();
 
       if (inputs.isEmpty || outputs.isEmpty) {
         throw StateError('Model has no inputs/outputs.');
       }
 
+      _session = session;
       _inputName = inputs.first['name'] as String? ?? 'images';
       _outputName = outputs.first['name'] as String? ?? 'output0';
 
@@ -49,8 +60,10 @@ class CotsYoloDetector {
         debugPrint('ONNX inputs: $inputs');
         debugPrint('ONNX outputs: $outputs');
       }
-    } finally {
-      _initializing = false;
+    } catch (_) {
+      await session.close();
+      _session = null;
+      rethrow;
     }
   }
 
@@ -62,7 +75,7 @@ class CotsYoloDetector {
 
     final decoded = img.decodeImage(imageBytes);
     if (decoded == null) {
-      throw FormatException('Could not decode image for detection.');
+      throw const FormatException('Could not decode image for detection.');
     }
     // Match display orientation so boxes align with the uploaded photo.
     final oriented = img.bakeOrientation(decoded);
@@ -76,7 +89,13 @@ class CotsYoloDetector {
       );
 
       final outputs = await session.run({inputName: inputTensor});
-      final outputTensor = outputs[outputName] ?? outputs.values.first;
+      final outputTensor = outputs[outputName];
+      if (outputTensor == null) {
+        for (final value in outputs.values) {
+          await value.dispose();
+        }
+        throw StateError('$modelName did not return its expected output.');
+      }
 
       try {
         final flat = await outputTensor.asFlattenedList();
@@ -84,9 +103,17 @@ class CotsYoloDetector {
         if (kDebugMode) {
           debugPrint('YOLO output shape: $shape');
         }
-        final boxes = _postprocessor.decode(flat, shape, preprocessed.meta);
+        if (shape.length != 3 ||
+            shape[0] != 1 ||
+            shape[1] != (_usesYolo11 ? 5 : 100) ||
+            shape[2] != (_usesYolo11 ? 8400 : 6)) {
+          throw FormatException(
+              'Unexpected bundled $modelName output shape: $shape.');
+        }
+        final boxes = _postprocessor.decode(flat, shape, preprocessed.meta,
+            endToEnd: !_usesYolo11);
         if (kDebugMode) {
-          debugPrint('YOLO detections after NMS: ${boxes.length}');
+          debugPrint('$modelName detections after processing: ${boxes.length}');
           if (boxes.isNotEmpty) {
             debugPrint(
               'YOLO top score: ${boxes.first.score.toStringAsFixed(3)}',

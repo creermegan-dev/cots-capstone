@@ -3,12 +3,15 @@ import 'dart:typed_data';
 import 'package:cloud_firestore/cloud_firestore.dart';
 
 import '../core/firebase_bootstrap.dart';
+import '../core/supabase_config.dart';
 import '../models/cots_detection_result.dart';
 import '../models/removal_record_model.dart';
 import '../models/record_collection.dart';
 import 'processed_detection_payload.dart';
 import 'removal_record_image_store.dart';
 import 'scan_record_repository.dart';
+import 'supabase_record_service.dart';
+import 'supabase_evidence_service.dart';
 import 'windows_removal_record_rest_service.dart';
 import 'zone_assignment_service.dart';
 
@@ -23,7 +26,7 @@ abstract final class RemovalRecordService {
     required String submittedBy,
     required String imageName,
     required Uint8List imageBytes,
-    required int removedQuantity,
+    required int? removedQuantity,
     required String? removalMethod,
     required String notes,
     required double? depth,
@@ -31,6 +34,11 @@ abstract final class RemovalRecordService {
     required double? longitude,
     required DateTime? dateTaken,
     CotsDetectionResult? verificationDetection,
+    String? submissionId,
+    String? encounterId,
+    bool? gpsFromPhoto,
+    EvidenceImagePayload? evidence,
+    EvidenceProgressCallback? onEvidenceProgress,
   }) async {
     if (captureId.trim().isEmpty) {
       throw ArgumentError('captureId is required for removal records.');
@@ -61,12 +69,39 @@ abstract final class RemovalRecordService {
       aiConfidence: verificationDetection?.confidence,
     );
 
+    if (SupabaseConfig.isConfigured) {
+      if (submissionId == null || submissionId.trim().isEmpty) {
+        throw ArgumentError('A stable submission ID is required.');
+      }
+      if (evidence == null) {
+        throw StateError('Prepared removal evidence is required.');
+      }
+      return SupabaseRecordService.submitElimination(
+        submissionId: submissionId,
+        encounterId: encounterId,
+        captureId: captureId,
+        uid: uid,
+        // Record only what the Diver entered. Never assume every detected
+        // COTS was removed; null means the quantity was not recorded.
+        removedCount: removedQuantity,
+        method: removalMethod ?? '',
+        notes: notes,
+        latitude: latitude,
+        longitude: longitude,
+        dateTaken: dateTaken,
+        evidence: evidence,
+        gpsFromPhoto: gpsFromPhoto,
+        onEvidenceProgress: onEvidenceProgress,
+      );
+    }
+
     if (deferFirebaseUntilFirstUse) {
       final idToken = ScanRecordRepository.windowsIdToken;
       if (idToken == null) {
         throw StateError('Not signed in — cannot submit removal record.');
       }
       final removalId = await _windowsRest.createRemovalRecord(
+        submissionId: submissionId,
         idToken: idToken,
         captureId: captureId,
         uid: uid,
@@ -97,12 +132,28 @@ abstract final class RemovalRecordService {
     await ensureFirebaseInitialized();
     final docRef = FirebaseFirestore.instance
         .collection(RecordCollection.removalRecords)
-        .doc();
+        .doc(submissionId);
     final payload = Map<String, dynamic>.from(data)
       ..['display_record_id'] =
           RemovalRecordModel.formatDisplayRecordId(docRef.id);
 
-    await docRef.set(payload);
+    await FirebaseFirestore.instance.runTransaction((transaction) async {
+      final existing = await transaction.get(docRef);
+      if (!existing.exists) {
+        transaction.set(docRef, payload);
+      } else {
+        final saved = RemovalRecordModel.fromFirestore(existing);
+        if (saved.uid != uid ||
+            saved.captureId != captureId ||
+            saved.imageName != imageName ||
+            saved.removedQuantity != removedQuantity ||
+            saved.removalMethod != (removalMethod ?? '') ||
+            saved.notes != notes) {
+          throw StateError(
+              'The saved removal differs from this retry. Its original data was preserved.');
+        }
+      }
+    });
     await RemovalRecordImageStore.save(
       removalId: docRef.id,
       uid: uid,

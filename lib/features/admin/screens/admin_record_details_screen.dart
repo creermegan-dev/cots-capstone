@@ -1,12 +1,15 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
+import '../../../core/supabase_config.dart';
+
 import '../../auth/auth_navigation.dart';
 import '../../../models/cots_confidence_policy.dart';
 import '../../../models/intervention_assignment_model.dart';
 import '../../../models/record_collection.dart';
 import '../../../models/user_model.dart';
 import '../../../providers/auth_provider.dart';
+import '../../../services/auth_service.dart';
 import '../../../services/intervention_assignment_repository.dart';
 import '../../../services/notification_repository.dart';
 import '../../../services/personnel_repository.dart';
@@ -198,7 +201,10 @@ class _AdminRecordDetailsScreenState extends State<AdminRecordDetailsScreen> {
         (i) => i.band == CotsVerificationBand.retakeRequired,
       );
 
+  // Scheduled removal tasks are Firebase-only. In the Supabase version the
+  // detecting Diver removes COTS immediately, so there is nothing to assign.
   bool get _canManageAssignment =>
+      !SupabaseConfig.isConfigured &&
       widget.viewOnly &&
       !widget.expertContext &&
       _row.recordCollection == RecordCollection.captures;
@@ -299,7 +305,7 @@ class _AdminRecordDetailsScreenState extends State<AdminRecordDetailsScreen> {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
           behavior: SnackBarBehavior.floating,
-          content: Text('Cannot save review — missing Firestore record ID.'),
+          content: Text('Cannot save review — missing record ID.'),
         ),
       );
       return;
@@ -320,6 +326,7 @@ class _AdminRecordDetailsScreenState extends State<AdminRecordDetailsScreen> {
         adminRejected: !confirmed,
         reviewedBy: reviewedBy,
         cotsDecisions: _cotsDecisions,
+        reason: _expertCommentsCtrl.text,
       );
       try {
         await NotificationRepository.createReviewDecision(
@@ -344,8 +351,8 @@ class _AdminRecordDetailsScreenState extends State<AdminRecordDetailsScreen> {
           behavior: SnackBarBehavior.floating,
           content: Text(
             confirmed
-                ? '${_row.recordId}: $_confirmedCotsCount of ${_detectionItems.length} COTS confirmed — saved to Firestore.'
-                : '${_row.recordId} rejected — saved to Firestore.',
+                ? '${_row.recordId}: $_confirmedCotsCount of ${_detectionItems.length} COTS confirmed. Review saved.'
+                : '${_row.recordId} rejected. Review saved.',
           ),
         ),
       );
@@ -354,7 +361,9 @@ class _AdminRecordDetailsScreenState extends State<AdminRecordDetailsScreen> {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           behavior: SnackBarBehavior.floating,
-          content: Text('Could not save expert review: $e'),
+          content: Text(
+            'Could not save the review. ${AuthService.messageFor(e)}',
+          ),
         ),
       );
     } finally {

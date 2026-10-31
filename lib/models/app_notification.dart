@@ -19,6 +19,10 @@ class AppNotification {
   static const reviewAccepted = 'review_accepted';
   static const reviewRejected = 'review_rejected';
   static const interventionAssigned = 'intervention_assigned';
+  static const reviewNeeded = 'review_needed';
+  static const recordFinalized = 'record_finalized';
+  static const recordRejected = 'record_rejected';
+  static const followUpReassignment = 'follow_up_reassignment';
 
   final String id;
   final String recipientUid;
@@ -65,6 +69,59 @@ class AppNotification {
       createdAt: _readTimestamp(fields, 'created_at'),
       isRead: _readBool(fields, 'is_read'),
     );
+  }
+
+  /// Builds a notification from a Supabase `notifications` row with its
+  /// `workflow_events` row embedded. The database stores the wording with the
+  /// event, so every screen shows the same text.
+  factory AppNotification.fromSupabase(Map<String, dynamic> row) {
+    final event = _asMap(row['workflow_events']);
+    final details = _asMap(event['details']);
+    final requestId = _asText(event['request_id']);
+    // Replacement notices open the request, as in the Firebase version.
+    final type = requestId.isNotEmpty
+        ? followUpReassignment
+        : _asText(event['action']);
+    final title = _asText(details['title']);
+    return AppNotification(
+      id: _asText(row['id']),
+      recipientUid: _asText(row['recipient_id']),
+      type: type,
+      title: title.isNotEmpty ? title : titleForType(_asText(event['action'])),
+      body: _asText(details['body']),
+      relatedRecordId:
+          requestId.isNotEmpty ? requestId : _asText(details['record_id']),
+      zone: _asText(details['zone']),
+      dueAt: _parseTime(details['due_at']),
+      createdAt: _parseTime(row['created_at']) ?? _parseTime(event['created_at']),
+      isRead: row['read_at'] != null,
+    );
+  }
+
+  /// A readable title for events saved without one, e.g. 'request_created'
+  /// becomes 'Request created'.
+  static String titleForType(String type) {
+    final words = type.replaceAll('_', ' ').trim();
+    if (words.isEmpty) return 'Notification';
+    return words[0].toUpperCase() + words.substring(1);
+  }
+
+  static Map<String, dynamic> _asMap(Object? value) {
+    if (value is Map) return Map<String, dynamic>.from(value);
+    if (value is List && value.isNotEmpty && value.first is Map) {
+      return Map<String, dynamic>.from(value.first as Map);
+    }
+    return const <String, dynamic>{};
+  }
+
+  static String _asText(Object? value) => value == null ? '' : value.toString();
+
+  static DateTime? _parseTime(Object? value) {
+    if (value is DateTime) return value.toLocal();
+    if (value is String && value.isNotEmpty) {
+      return DateTime.tryParse(value)?.toLocal();
+    }
+    return null;
   }
 
   static DateTime? _asDateTime(Object? value) {

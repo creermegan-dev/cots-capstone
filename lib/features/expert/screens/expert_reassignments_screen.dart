@@ -1,11 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import '../../../models/app_notification.dart';
-import '../../../models/capture_model.dart';
 import '../../../models/follow_up_monitoring_model.dart';
 import '../../../models/follow_up_reassignment.dart';
+import '../../../services/follow_up_monitoring_repository.dart';
 import '../../../services/follow_up_reassignment_repository.dart';
-import '../../../services/follow_up_workflow_store.dart';
 import '../../../services/notification_repository.dart';
 import '../../../widgets/follow_up_reassignment_controls.dart';
 import '../../admin/theme/admin_theme.dart';
@@ -108,26 +107,15 @@ class _MonitoringSummary extends StatelessWidget {
   const _MonitoringSummary({required this.request});
   final FollowUpReassignment request;
   Future<String> _summary() async {
-    final store = FollowUpReassignmentRepository.store;
-    final assignmentDoc =
-        await store.get('follow_up_assignments/${request.areaId}');
-    if (assignmentDoc == null) {
+    final assignment =
+        await FollowUpMonitoringRepository.assignmentForArea(request.areaId);
+    if (assignment == null) {
       throw StateError('Primary assignment is missing.');
     }
-    final assignment = FollowUpAssignmentModel.fromMap(
-        FollowUpWorkflowStore.data(assignmentDoc),
-        areaId: request.areaId);
-    final docs = await store.query('follow_up_surveys',
-        field: 'area_id', value: request.areaId);
-    final captures = (await store.query('captures',
-            field: 'monitoring_area_id', value: request.areaId))
-        .map(CaptureModel.fromRestDocument)
-        .toList();
-    final surveys = docs
-        .map((doc) => FollowUpSurveyModel.fromMap(
-            FollowUpWorkflowStore.data(doc),
-            id: (doc['name'] as String).split('/').last))
-        .toList();
+    final history =
+        await FollowUpMonitoringRepository.loadAreaHistory(request.areaId);
+    final captures = history.captures;
+    final surveys = history.surveys;
     final valid = surveys
         .where((s) =>
             followUpSurveyStatus(s, captures) == FollowUpSurveyStatus.completed)

@@ -1,11 +1,13 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 
 import '../core/firebase_bootstrap.dart';
+import '../core/supabase_config.dart';
 import '../models/capture_model.dart';
 import '../models/removal_record_model.dart';
 import '../models/record_collection.dart';
 import 'capture_repository.dart';
 import 'scan_record_repository.dart';
+import 'supabase_record_service.dart';
 import 'windows_removal_record_rest_service.dart';
 
 /// Reads removal activities from Firestore `removal_records`.
@@ -21,6 +23,9 @@ abstract final class RemovalRecordRepository {
   }
 
   static Stream<List<RemovalRecordModel>> watchAllWithCaptureLinks() {
+    if (SupabaseConfig.isConfigured) {
+      return SupabaseRecordService.watchEliminations();
+    }
     if (deferFirebaseUntilFirstUse) {
       final token = ScanRecordRepository.windowsIdToken;
       if (token == null) {
@@ -48,6 +53,9 @@ abstract final class RemovalRecordRepository {
   }
 
   static Stream<List<RemovalRecordModel>> watchForUser(String uid) {
+    if (SupabaseConfig.isConfigured) {
+      return SupabaseRecordService.watchEliminations(ownerId: uid);
+    }
     if (deferFirebaseUntilFirstUse) {
       final token = ScanRecordRepository.windowsIdToken;
       if (token == null) {
@@ -65,7 +73,10 @@ abstract final class RemovalRecordRepository {
       });
     }
 
-    return _collection.where('uid', isEqualTo: uid).snapshots().asyncMap((snap) {
+    return _collection
+        .where('uid', isEqualTo: uid)
+        .snapshots()
+        .asyncMap((snap) {
       final removals =
           snap.docs.map((d) => RemovalRecordModel.fromFirestore(d)).toList();
       removals.sort(
