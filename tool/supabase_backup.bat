@@ -1,7 +1,7 @@
 @echo off
 rem Saves a copy of the hosted Supabase database into backups\ (read-only on the database).
 cd /d "%~dp0.."
-set STAMP=2026-10-31_1025
+set STAMP=2026-10-31_1140
 echo Backup %STAMP% > tool\last_supabase.txt
 call npx supabase db dump --linked -f backups\%STAMP%_schema.sql < nul >> tool\last_supabase.txt 2>&1
 echo SCHEMA EXIT %errorlevel% >> tool\last_supabase.txt

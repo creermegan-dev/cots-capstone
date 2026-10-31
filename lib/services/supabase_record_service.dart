@@ -398,7 +398,8 @@ abstract final class SupabaseRecordService {
   static Future<List<CaptureModel>> loadCaptures({String? ownerId}) async {
     var query = _client.from('captures').select(
           '*,monitoring_areas(code,name,municipality,barangay,geographic_reference),detection_items(*),'
-          'expert_decisions(decision,item_decisions,decision_sequence,expert_id,decided_at)',
+          'expert_decisions(decision,item_decisions,decision_sequence,expert_id,decided_at),'
+          'zone_review_assigned_to',
         );
     if (ownerId != null) query = query.eq('owner_id', ownerId);
     final rows = await query.order('submitted_at', ascending: false);
@@ -426,7 +427,8 @@ abstract final class SupabaseRecordService {
         .from('captures')
         .select(
           '*,monitoring_areas(code,name,municipality,barangay,geographic_reference),detection_items(*),'
-          'expert_decisions(decision,item_decisions,decision_sequence,expert_id,decided_at)',
+          'expert_decisions(decision,item_decisions,decision_sequence,expert_id,decided_at),'
+          'zone_review_assigned_to',
         )
         .eq('id', captureId)
         .maybeSingle();
@@ -626,7 +628,20 @@ abstract final class SupabaseRecordService {
           : names[review.reviewerId] ?? 'Expert',
       adminReviewedAt: review.reviewedAt,
       adminCotsDecisions: review.itemDecisions,
+      zoneAssignedTo: row['zone_review_assigned_to']?.toString() ?? '',
     );
+  }
+
+  /// Stage 2: the Diver the zone is assigned to when this submission is
+  /// another Diver's record waiting for the Expert; null otherwise.
+  static Future<String?> zoneReviewAssignedTo(String submissionId) async {
+    final row = await _client
+        .from('captures')
+        .select('zone_review_assigned_to')
+        .eq('id', stableUuid('capture', submissionId))
+        .maybeSingle();
+    final name = row?['zone_review_assigned_to']?.toString() ?? '';
+    return name.isEmpty ? null : name;
   }
 
   static RemovalRecordModel _eliminationFromRow(

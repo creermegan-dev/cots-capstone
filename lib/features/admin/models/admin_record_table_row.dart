@@ -1,6 +1,7 @@
 import '../../../models/cots_confidence_policy.dart';
 import '../../../models/cots_detection_result.dart';
 import '../../../models/record_collection.dart';
+import '../../../models/zone_review.dart';
 
 /// Row model for the Records / Submissions table (shared with details navigation).
 ///
@@ -44,6 +45,7 @@ class AdminRecordTableRow {
     this.linkedCaptureId,
     this.linkedCaptureDisplayId,
     this.ownerUid = '',
+    this.zoneAssignedTo = '',
   });
 
   final int number;
@@ -82,6 +84,10 @@ class AdminRecordTableRow {
   final String? linkedCaptureDisplayId;
   final String ownerUid;
 
+  /// Stage 2: the Diver the zone is assigned to when this is another Diver's
+  /// record in an assigned zone; empty otherwise.
+  final String zoneAssignedTo;
+
   int get displayAiCount => aiCount ?? cotsCount;
 
   List<CotsDetectionReviewItem> get detectionReviewItems =>
@@ -93,11 +99,17 @@ class AdminRecordTableRow {
         imageHeight: imageHeight > 0 ? imageHeight : 1080,
       );
 
-  String get displayStatus => CotsConfidencePolicy.adminStatusKeyFromItems(
-        items: detectionReviewItems,
-        adminConfirmed: adminConfirmed,
-        adminRejected: adminRejected,
-      );
+  String get displayStatus => ZoneReview.isWaiting(
+        assignedTo: zoneAssignedTo,
+        confirmed: adminConfirmed,
+        rejected: adminRejected,
+      )
+          ? 'Needs Review'
+          : CotsConfidencePolicy.adminStatusKeyFromItems(
+              items: detectionReviewItems,
+              adminConfirmed: adminConfirmed,
+              adminRejected: adminRejected,
+            );
 
   /// User-facing status labels in admin records UI.
   String get displayStatusLabel {
@@ -153,6 +165,7 @@ class AdminRecordTableRow {
       linkedCaptureId: linkedCaptureId,
       linkedCaptureDisplayId: linkedCaptureDisplayId,
       ownerUid: ownerUid,
+      zoneAssignedTo: zoneAssignedTo,
     );
   }
 }

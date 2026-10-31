@@ -251,7 +251,9 @@ class _NotificationTile extends StatelessWidget {
           Icons.warning_amber_rounded,
           AdminColors.statRed
         ),
-      AppNotification.reviewNeeded => (
+      AppNotification.reviewNeeded ||
+      AppNotification.zoneReviewNeeded ||
+      AppNotification.zoneReviewReminder => (
           Icons.rate_review_outlined,
           AdminColors.statYellow
         ),

@@ -8,6 +8,7 @@ import '../../../models/cots_confidence_policy.dart';
 import '../../../models/intervention_assignment_model.dart';
 import '../../../models/record_collection.dart';
 import '../../../models/user_model.dart';
+import '../../../models/zone_review.dart';
 import '../../../providers/auth_provider.dart';
 import '../../../services/auth_service.dart';
 import '../../../services/intervention_assignment_repository.dart';
@@ -189,6 +190,18 @@ class _AdminRecordDetailsScreenState extends State<AdminRecordDetailsScreen> {
       !_row.adminConfirmed &&
       !_row.adminRejected;
 
+  /// Stage 2: another Diver's record in an assigned zone.
+  bool get _isZoneRecord => _row.zoneAssignedTo.isNotEmpty;
+
+  /// An Expert decision is needed: per-COTS review, or a zone record (even
+  /// when every COTS is 80% or above).
+  bool get _needsExpertDecision =>
+      !widget.viewOnly &&
+      (CotsConfidencePolicy.submissionNeedsPerCotsReview(_detectionItems) ||
+          _isZoneRecord) &&
+      !_row.adminConfirmed &&
+      !_row.adminRejected;
+
   bool get _allCotsAutoApproved =>
       _detectionItems.isNotEmpty &&
       _detectionItems.every(
@@ -289,12 +302,25 @@ class _AdminRecordDetailsScreenState extends State<AdminRecordDetailsScreen> {
   }
 
   Future<void> _onAdminConfirm() async {
-    if (!_needsPerCotsReview || !_allCotsReviewed || _savingReview) return;
+    if (!_needsExpertDecision || !_allCotsReviewed || _savingReview) return;
     await _persistAdminReview(confirmed: true);
   }
 
   Future<void> _onAdminReject() async {
-    if (!_needsPerCotsReview || !_allCotsReviewed || _savingReview) return;
+    if (!_needsExpertDecision || !_allCotsReviewed || _savingReview) return;
+    final reasonError = ZoneReview.rejectReasonError(
+      assignedTo: _row.zoneAssignedTo,
+      reason: _expertCommentsCtrl.text,
+    );
+    if (reasonError != null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          behavior: SnackBarBehavior.floating,
+          content: Text(reasonError),
+        ),
+      );
+      return;
+    }
     await _persistAdminReview(confirmed: false);
   }
 
@@ -540,6 +566,10 @@ class _AdminRecordDetailsScreenState extends State<AdminRecordDetailsScreen> {
                       final narrow = c2.maxWidth < 1000;
                       final perCotsBelowImage = _needsPerCotsReview;
                       final leftCol = [
+                        if (_isZoneRecord) ...[
+                          _zoneReviewCard(),
+                          const SizedBox(height: 14),
+                        ],
                         _detectionResultsCard(r),
                         const SizedBox(height: 14),
                         _confidencePolicyCard(),
@@ -577,7 +607,7 @@ class _AdminRecordDetailsScreenState extends State<AdminRecordDetailsScreen> {
                       );
                     },
                   ),
-                  if (_needsPerCotsReview) ...[
+                  if (_needsExpertDecision) ...[
                     const SizedBox(height: 22),
                     _recordReviewActionRow(),
                     const SizedBox(height: 12),
@@ -1883,6 +1913,62 @@ class _AdminRecordDetailsScreenState extends State<AdminRecordDetailsScreen> {
     );
   }
 
+  /// Stage 2: what the Expert checks for another Diver's record in an
+  /// assigned zone.
+  Widget _zoneReviewCard() {
+    final waiting = ZoneReview.isWaiting(
+      assignedTo: _row.zoneAssignedTo,
+      confirmed: _row.adminConfirmed,
+      rejected: _row.adminRejected,
+    );
+    const textStyle = TextStyle(fontSize: 13, height: 1.45);
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: AdminColors.statYellow.withValues(alpha: 0.08),
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: AdminColors.statYellow.withValues(alpha: 0.4)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Icon(Icons.how_to_reg_outlined,
+                  size: 20, color: AdminColors.statYellow),
+              const SizedBox(width: 8),
+              Expanded(
+                child: Text(
+                  ZoneReview.expertTitle,
+                  style: const TextStyle(
+                      fontSize: 15, fontWeight: FontWeight.w800),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 10),
+          Text('Zone assigned to: ${_row.zoneAssignedTo}', style: textStyle),
+          Text('Recorded by: ${_row.submittedBy}', style: textStyle),
+          Text('Photo taken: ${_row.dateCaptured}', style: textStyle),
+          if (waiting) ...[
+            const SizedBox(height: 10),
+            const Text('Check before approving:',
+                style: TextStyle(fontSize: 13, fontWeight: FontWeight.w700)),
+            for (final check in ZoneReview.expertChecks)
+              Text('• $check', style: textStyle),
+            const SizedBox(height: 10),
+            Text(
+              'Approve: it counts under ${_row.submittedBy}\'s name. It is not '
+              'the assigned Diver\'s monthly visit and does not change the zone. '
+              'Reject: give a reason.',
+              style: textStyle.copyWith(color: AdminColors.muted),
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+
   Widget _recordReviewActionRow() {
     final canFinalize = _allCotsReviewed;
     return Column(
@@ -1902,7 +1988,9 @@ class _AdminRecordDetailsScreenState extends State<AdminRecordDetailsScreen> {
             controller: _expertCommentsCtrl,
             maxLines: 3,
             decoration: InputDecoration(
-              hintText: 'Add expert validation comments (optional)',
+              hintText: _isZoneRecord
+                  ? 'Reason (required to reject)'
+                  : 'Add expert validation comments (optional)',
               filled: true,
               fillColor: Colors.white,
               border:

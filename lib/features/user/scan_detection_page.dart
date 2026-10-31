@@ -14,6 +14,7 @@ import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
 
 import '../../core/cots_colors.dart';
+import '../../core/supabase_config.dart';
 import '../../models/activity_type.dart';
 import '../../models/cots_confidence_policy.dart';
 import '../../models/cots_detection_result.dart';
@@ -29,6 +30,8 @@ import '../../services/follow_up_reassignment_repository.dart';
 import '../../models/follow_up_reassignment.dart';
 import '../../services/offline_submission_service.dart';
 import '../../services/original_photo_picker.dart';
+import '../../services/supabase_record_service.dart';
+import '../../models/zone_review.dart';
 import '../../services/zone_assignment_service.dart';
 import 'cots_map_page.dart';
 import 'profile_page.dart';
@@ -1946,7 +1949,36 @@ class _ScanDetectionPageState extends State<ScanDetectionPage> {
         if (surveyPending) queued++;
       }
 
+      // Stage 2: another Diver's record in an assigned zone waits for the
+      // Expert. Offline records get the same message as a notification when
+      // they upload.
+      String? zoneAssignedTo;
+      if (SupabaseConfig.isConfigured && !_isFollowUp && queued == 0) {
+        try {
+          zoneAssignedTo = await SupabaseRecordService.zoneReviewAssignedTo(
+              ready.first.submissionId);
+        } catch (_) {
+          // The database also sends this message as a notification.
+        }
+      }
       if (!mounted) return;
+      final assignedTo = zoneAssignedTo;
+      if (assignedTo != null) {
+        await showDialog<void>(
+          context: context,
+          builder: (dialogContext) => AlertDialog(
+            title: const Text('Sent to the Expert'),
+            content: Text(ZoneReview.waitingMessage(assignedTo)),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.of(dialogContext).pop(),
+                child: const Text('OK'),
+              ),
+            ],
+          ),
+        );
+        if (!mounted) return;
+      }
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           backgroundColor: kPrimaryTeal,

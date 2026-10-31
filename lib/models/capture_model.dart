@@ -39,6 +39,7 @@ class CaptureModel {
     this.adminReviewedAt,
     this.adminCotsDecisions = const [],
     this.storedDisplayRecordId = '',
+    this.zoneAssignedTo = '',
   });
 
   final String id;
@@ -70,6 +71,10 @@ class CaptureModel {
   final DateTime? adminReviewedAt;
   final List<PerCotsAdminDecision> adminCotsDecisions;
   final String storedDisplayRecordId;
+
+  /// Stage 2: the Diver the zone is assigned to when this is another Diver's
+  /// record in an assigned zone (needs Expert approval); empty otherwise.
+  final String zoneAssignedTo;
 
   factory CaptureModel.fromFirestore(
     DocumentSnapshot<Map<String, dynamic>> doc,

@@ -24,6 +24,12 @@ class AppNotification {
   static const recordRejected = 'record_rejected';
   static const followUpReassignment = 'follow_up_reassignment';
 
+  // Stage 2: another Diver's record in an assigned zone.
+  static const zoneReviewNeeded = 'zone_review_needed';
+  static const zoneReviewReminder = 'zone_review_reminder';
+  static const zoneReviewWaiting = 'zone_review_waiting';
+  static const zoneRecordApproved = 'zone_record_approved';
+
   final String id;
   final String recipientUid;
   final String type;

@@ -9,6 +9,7 @@ import 'cots_detection_result.dart';
 import 'follow_up_monitoring_model.dart';
 import 'record_collection.dart';
 import 'removal_record_model.dart';
+import 'zone_review.dart';
 import '../utils/scan_record_image.dart';
 
 /// Firestore `scan_records/{id}` citizen science submission.
@@ -337,6 +338,7 @@ class ScanRecordModel {
       linkedCaptureId: linkedCaptureId,
       linkedCaptureDisplayId: linkedCaptureDisplayId,
       ownerUid: uid,
+      zoneAssignedTo: zoneAssignedTo,
     );
   }
 
@@ -372,11 +374,21 @@ class ScanRecordModel {
         imageHeight: imageHeight > 0 ? imageHeight : 1080,
       );
 
+  /// Stage 2: who the zone is assigned to, for another Diver's record.
+  String get zoneAssignedTo => sourceCapture?.zoneAssignedTo ?? '';
+
+  bool get _waitingForZoneApproval => ZoneReview.isWaiting(
+        assignedTo: zoneAssignedTo,
+        confirmed: adminConfirmed,
+        rejected: adminRejected,
+      );
+
   String get userStatusLabel {
     if (recordCollection == RecordCollection.followUpSurveys) {
       return followUpSurveyStatusLabel(
           followUpStatus ?? FollowUpSurveyStatus.submitted);
     }
+    if (_waitingForZoneApproval) return ZoneReview.statusLabel;
     if (CotsActivityType.isRemoval(activityType) &&
         recordCollection != RecordCollection.captures) {
       if (adminConfirmed) return 'Verified';
@@ -393,6 +405,9 @@ class ScanRecordModel {
   String get userStatusDescription {
     if (recordCollection == RecordCollection.followUpSurveys) {
       return 'Monthly follow-up survey saved for ${followUpSurvey?.areaName ?? zone}.';
+    }
+    if (_waitingForZoneApproval) {
+      return ZoneReview.waitingMessage(zoneAssignedTo);
     }
     if (CotsActivityType.isRemoval(activityType) &&
         recordCollection != RecordCollection.captures) {
