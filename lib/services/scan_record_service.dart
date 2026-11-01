@@ -62,6 +62,7 @@ abstract final class ScanRecordService {
     EvidenceImagePayload? evidence,
     RecordEvidenceProgressCallback? onEvidenceProgress,
     bool? gpsFromPhoto,
+    bool? timeFromPhoto,
   }) async {
     if (CotsActivityType.isRemoval(activityType)) {
       var captureId = linkedCaptureId?.trim() ?? '';
@@ -96,6 +97,7 @@ abstract final class ScanRecordService {
           measurementReferenceVisible: measurementReferenceVisible,
           sizeEstimate: sizeEstimate,
           gpsFromPhoto: gpsFromPhoto,
+          timeFromPhoto: timeFromPhoto,
           evidence: evidence,
           onEvidenceProgress: onEvidenceProgress == null
               ? null
@@ -191,6 +193,7 @@ abstract final class ScanRecordService {
       measurementReferenceVisible: measurementReferenceVisible,
       sizeEstimate: sizeEstimate,
       gpsFromPhoto: gpsFromPhoto,
+      timeFromPhoto: timeFromPhoto,
       evidence: evidence,
       onEvidenceProgress: onEvidenceProgress == null
           ? null

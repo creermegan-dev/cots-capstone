@@ -6,7 +6,6 @@ import 'package:geolocator/geolocator.dart';
 import 'package:latlong2/latlong.dart';
 
 import '../../core/user_shell_theme.dart';
-import '../../models/cots_marine_sector_palette.dart';
 import '../../models/cots_zone.dart';
 import '../../models/davao_gulf_geography.dart';
 import '../../widgets/marine_sector_map_label.dart';
@@ -91,21 +90,14 @@ class _CotsMapPageState extends State<CotsMapPage> {
       case MapViewMode.zones:
         if (_isDrilledIn) {
           final m = _selectedMunicipality;
-          return '${m?.zoneLabel ?? 'Zone'} — tap a site code for details.';
+          return '${m?.zoneLabel ?? 'Zone'} · ${m?.name ?? ''} — zoom in to see the parts.';
         }
-        return 'Davao Gulf zones A–Q — tap a zone to view barangay sites.';
+        return 'Davao Gulf zones A–V — tap a zone to view its areas.';
       case MapViewMode.heatmap:
         return 'Heatmap shows COTS density intensity by barangay.';
       case MapViewMode.density:
         return 'Density values (COTS/ha) by coastal barangay.';
     }
-  }
-
-  CotsZone? _zoneForBarangayId(String id) {
-    for (final zone in kSampleZones) {
-      if (zone.id == id) return zone;
-    }
-    return null;
   }
 
   List<CircleMarker> _buildHeatmapCircles() {
@@ -162,8 +154,8 @@ class _CotsMapPageState extends State<CotsMapPage> {
     }
 
     var minLat = 90.0, maxLat = -90.0, minLng = 180.0, maxLng = -180.0;
-    for (final b in barangays) {
-      for (final p in b.polygon) {
+    for (final a in municipality.areas) {
+      for (final p in [for (final r in a.rings) ...r]) {
         minLat = math.min(minLat, p.latitude);
         maxLat = math.max(maxLat, p.latitude);
         minLng = math.min(minLng, p.longitude);
@@ -171,7 +163,12 @@ class _CotsMapPageState extends State<CotsMapPage> {
       }
     }
     final center = LatLng((minLat + maxLat) / 2, (minLng + maxLng) / 2);
-    const drillZoom = 12.8;
+    final spanDeg = math.max(maxLat - minLat, maxLng - minLng);
+    final drillZoom = spanDeg > 0.6
+        ? 10.2
+        : spanDeg > 0.25
+            ? 11.2
+            : 12.4;
     _mapController.move(center, drillZoom);
     setState(() {
       _selectedZoneCode = municipality.zoneCode;
@@ -205,31 +202,127 @@ class _CotsMapPageState extends State<CotsMapPage> {
     }).toList();
   }
 
+  /// Zoom from which the 1.1 ha parts are drawn as faint lines.
+  static const _partLinesZoom = 14.5;
+
+  /// Zoom from which part codes (e.g. V3-12) are shown.
+  static const _partCodesZoom = 16.5;
+
+  static const _areaPalette = <Color>[
+    Color(0xFF1D9E75),
+    Color(0xFF378ADD),
+    Color(0xFFD4537E),
+    Color(0xFFBA7517),
+    Color(0xFF7F77DD),
+    Color(0xFF639922),
+    Color(0xFFD85A30),
+    Color(0xFF185FA5),
+  ];
+
+  bool _visible(LatLng p) {
+    try {
+      return _mapController.camera.visibleBounds.contains(p);
+    } catch (_) {
+      return true;
+    }
+  }
+
+  /// Areas in soft colours; parts as faint lines when zoomed in (Stage 6 map style).
   List<Polygon> _barangayPolygons() {
-    final barangays = _isDrilledIn
-        ? _selectedMunicipality!.barangays
-        : const <GulfCoastalBarangay>[];
-    return barangays.map((b) {
-      if (_marineSectorView) {
-        final accent = marineSectorColor(b.siteCode);
-        return Polygon(
-          points: b.polygon,
-          color: accent.withValues(alpha: 0.38),
-          borderColor: accent,
-          borderStrokeWidth: 1.8,
-        );
+    final zone = _isDrilledIn ? _selectedMunicipality : null;
+    if (zone == null) return const [];
+    final out = <Polygon>[];
+    for (var i = 0; i < zone.areas.length; i++) {
+      final area = zone.areas[i];
+      final accent = _areaPalette[i % _areaPalette.length];
+      for (final ring in area.rings) {
+        out.add(Polygon(
+          points: ring,
+          color: accent.withValues(alpha: 0.28),
+          borderColor: accent.withValues(alpha: 0.85),
+          borderStrokeWidth: 1.6,
+        ));
       }
-      final zone = _zoneForBarangayId(b.id);
-      final accent = zone != null
-          ? outbreakColor(zone.level)
-          : kTeal;
-      return Polygon(
-        points: b.polygon,
-        color: accent.withValues(alpha: 0.30),
-        borderColor: accent.withValues(alpha: 0.95),
-        borderStrokeWidth: 2.2,
-      );
-    }).toList();
+    }
+    if (_mapZoom >= _partLinesZoom) {
+      for (final part in zone.barangays) {
+        if (!_visible(part.centroid)) continue;
+        out.add(Polygon(
+          points: part.polygon,
+          color: Colors.transparent,
+          borderColor: Colors.white.withValues(alpha: 0.55),
+          borderStrokeWidth: 0.6,
+        ));
+      }
+    }
+    return out;
+  }
+
+  /// Area codes on the drilled-in zone; part codes only when zoomed in close.
+  List<Marker> _areaLabelMarkers() {
+    final zone = _isDrilledIn ? _selectedMunicipality : null;
+    if (zone == null) return const [];
+    final out = <Marker>[];
+    if (_mapZoom >= _partCodesZoom) {
+      for (final part in zone.barangays) {
+        if (out.length >= 300) break;
+        if (!_visible(part.centroid)) continue;
+        out.add(Marker(
+          point: part.centroid,
+          width: 64,
+          height: 18,
+          alignment: Alignment.center,
+          child: GestureDetector(
+            onTap: () => _showPartInfo(part),
+            child: Text(
+              part.id,
+              textAlign: TextAlign.center,
+              style: TextStyle(
+                fontSize: 10,
+                fontWeight: FontWeight.w700,
+                color: kNavy.withValues(alpha: 0.8),
+              ),
+            ),
+          ),
+        ));
+      }
+      return out;
+    }
+    for (final area in zone.areas) {
+      out.add(Marker(
+        point: area.centroid,
+        width: 56,
+        height: 22,
+        alignment: Alignment.center,
+        child: Container(
+          alignment: Alignment.center,
+          decoration: BoxDecoration(
+            color: Colors.white.withValues(alpha: 0.85),
+            borderRadius: BorderRadius.circular(6),
+          ),
+          child: Text(
+            area.code,
+            style: const TextStyle(
+              fontSize: 11,
+              fontWeight: FontWeight.w800,
+              color: kNavy,
+            ),
+          ),
+        ),
+      ));
+    }
+    return out;
+  }
+
+  void _showPartInfo(GulfCoastalBarangay part) {
+    final messenger = ScaffoldMessenger.maybeOf(context);
+    messenger?.hideCurrentSnackBar();
+    messenger?.showSnackBar(SnackBar(
+      content: Text(
+        '${part.displayName} · ${part.municipalityName}\n'
+        'Reef: ${part.reefHectares.toStringAsFixed(2)} ha',
+      ),
+    ));
   }
 
   List<Marker> _marineSectorLabelMarkers() {
@@ -281,10 +374,7 @@ class _CotsMapPageState extends State<CotsMapPage> {
       if (_marineSectorView) {
         markers.addAll(_marineSectorLabelMarkers());
       } else if (_isDrilledIn) {
-        for (final b in _selectedMunicipality!.barangays) {
-          final zone = _zoneForBarangayId(b.id);
-          if (zone != null) markers.add(_siteMarker(zone));
-        }
+        markers.addAll(_areaLabelMarkers());
       } else {
         for (final m in DavaoGulfGeography.municipalities) {
           markers.add(_municipalityMarker(m));

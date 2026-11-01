@@ -137,6 +137,7 @@ class OfflineSubmissionService extends ChangeNotifier
     FollowUpAssignmentModel? followUpAssignment,
     void Function(String message)? onWarning,
     bool? gpsFromPhoto,
+    bool? timeFromPhoto,
   }) async {
     _activeUserId = uid.trim();
     final evidence = SupabaseConfig.isConfigured
@@ -162,6 +163,7 @@ class OfflineSubmissionService extends ChangeNotifier
       'latitude': latitude,
       'longitude': longitude,
       'gps_from_photo': gpsFromPhoto,
+      'time_from_photo': timeFromPhoto,
       'date_taken': dateTaken?.toUtc().toIso8601String(),
       'image_width': imageWidth,
       'image_height': imageHeight,
@@ -456,6 +458,7 @@ class OfflineSubmissionService extends ChangeNotifier
       latitude: _double(task['latitude']),
       longitude: _double(task['longitude']),
       gpsFromPhoto: task['gps_from_photo'] as bool?,
+      timeFromPhoto: task['time_from_photo'] as bool?,
       dateTaken: _date(task['date_taken']),
       imageWidth: (task['image_width'] as num?)?.round(),
       imageHeight: (task['image_height'] as num?)?.round(),

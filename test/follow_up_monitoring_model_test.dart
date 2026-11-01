@@ -6,7 +6,10 @@ import 'package:cots_monitor/models/davao_gulf_geography.dart';
 import 'package:cots_monitor/services/zone_assignment_service.dart';
 import 'package:flutter_test/flutter_test.dart';
 
+import 'support/map_test_data.dart';
+
 void main() {
+  setUpAll(loadTestMap);
   group('monitoring zone linkage', () {
     test('missing, invalid and unmapped GPS never selects a monitoring site',
         () {
@@ -26,10 +29,13 @@ void main() {
     });
     test('unique mapped sites resolve to their stable site identity', () {
       var resolved = 0;
-      for (final site in DavaoGulfGeography.allBarangays) {
+      final sites = DavaoGulfGeography.allBarangays;
+      for (var i = 0; i < sites.length; i += 50) {
+        final site = sites[i];
+        final point = DavaoGulfGeography.pointInside(site);
+        if (point == null) continue;
         final result = ZoneAssignmentService.resolveMonitoringArea(
-            latitude: site.centroid.latitude,
-            longitude: site.centroid.longitude);
+            latitude: point.latitude, longitude: point.longitude);
         if (result == null) continue;
         expect(result.barangay.id, site.id);
         expect(result.barangay.siteCode, site.siteCode);

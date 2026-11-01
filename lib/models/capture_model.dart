@@ -42,6 +42,8 @@ class CaptureModel {
     this.zoneAssignedTo = '',
     this.confirmedCount,
     this.waitingCount,
+    this.locationSource = '',
+    this.timeSource = '',
   });
 
   final String id;
@@ -82,6 +84,11 @@ class CaptureModel {
   /// for Firebase records, which are counted in the app as before).
   final int? confirmedCount;
   final int? waitingCount;
+
+  /// Where the location and the time came from, as stored with the photo
+  /// (see PhotoSource). Empty for Firebase records.
+  final String locationSource;
+  final String timeSource;
 
   factory CaptureModel.fromFirestore(
     DocumentSnapshot<Map<String, dynamic>> doc,

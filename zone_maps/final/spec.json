@@ -1,0 +1,27 @@
+{
+ "version": "cots-davao-gulf-v2",
+ "grid": {
+  "formula": "x = (lon - 125.7) * kx; y = (lat - 6.6) * ky; ix = round(x / 30); iy = round(y / 30)",
+  "lat0": 6.6,
+  "lon0": 125.7,
+  "kx": 110582.25626663613,
+  "ky": 110574.0,
+  "cell_m": 30.0
+ },
+ "allowance_m": 15,
+ "margin_m": 50,
+ "part_reef_ha": 1.1,
+ "counts": {
+  "zones": 22,
+  "areas": 196,
+  "parts": 17841,
+  "cells": 266078,
+  "runs": 78240,
+  "parts_without_cells": 0
+ },
+ "sources": [
+  "Allen Coral Atlas (2020) geomorphic map, CC BY 4.0, doi.org/10.5281/zenodo.3833242",
+  "Barangay boundaries: NAMRIA/PSA via OCHA COD-AB (faeldon/philippines-json-maps, PSGC 3Q 2026)",
+  "Part size: Chandler et al. (2023) Sci Rep 13:19306"
+ ]
+}

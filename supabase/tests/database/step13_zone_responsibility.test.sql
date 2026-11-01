@@ -99,12 +99,12 @@ select is(cots_private.zone_responsible_name(pg_temp.uid(35)),'Diver Charlie','I
 select pg_temp.evidence(31,4);
 select is(pg_temp.body(31,'scan_submitted'),
   'Your report ' || cots_private.capture_label(pg_temp.uid(31)) || ' was submitted with 1 COTS detected in Stage Two Reef. '
-  || 'This zone is currently assigned to Diver Alpha. Your record was sent to the Expert for review.',
+  || 'This area is currently assigned to Diver Alpha. Your record was sent to the Expert for review.',
   'Diver B sees the agreed message');
 select ok('zone_review_needed' = any(pg_temp.notices(2)),'The Expert is notified');
 select ok(not ('review_needed' = any(pg_temp.notices(2))),'No separate per-COTS notice for the same record');
 select is(pg_temp.body(31,'zone_review_needed'),
-  'Record ' || cots_private.capture_label(pg_temp.uid(31)) || ' in Stage Two Reef was submitted by another Diver in an assigned zone. Please approve or reject it.',
+  'Record ' || cots_private.capture_label(pg_temp.uid(31)) || ' in Stage Two Reef was submitted by another Diver in an assigned area. Please approve or reject it.',
   'Expert notice wording');
 select is(pg_temp.zone_notices(3),'{}'::text[],'Diver A is not told anything while it waits');
 
@@ -193,7 +193,7 @@ select is(cots_private.zone_review_needed(pg_temp.uid(41)),true,'Now it needs ap
 select is(cots_private.send_zone_review_reminders(now()),1,'First run: first notices for the late record only');
 select ok('zone_review_waiting' = any(pg_temp.notices(4)),'Diver B is told the late record waits for the Expert');
 select is(pg_temp.body(41,'zone_review_waiting'),
-  'Report ' || cots_private.capture_label(pg_temp.uid(41)) || ': This zone is currently assigned to Diver Alpha. Your record was sent to the Expert for review.',
+  'Report ' || cots_private.capture_label(pg_temp.uid(41)) || ': This area is currently assigned to Diver Alpha. Your record was sent to the Expert for review.',
   'Late-record message for Diver B');
 -- Pretend the first notice was sent 4 days ago (history is append-only, so
 -- the protection is bypassed for this test update only).

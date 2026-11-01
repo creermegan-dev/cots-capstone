@@ -3,7 +3,10 @@ import 'package:cots_monitor/models/follow_up_monitoring_model.dart';
 import 'package:cots_monitor/services/supabase_follow_up_service.dart';
 import 'package:flutter_test/flutter_test.dart';
 
+import 'support/map_test_data.dart';
+
 void main() {
+  loadTestMap();
   final area = DavaoGulfGeography.allBarangays.first;
 
   test('new visit IDs are version-4 UUIDs', () {

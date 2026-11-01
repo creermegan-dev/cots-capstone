@@ -15,12 +15,15 @@ import 'features/user/follow_up_page.dart';
 import 'features/user/user_bottom_nav.dart';
 import 'core/root_scaffold_messenger.dart';
 import 'firebase_options.dart';
+import 'models/davao_gulf_geography.dart';
 import 'providers/admin_record_review_tracker.dart';
 import 'providers/auth_provider.dart';
 import 'services/offline_submission_service.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
+  // Stage 6 monitoring map (zones, areas, parts) bundled with the app.
+  await DavaoGulfGeography.load();
 
   final useSupabase = await SupabaseConfig.initializeIfConfigured();
   if (!useSupabase && !deferFirebaseUntilFirstUse) {

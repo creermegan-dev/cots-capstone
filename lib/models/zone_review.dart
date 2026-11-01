@@ -4,13 +4,13 @@
 abstract final class ZoneReview {
   /// The agreed message for the Diver whose record was sent to the Expert.
   static String waitingMessage(String assignedTo) =>
-      'This zone is currently assigned to $assignedTo. '
+      'This area is currently assigned to $assignedTo. '
       'Your record was sent to the Expert for review.';
 
   /// Agreed status for the other Diver's waiting record.
   static const statusLabel = 'Unassigned Diver - waiting for Expert';
 
-  static const expertTitle = 'Another Diver in an assigned zone';
+  static const expertTitle = 'Another Diver in an assigned area';
 
   /// What the Expert checks before approving.
   static const expertChecks = [

@@ -113,7 +113,7 @@ abstract final class ExpertActions {
                 row.recordId,
                 row.zone,
                 'by ${row.submittedBy}',
-                'zone assigned to ${row.zoneAssignedTo}',
+                'area assigned to ${row.zoneAssignedTo}',
               ]),
             )
           : ExpertActionItem(

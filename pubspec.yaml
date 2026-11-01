@@ -55,3 +55,7 @@ flutter:
     - assets/images/cots_logo.png
     - assets/models/yolov8_best.onnx
     - assets/models/yolo26_best.onnx
+    - assets/map/parts.json
+    - assets/map/areas.json
+    - assets/map/part_outlines.json
+    - assets/map/lookup.bin

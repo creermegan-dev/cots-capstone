@@ -6,6 +6,7 @@ import '../../../core/supabase_config.dart';
 import '../../auth/auth_navigation.dart';
 import '../../../models/cots_confidence_policy.dart';
 import '../../../models/intervention_assignment_model.dart';
+import '../../../models/photo_source.dart';
 import '../../../models/record_collection.dart';
 import '../../../models/user_model.dart';
 import '../../../models/zone_review.dart';
@@ -91,7 +92,7 @@ class AdminRecordDetailsData {
         row.dateUploaded.isNotEmpty ? row.dateUploaded : row.dateTime);
     final coords = row.latitude != null && row.longitude != null
         ? _formatCoords(row.latitude!, row.longitude!)
-        : _coordsForZone(row.zone);
+        : 'Not available';
     final remarks =
         row.notes.trim().isEmpty ? 'No remarks submitted.' : row.notes.trim();
     final statusLabel = row.displayStatusLabel;
@@ -116,12 +117,12 @@ class AdminRecordDetailsData {
       coordinates: coords,
       locationDateTime:
           row.dateUploaded.isNotEmpty ? row.dateUploaded : row.dateTime,
-      locationAccuracy: 'Live Device GPS',
+      locationAccuracy: PhotoSource.locationLabel(row.locationSource),
       autoZoneAssignment: row.zone,
       imageUrl: row.imageUrl,
       imagePath: row.imagePath,
       imageName: row.imageName.isNotEmpty ? row.imageName : 'GoPro image',
-      dateCaptured: row.dateCaptured,
+      dateCaptured: PhotoSource.dateTaken(row.dateCaptured, row.timeSource),
       dateUploaded:
           row.dateUploaded.isNotEmpty ? row.dateUploaded : row.dateTime,
       scheduledDate: '—',
@@ -145,13 +146,6 @@ class AdminRecordDetailsData {
       return (m.group(1)!.trim(), m.group(2)!.trim());
     }
     return (raw, '');
-  }
-
-  static String _coordsForZone(String zone) {
-    final seed = zone.hashCode.abs() % 1000000;
-    final lat = 13.0 + (seed % 200000) / 1000000;
-    final lng = 120.0 + ((seed ~/ 7) % 300000) / 1000000;
-    return '${lat.toStringAsFixed(6)}° N, ${lng.toStringAsFixed(6)}° E (GPS)';
   }
 }
 
@@ -1016,11 +1010,9 @@ class _AdminRecordDetailsScreenState extends State<AdminRecordDetailsScreen> {
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           _kv('Coordinates', r.coordinates),
-          _kv('Location source', r.locationAccuracy),
-          _kv('GPS source', r.locationAccuracy),
-          _kv('Capture device', 'Unknown Device'),
+          _kv('Location from', r.locationAccuracy),
           _kv('Upload method', r.submissionMethod),
-          _kv('Date captured', r.dateCaptured),
+          _kv('Date taken', r.dateCaptured),
           _kv('Date uploaded', r.dateUploaded),
           _kv('User remarks', r.userRemarks),
           const SizedBox(height: 6),
@@ -1947,9 +1939,12 @@ class _AdminRecordDetailsScreenState extends State<AdminRecordDetailsScreen> {
             ],
           ),
           const SizedBox(height: 10),
-          Text('Zone assigned to: ${_row.zoneAssignedTo}', style: textStyle),
+          Text('Area assigned to: ${_row.zoneAssignedTo}', style: textStyle),
           Text('Recorded by: ${_row.submittedBy}', style: textStyle),
-          Text('Photo taken: ${_row.dateCaptured}', style: textStyle),
+          Text(
+              'Photo taken: '
+              '${PhotoSource.dateTaken(_row.dateCaptured, _row.timeSource)}',
+              style: textStyle),
           if (waiting) ...[
             const SizedBox(height: 10),
             const Text('Check before approving:',
@@ -1959,7 +1954,7 @@ class _AdminRecordDetailsScreenState extends State<AdminRecordDetailsScreen> {
             const SizedBox(height: 10),
             Text(
               'Approve: it counts under ${_row.submittedBy}\'s name. It is not '
-              'the assigned Diver\'s monthly visit and does not change the zone. '
+              'the assigned Diver\'s monthly visit and does not change the area. '
               'Reject: give a reason.',
               style: textStyle.copyWith(color: AdminColors.muted),
             ),

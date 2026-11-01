@@ -7,6 +7,7 @@ import '../models/davao_gulf_geography.dart';
 import '../models/follow_up_infestation_assessment.dart';
 import '../models/follow_up_monitoring_model.dart';
 import '../models/follow_up_reassignment.dart';
+import 'area_messages.dart';
 
 /// Follow-up monitoring on Supabase.
 ///
@@ -127,7 +128,9 @@ abstract final class SupabaseFollowUpService {
     required double? longitude,
     required String notes,
   }) async {
-    final status = await _client.rpc<dynamic>(
+    final dynamic status;
+    try {
+      status = await _client.rpc<dynamic>(
       'submit_follow_up_survey',
       params: {
         'sid': surveyId,
@@ -143,6 +146,11 @@ abstract final class SupabaseFollowUpService {
         'notes_text': notes,
       },
     );
+    } on PostgrestException catch (error) {
+      final areaMessage = AreaMessages.forError(error);
+      if (areaMessage != null) throw StateError(areaMessage);
+      rethrow;
+    }
     return status?.toString() ?? 'pending';
   }
 

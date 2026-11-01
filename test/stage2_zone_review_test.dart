@@ -46,7 +46,7 @@ AdminRecordTableRow _row({String zoneAssignedTo = '', bool confirmed = false}) =
 void main() {
   test('the other Diver sees the agreed message', () {
     expect(ZoneReview.waitingMessage('Diver Alpha'),
-        'This zone is currently assigned to Diver Alpha. Your record was sent to the Expert for review.');
+        'This area is currently assigned to Diver Alpha. Your record was sent to the Expert for review.');
   });
 
   test('the waiting record uses the agreed status', () {
@@ -110,7 +110,10 @@ void main() {
     ]) {
       expect(sql, contains("'$action'"));
     }
-    expect(sql, contains("'This zone is currently assigned to '"));
+    final wording = File(
+      'supabase/migrations/20261101000200_area_wording.sql',
+    ).readAsStringSync();
+    expect(wording, contains("'This area is currently assigned to '"));
     expect(sql, contains('. The Expert approved the record.'));
     expect(sql, contains("interval '3 days'"));
     expect(sql, contains('cots-zone-review-reminders'));

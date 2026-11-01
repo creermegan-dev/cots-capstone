@@ -89,7 +89,7 @@ class CotsZone {
         '${lng.abs().toStringAsFixed(4)}° ${lng >= 0 ? 'E' : 'W'}';
     return CotsZone(
       id: barangay.id,
-      label: barangay.siteCode,
+      label: barangay.areaCode,
       name: barangay.name,
       position: barangay.centroid,
       level: level,
@@ -118,8 +118,11 @@ class CotsZone {
   }
 }
 
-/// Coastal barangay monitoring zones derived from [DavaoGulfGeography].
-List<CotsZone> get kSampleZones => DavaoGulfGeography.allBarangays
+/// Sample map cards, one per monitoring area (its first part). The map page
+/// still shows generated sample levels until Stage 8 brings real data.
+List<CotsZone>? _sampleZonesCache;
+List<CotsZone> get kSampleZones => _sampleZonesCache ??= DavaoGulfGeography
+    .areaRepresentatives
     .map(CotsZone.fromCoastalBarangay)
     .toList(growable: false);
 

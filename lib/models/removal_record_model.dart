@@ -27,6 +27,7 @@ class RemovalRecordModel {
     this.linkedCaptureDisplayId = '',
     this.linkedCaptureAiCount,
     this.storedDisplayRecordId = '',
+    this.locationSource = '',
   });
 
   final String id;
@@ -50,6 +51,9 @@ class RemovalRecordModel {
   final String linkedCaptureDisplayId;
   final int? linkedCaptureAiCount;
   final String storedDisplayRecordId;
+
+  /// Where the location came from (see PhotoSource). Empty for Firebase.
+  final String locationSource;
 
   factory RemovalRecordModel.fromFirestore(
     DocumentSnapshot<Map<String, dynamic>> doc, {

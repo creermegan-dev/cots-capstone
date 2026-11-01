@@ -40,6 +40,7 @@ abstract final class CaptureService {
     required bool? measurementReferenceVisible,
     required CotsSizeEstimate? sizeEstimate,
     bool? gpsFromPhoto,
+    bool? timeFromPhoto,
     EvidenceImagePayload? evidence,
     EvidenceProgressCallback? onEvidenceProgress,
     String? submissionId,
@@ -111,6 +112,7 @@ abstract final class CaptureService {
         imageHeight: imageHeight,
         notes: notes,
         gpsFromPhoto: gpsFromPhoto,
+        timeFromPhoto: timeFromPhoto,
         onEvidenceProgress: onEvidenceProgress,
       );
     }

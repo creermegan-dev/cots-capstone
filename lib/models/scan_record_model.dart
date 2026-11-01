@@ -50,6 +50,8 @@ class ScanRecordModel {
     this.followUpSurvey,
     this.followUpStatus,
     this.sourceCapture,
+    this.locationSource = '',
+    this.timeSource = '',
   });
 
   final String id;
@@ -86,6 +88,10 @@ class ScanRecordModel {
   final FollowUpSurveyModel? followUpSurvey;
   final FollowUpSurveyStatus? followUpStatus;
   final CaptureModel? sourceCapture;
+
+  /// Where the location and the time came from (see PhotoSource).
+  final String locationSource;
+  final String timeSource;
 
   /// Parses a Firestore REST API document (`fields` map).
   factory ScanRecordModel.fromRestDocument(Map<String, dynamic> doc) {
@@ -179,6 +185,8 @@ class ScanRecordModel {
       adminCotsDecisions: capture.adminCotsDecisions,
       storedDisplayRecordId: capture.storedDisplayRecordId,
       recordCollection: RecordCollection.captures,
+      locationSource: capture.locationSource,
+      timeSource: capture.timeSource,
     );
   }
 
@@ -211,6 +219,7 @@ class ScanRecordModel {
       linkedCaptureDisplayId: removal.linkedCaptureDisplayId.isNotEmpty
           ? removal.linkedCaptureDisplayId
           : null,
+      locationSource: removal.locationSource,
     );
   }
 
@@ -239,6 +248,11 @@ class ScanRecordModel {
       longitude: survey.longitude,
       recordCollection: RecordCollection.followUpSurveys,
       followUpSurvey: survey,
+      // The Diver types the visit's coordinates and picks its date.
+      locationSource: survey.latitude != null && survey.longitude != null
+          ? 'manual_surface'
+          : 'unavailable',
+      timeSource: 'manual',
     );
   }
 
@@ -321,7 +335,10 @@ class ScanRecordModel {
       documentId: id,
       imageName: imageName,
       notes: notes,
-      dateCaptured: dateTaken != null ? fmt.format(dateTaken!) : 'Unknown',
+      dateCaptured: dateTaken == null
+          ? 'Unknown'
+          : (timeSource == 'manual' ? DateFormat('MMM d, yyyy') : fmt)
+              .format(dateTaken!),
       dateUploaded:
           submittedAt != null ? fmt.format(submittedAt!) : fmt.format(when),
       latitude: latitude,
@@ -341,6 +358,8 @@ class ScanRecordModel {
       ownerUid: uid,
       zoneAssignedTo: zoneAssignedTo,
       cotsTally: cotsTally,
+      locationSource: locationSource,
+      timeSource: timeSource,
     );
   }
 

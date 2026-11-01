@@ -187,7 +187,7 @@ void main() {
       ExpertActionPlace.reassignments,
     ]);
     expect(items[1].detail,
-        'Another Diver in an assigned zone · CAP-2 · Reef A · by Diver Bravo · zone assigned to Diver Alpha');
+        'Another Diver in an assigned area · CAP-2 · Reef A · by Diver Bravo · area assigned to Diver Alpha');
     expect(items[2].detail,
         'Zone C · C-01 · Test Barangay · Oct 5, 2026 · by Diver A');
     expect(items[3].detail,

@@ -10,6 +10,7 @@ import '../models/cots_tally.dart';
 import '../models/removal_record_model.dart';
 import '../models/activity_type.dart';
 import 'cots_yolo_detector.dart';
+import 'area_messages.dart';
 import 'supabase_evidence_service.dart';
 import 'zone_assignment_service.dart';
 
@@ -38,6 +39,7 @@ abstract final class SupabaseRecordService {
     required int? imageHeight,
     required String notes,
     bool? gpsFromPhoto,
+    bool? timeFromPhoto,
     EvidenceProgressCallback? onEvidenceProgress,
   }) async {
     final assignment = ZoneAssignmentService.resolveMonitoringArea(
@@ -45,9 +47,7 @@ abstract final class SupabaseRecordService {
       longitude: longitude,
     );
     if (assignment == null) {
-      throw StateError(
-        'The image GPS location is outside a mapped Supabase monitoring area.',
-      );
+      throw StateError(AreaMessages.outside);
     }
     if (imageWidth == null ||
         imageWidth <= 0 ||
@@ -99,7 +99,8 @@ abstract final class SupabaseRecordService {
       'idempotency_key': stableUuid('capture-idempotency', submissionId),
       'area_id': area['id'],
       'captured_at': capturedAt.toIso8601String(),
-      'capture_time_source': dateTaken == null ? 'device' : 'exif',
+      'capture_time_source':
+          timeSourceFor(dateTaken: dateTaken, timeFromPhoto: timeFromPhoto),
       'original_time_text': dateTaken?.toIso8601String(),
       'timezone_assumed': false,
       'model_name': CotsYoloDetector.modelName,
@@ -123,6 +124,8 @@ abstract final class SupabaseRecordService {
     try {
       await _client.from('captures').insert(row);
     } on PostgrestException catch (error) {
+      final areaMessage = AreaMessages.forError(error);
+      if (areaMessage != null) throw StateError(areaMessage);
       if (error.code != '23505') rethrow;
       await _validateCaptureRetry(captureId, uid, area['id'].toString());
     }
@@ -181,6 +184,14 @@ abstract final class SupabaseRecordService {
   static String gpsSourceFor({required bool hasGps, bool? gpsFromPhoto}) {
     if (!hasGps) return 'unavailable';
     return gpsFromPhoto == false ? 'device_surface' : 'exif';
+  }
+
+  /// Where the photo time came from: the photo itself ('exif') or the phone's
+  /// clock when the photo had no date ('device'). `timeFromPhoto` is null
+  /// only for submissions queued by older builds.
+  static String timeSourceFor({DateTime? dateTaken, bool? timeFromPhoto}) {
+    if (dateTaken == null || timeFromPhoto == false) return 'device';
+    return 'exif';
   }
 
   /// Photo GPS is as old as the photo; device GPS was read when the photo was
@@ -632,6 +643,8 @@ abstract final class SupabaseRecordService {
       zoneAssignedTo: row['zone_review_assigned_to']?.toString() ?? '',
       confirmedCount: (row['confirmed_cots'] as num?)?.round(),
       waitingCount: (row['waiting_cots'] as num?)?.round(),
+      locationSource: row['gps_source']?.toString() ?? '',
+      timeSource: row['capture_time_source']?.toString() ?? '',
     );
   }
 
@@ -715,6 +728,7 @@ abstract final class SupabaseRecordService {
       linkedCaptureDisplayId:
           CaptureModel.formatDisplayRecordId(row['capture_id'].toString()),
       linkedCaptureAiCount: items.length,
+      locationSource: row['gps_source']?.toString() ?? '',
     );
   }
 

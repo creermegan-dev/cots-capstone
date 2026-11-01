@@ -530,7 +530,9 @@ abstract final class FollowUpMonitoringRepository {
     final referenceArea = ZoneAssignmentService.resolveMonitoringArea(
         latitude: latitude, longitude: longitude);
     if (referenceArea != null && referenceArea.barangay.id != areaId) {
-      throw ArgumentError('GPS reference belongs to another monitoring zone.');
+      throw ArgumentError(
+          'This visit\'s location is in area ${referenceArea.barangay.id}, '
+          'not $areaId. Please record the visit for the area you dived in.');
     }
     var imageCount = 0;
     for (final captureId in captureIds) {

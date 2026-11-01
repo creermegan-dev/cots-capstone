@@ -16,6 +16,7 @@ import 'package:provider/provider.dart';
 import '../../core/cots_colors.dart';
 import '../../core/supabase_config.dart';
 import '../../models/activity_type.dart';
+import '../../models/photo_source.dart';
 import '../../models/cots_confidence_policy.dart';
 import '../../models/cots_detection_result.dart';
 import '../../models/cots_density.dart';
@@ -32,6 +33,7 @@ import '../../services/offline_submission_service.dart';
 import '../../services/original_photo_picker.dart';
 import '../../services/supabase_record_service.dart';
 import '../../models/zone_review.dart';
+import '../../services/area_messages.dart';
 import '../../services/zone_assignment_service.dart';
 import 'cots_map_page.dart';
 import 'profile_page.dart';
@@ -179,7 +181,8 @@ class _ScanDetectionPageState extends State<ScanDetectionPage> {
 
   String get _locationSourceLabel {
     if (_latitude == null || _longitude == null) return 'Unavailable';
-    return _gpsFromExif ? 'Image EXIF GPS' : 'Live Device GPS';
+    return PhotoSource.locationLabel(
+        _gpsFromExif ? 'exif' : 'device_surface');
   }
 
   String get _activityTypeLabel => _isFollowUp
@@ -1819,17 +1822,22 @@ class _ScanDetectionPageState extends State<ScanDetectionPage> {
       return;
     }
     if (_isFollowUp) {
-      final conflict = ready.any((image) {
+      String? otherPart;
+      for (final image in ready) {
         final area = ZoneAssignmentService.resolveMonitoringArea(
             latitude: image.metadata.latitude,
             longitude: image.metadata.longitude);
-        return area != null &&
-            area.barangay.id != widget.followUpAssignment!.areaId;
-      });
+        if (area != null &&
+            area.barangay.id != widget.followUpAssignment!.areaId) {
+          otherPart = area.barangay.id;
+          break;
+        }
+      }
+      final conflict = otherPart != null;
       if (conflict || ready.length > scanMaxFollowUpPhotos) {
         ScaffoldMessenger.of(context).showSnackBar(SnackBar(
             content: Text(conflict
-                ? 'An image GPS location belongs to another monitoring zone. Remove it before submitting.'
+                ? AreaMessages.otherPart(otherPart!)
                 : 'Submit at most $scanMaxFollowUpPhotos images per visit.')));
         return;
       }
@@ -1899,6 +1907,9 @@ class _ScanDetectionPageState extends State<ScanDetectionPage> {
           latitude: img.metadata.latitude,
           longitude: img.metadata.longitude,
           gpsFromPhoto: img.metadata.gpsFromExif,
+          // The date comes from the photo only when it had one; otherwise
+          // captureInstant is the moment the photo was selected.
+          timeFromPhoto: img.metadata.dateTaken != null,
           dateTaken: img.captureInstant,
           imageWidth: img.metadata.widthPx,
           imageHeight: img.metadata.heightPx,
@@ -2650,8 +2661,8 @@ class _ScanDetectionPageState extends State<ScanDetectionPage> {
           const SizedBox(height: 10),
           Text(
             assigned
-                ? 'Auto-assigned from GPS to the nearest monitoring zone.'
-                : 'No monitoring zone matched — enable GPS or use a photo with location data.',
+                ? 'Matched from GPS to its monitoring area.'
+                : 'No monitoring area matched — the location is on land or in deep water, or the photo has no GPS.',
             style: TextStyle(
               color: kMutedGray.withValues(alpha: 0.95),
               fontSize: 11.5,

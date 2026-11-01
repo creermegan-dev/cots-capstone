@@ -48,6 +48,8 @@ class AdminRecordTableRow {
     this.ownerUid = '',
     this.zoneAssignedTo = '',
     this.cotsTally = CotsTally.zero,
+    this.locationSource = '',
+    this.timeSource = '',
   });
 
   final int number;
@@ -93,6 +95,10 @@ class AdminRecordTableRow {
   /// Stage 3: confirmed, waiting and not-accepted COTS (zero for removal
   /// records and visit summaries, whose photos are counted separately).
   final CotsTally cotsTally;
+
+  /// Where the location and the time came from (see PhotoSource).
+  final String locationSource;
+  final String timeSource;
 
   int get displayAiCount => aiCount ?? cotsCount;
 
@@ -173,6 +179,8 @@ class AdminRecordTableRow {
       ownerUid: ownerUid,
       zoneAssignedTo: zoneAssignedTo,
       cotsTally: cotsTally,
+      locationSource: locationSource,
+      timeSource: timeSource,
     );
   }
 }

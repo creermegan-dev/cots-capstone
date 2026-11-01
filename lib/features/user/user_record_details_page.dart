@@ -5,6 +5,7 @@ import 'package:intl/intl.dart';
 import '../../models/activity_type.dart';
 import '../../models/cots_confidence_policy.dart';
 import '../../models/follow_up_monitoring_model.dart';
+import '../../models/photo_source.dart';
 import '../../models/scan_record_model.dart';
 import '../../models/capture_model.dart';
 import '../../services/capture_repository.dart';
@@ -29,6 +30,16 @@ class UserRecordDetailsPage extends StatelessWidget {
 
   String get _dateCaptured =>
       record.dateTaken != null ? _dateFmt.format(record.dateTaken!) : 'Unknown';
+
+  /// Date taken with where it came from; a visit's date is picked by the
+  /// Diver, so it shows without a time.
+  String get _dateTaken => record.dateTaken == null
+      ? 'Unknown'
+      : PhotoSource.dateTaken(
+          record.timeSource == 'manual'
+              ? DateFormat('MMM d, yyyy').format(record.dateTaken!)
+              : _dateFmt.format(record.dateTaken!),
+          record.timeSource);
 
   String get _dateUploaded => record.submittedAt != null
       ? _dateFmt.format(record.submittedAt!)
@@ -532,12 +543,14 @@ class UserRecordDetailsPage extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          _kv('Coordinates', record.formattedCoordinates),
-          _kv('Location source', 'Live Device GPS'),
-          _kv('GPS source', 'Live Device GPS'),
-          _kv('Capture device', 'Unknown Device'),
-          _kv('Upload method', 'Gallery Upload'),
-          _kv('Date captured', _dateCaptured),
+          _kv(
+              'Coordinates',
+              record.latitude == null || record.longitude == null
+                  ? 'Not available'
+                  : record.formattedCoordinates),
+          _kv('Location from', PhotoSource.locationLabel(record.locationSource)),
+          _kv('Upload method', 'Gallery upload'),
+          _kv('Date taken', _dateTaken),
           _kv('Date uploaded', _dateUploaded),
           _kv('User remarks', _userRemarks),
           const SizedBox(height: 6),
