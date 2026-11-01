@@ -16,6 +16,8 @@ import 'package:provider/provider.dart';
 import '../../core/cots_colors.dart';
 import '../../core/supabase_config.dart';
 import '../../models/activity_type.dart';
+import '../../models/davao_gulf_geography.dart';
+import '../../models/photo_location_rule.dart';
 import '../../models/photo_source.dart';
 import '../../models/cots_confidence_policy.dart';
 import '../../models/cots_detection_result.dart';
@@ -63,8 +65,12 @@ bool scanPhotoNeedsAttention({
   required bool isFollowUp,
   required bool analysisFailed,
   int? detectedCount,
+  bool locationProblem = false,
 }) =>
-    analysisFailed || (!isFollowUp && detectedCount == 0);
+    locationProblem || analysisFailed || (!isFollowUp && detectedCount == 0);
+
+/// Phone location status on the record page (Stage 7).
+enum ScanLocationAccess { checking, ready, serviceOff, denied, deniedForever }
 const _allowedExtensions = {'.jpg', '.jpeg', '.png'};
 
 const _scanBoxPurple = Color(0xFFAB47BC);
@@ -89,7 +95,8 @@ class ScanDetectionPage extends StatefulWidget {
   State<ScanDetectionPage> createState() => _ScanDetectionPageState();
 }
 
-class _ScanDetectionPageState extends State<ScanDetectionPage> {
+class _ScanDetectionPageState extends State<ScanDetectionPage>
+    with WidgetsBindingObserver {
   static final _picker = ImagePicker();
   final _formKey = GlobalKey<FormState>();
   final _notesController = TextEditingController();
@@ -104,6 +111,7 @@ class _ScanDetectionPageState extends State<ScanDetectionPage> {
   String? _detectionProgress;
   double? _deviceGpsLat;
   double? _deviceGpsLng;
+  ScanLocationAccess _locationAccess = ScanLocationAccess.checking;
   String get _activityType => _isFollowUp
       ? CotsActivityType.detectionOnly
       : CotsActivityType.removalActivity;
@@ -165,6 +173,8 @@ class _ScanDetectionPageState extends State<ScanDetectionPage> {
             isFollowUp: _isFollowUp,
             analysisFailed: img.detectionError != null,
             detectedCount: img.detection?.count,
+            locationProblem: img.metadata.locationProblem !=
+                PhotoLocationProblem.none,
           ))
             img,
       ];
@@ -194,7 +204,56 @@ class _ScanDetectionPageState extends State<ScanDetectionPage> {
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
     _startLiveClock();
+    _checkLocationAccess(ask: true);
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    // Back from Settings: check again.
+    if (state == AppLifecycleState.resumed) _checkLocationAccess();
+  }
+
+  /// Checks (and, the first time, asks for) the phone's location (Stage 7).
+  Future<void> _checkLocationAccess({bool ask = false}) async {
+    ScanLocationAccess next;
+    try {
+      if (!await Geolocator.isLocationServiceEnabled()) {
+        next = ScanLocationAccess.serviceOff;
+      } else {
+        var permission = await Geolocator.checkPermission();
+        if (permission == LocationPermission.denied && ask) {
+          permission = await Geolocator.requestPermission();
+        }
+        next = switch (permission) {
+          LocationPermission.deniedForever => ScanLocationAccess.deniedForever,
+          LocationPermission.denied ||
+          LocationPermission.unableToDetermine =>
+            ScanLocationAccess.denied,
+          _ => ScanLocationAccess.ready,
+        };
+      }
+    } catch (_) {
+      next = ScanLocationAccess.denied;
+    }
+    if (!mounted) return;
+    setState(() => _locationAccess = next);
+  }
+
+  /// Fixes the location of photos still waiting for the phone's GPS.
+  Future<void> _retryPhotoLocations() async {
+    await _checkLocationAccess(ask: true);
+    _deviceGpsLat = null;
+    _deviceGpsLng = null;
+    for (final image in _images) {
+      if (image.metadata.locationProblem == PhotoLocationProblem.none ||
+          image.metadata.gpsFromExif) {
+        continue;
+      }
+      image.metadata = await _extractMetadata(image.bytes);
+    }
+    if (mounted) setState(() {});
   }
 
   void _startLiveClock() {
@@ -212,6 +271,7 @@ class _ScanDetectionPageState extends State<ScanDetectionPage> {
 
   @override
   void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
     _stopLiveClock();
     _notesController.dispose();
     _depthController.dispose();
@@ -611,6 +671,7 @@ class _ScanDetectionPageState extends State<ScanDetectionPage> {
           ),
         ),
         const SizedBox(height: 12),
+        _locationAccessCard(),
         _photoRuleNoteCard(),
         if (_problemImages.isNotEmpty) ...[
           const SizedBox(height: 12),
@@ -1738,13 +1799,19 @@ class _ScanDetectionPageState extends State<ScanDetectionPage> {
       if (!mounted) return;
       final problems = _problemImages;
       if (problems.isNotEmpty) {
+        final locationCount = problems
+            .where((img) =>
+                img.metadata.locationProblem != PhotoLocationProblem.none)
+            .length;
         final failedCount =
             problems.where((img) => img.detectionError != null).length;
         final noCotsCount = problems.length - failedCount;
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text(
-              failedCount == 0
+              locationCount > 0
+                  ? '$locationCount photo(s) need a location. See the notes below the photos.'
+                  : failedCount == 0
                   ? scanNoCotsMessage
                   : noCotsCount == 0
                       ? 'The AI could not process $failedCount photo(s). Retry or replace them.'
@@ -2106,6 +2173,8 @@ class _ScanDetectionPageState extends State<ScanDetectionPage> {
 
     if (!mounted) return;
     setState(() {});
+    await _askPhotoLocationPermissionIfNeeded();
+    if (!mounted) return;
 
     if (skipped > 0) {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -2114,6 +2183,111 @@ class _ScanDetectionPageState extends State<ScanDetectionPage> {
                 '$skipped file(s) skipped (unsupported type or over 20 MB).')),
       );
     }
+  }
+
+  /// Phone location status, with the way to fix it (Stage 7).
+  Widget _locationAccessCard() {
+    if (_locationAccess == ScanLocationAccess.ready ||
+        _locationAccess == ScanLocationAccess.checking) {
+      return const SizedBox.shrink();
+    }
+    final (String message, String button, Future<void> Function() action) =
+        switch (_locationAccess) {
+      ScanLocationAccess.serviceOff => (
+          'Location is turned off. Turn it on so photos without GPS can use '
+              "your phone's location.",
+          'Open settings',
+          () async {
+            await Geolocator.openLocationSettings();
+          },
+        ),
+      ScanLocationAccess.deniedForever => (
+          'Location permission is blocked for COTS Monitor. Allow it in the '
+              "app's settings (Permissions → Location → While using the app).",
+          'Open settings',
+          () async {
+            await Geolocator.openAppSettings();
+          },
+        ),
+      _ => (
+          'COTS Monitor needs your location (while using the app).',
+          'Allow location',
+          () => _checkLocationAccess(ask: true),
+        ),
+    };
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 12),
+      child: Container(
+        padding: const EdgeInsets.all(12),
+        decoration: BoxDecoration(
+          color: kDangerRed.withValues(alpha: 0.06),
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(color: kDangerRed.withValues(alpha: 0.35)),
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Icon(Icons.location_off_rounded,
+                    color: kDangerRed, size: 18),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Text(
+                    '${PhotoLocationRule.locationRequiredBanner}\n$message',
+                    style: const TextStyle(
+                        color: kTextNavy, fontSize: 12.5, height: 1.35),
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 8),
+            Wrap(
+              spacing: 8,
+              children: [
+                OutlinedButton(
+                  onPressed: _isBusy ? null : action,
+                  child: Text(button),
+                ),
+                TextButton(
+                  onPressed: _isBusy ? null : _retryPhotoLocations,
+                  child: const Text('Try again'),
+                ),
+              ],
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  /// Android hides the GPS saved in photos unless the app may read photo
+  /// locations. When photos came in without GPS and that permission is
+  /// missing, explain it and offer the app settings (Stage 7).
+  Future<void> _askPhotoLocationPermissionIfNeeded() async {
+    if (!OriginalPhotoPicker.isSupported) return;
+    if (_images.every((image) => image.metadata.gpsFromExif)) return;
+    if (await OriginalPhotoPicker.photoLocationAllowed()) return;
+    if (!mounted) return;
+    final open = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text(PhotoLocationRule.photoLocationPermissionTitle),
+        content: const Text(PhotoLocationRule.photoLocationPermissionMessage),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(false),
+            child: const Text('Not now'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.of(context).pop(true),
+            child: const Text('Open settings'),
+          ),
+        ],
+      ),
+    );
+    if (open == true) await Geolocator.openAppSettings();
   }
 
   Widget _photoRuleNoteCard() => Container(
@@ -2180,9 +2354,13 @@ class _ScanDetectionPageState extends State<ScanDetectionPage> {
                       ),
                       const SizedBox(height: 2),
                       Text(
-                        img.detectionError != null
-                            ? scanAnalysisFailedMessage
-                            : scanNoCotsMessage,
+                        img.metadata.locationProblem !=
+                                PhotoLocationProblem.none
+                            ? PhotoLocationRule.message(
+                                img.metadata.locationProblem)
+                            : img.detectionError != null
+                                ? scanAnalysisFailedMessage
+                                : scanNoCotsMessage,
                         style: const TextStyle(
                             color: kDangerRed, fontSize: 12, height: 1.3),
                       ),
@@ -2197,6 +2375,15 @@ class _ScanDetectionPageState extends State<ScanDetectionPage> {
                         spacing: 8,
                         runSpacing: 4,
                         children: [
+                          if (img.metadata.locationProblem ==
+                              PhotoLocationProblem.noLocation)
+                            OutlinedButton.icon(
+                              onPressed:
+                                  _isBusy ? null : _retryPhotoLocations,
+                              icon: const Icon(Icons.my_location_rounded,
+                                  size: 16),
+                              label: const Text('Try again'),
+                            ),
                           if (img.detectionError != null)
                             OutlinedButton.icon(
                               onPressed:
@@ -2491,17 +2678,37 @@ class _ScanDetectionPageState extends State<ScanDetectionPage> {
       }
     } catch (_) {}
 
-    if (latitude == null || longitude == null) {
+    final now = DateTime.now();
+    if ((latitude == null || longitude == null) &&
+        PhotoLocationRule.phoneGpsAllowed(dateTaken: dateTaken, now: now)) {
       await _ensureDeviceGps();
       latitude ??= _deviceGpsLat;
       longitude ??= _deviceGpsLng;
     }
+    final hasLocation = latitude != null && longitude != null;
+    final locationProblem = PhotoLocationRule.check(
+      hasPhotoGps: gpsFromExif,
+      hasLocation: hasLocation,
+      insideArea: hasLocation &&
+          DavaoGulfGeography.assignWithinMonitoringArea(
+                latitude: latitude,
+                longitude: longitude,
+              ) !=
+              null,
+      dateTaken: dateTaken,
+      now: now,
+    );
 
     return _ScanImageMetadata(
       dateTaken: dateTaken,
-      latitude: latitude,
-      longitude: longitude,
+      latitude: gpsFromExif || locationProblem != PhotoLocationProblem.tooOld
+          ? latitude
+          : null,
+      longitude: gpsFromExif || locationProblem != PhotoLocationProblem.tooOld
+          ? longitude
+          : null,
       gpsFromExif: gpsFromExif,
+      locationProblem: locationProblem,
       deviceLabel: deviceLabel,
       widthPx: widthPx == 0 ? null : widthPx,
       heightPx: heightPx == 0 ? null : heightPx,
@@ -2977,6 +3184,7 @@ class _ScanImageMetadata {
     this.latitude,
     this.longitude,
     this.gpsFromExif = false,
+    this.locationProblem = PhotoLocationProblem.none,
     this.deviceLabel = 'Unknown Device',
     this.widthPx,
     this.heightPx,
@@ -2986,6 +3194,9 @@ class _ScanImageMetadata {
   final double? latitude;
   final double? longitude;
   final bool gpsFromExif;
+
+  /// Stage 7: why this photo cannot be submitted yet (location), if any.
+  final PhotoLocationProblem locationProblem;
   final String deviceLabel;
   final int? widthPx;
   final int? heightPx;
@@ -3005,7 +3216,7 @@ class _PendingScanImage {
   final DateTime selectedAt = DateTime.now();
   final Uint8List bytes;
   final String fileName;
-  final _ScanImageMetadata metadata;
+  _ScanImageMetadata metadata;
   CotsDetectionResult? detection;
   String? detectionError;
 

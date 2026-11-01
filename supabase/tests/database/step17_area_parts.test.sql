@@ -69,7 +69,7 @@ select lives_ok($$select pg_temp.capture(21,3,pg_temp.area('V28-67'),6.8924738,1
 select throws_like($$select pg_temp.capture(22,3,pg_temp.area('V28-67'),6.8924738,125.7080935)$$,'COTS_AREA_OUTSIDE:%','A photo 40 m outside every part is refused');
 select throws_like($$select pg_temp.capture(23,3,pg_temp.area('V28-67'),7.0800000,125.7200000)$$,'COTS_AREA_OUTSIDE:%','A photo on land is refused');
 select throws_like($$select pg_temp.capture(24,3,pg_temp.area('V28-85'),6.8908459,125.7048832)$$,'COTS_AREA_MISMATCH:V28-86:%','A photo in the neighbouring part is refused and names that part');
-select lives_ok($$select pg_temp.capture(25,3,pg_temp.area('V28-67'),null,null)$$,'A photo without GPS is not checked here');
+select throws_like($$select pg_temp.capture(25,3,pg_temp.area('V28-67'),null,null)$$,'COTS_AREA_NO_LOCATION:%','A photo without a location is refused (Stage 7)');
 select throws_like($$select pg_temp.capture(26,3,(select id from public.monitoring_areas where geography_version='cots-davao-gulf-v1' limit 1),null,null)$$,
   'COTS_AREA_INACTIVE:%','A photo for an old switched-off box is refused');
 select lives_ok($$select pg_temp.capture(27,3,pg_temp.area('V28-85'),6.8908459,125.7046120)$$,'A photo in the neighbouring part, filed there, is accepted');

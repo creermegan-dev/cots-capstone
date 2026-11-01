@@ -9,6 +9,8 @@ abstract final class AreaMessages {
   static const outside =
       'This location is outside every monitoring area (on land or in deep '
       'water). Records must be made at the dive site, in the water.';
+  static const noLocation =
+      'A location is required. Turn on location, or use a photo that has GPS.';
   static const inactive =
       'This monitoring area is no longer used. Please update the app.';
 
@@ -17,7 +19,7 @@ abstract final class AreaMessages {
       'Please submit them as a separate record for $code.';
 
   static final _pattern =
-      RegExp(r'COTS_AREA_(OUTSIDE|MISMATCH|INACTIVE)(?::([A-Z]\d+(?:-\d+)?))?');
+      RegExp(r'COTS_AREA_(OUTSIDE|MISMATCH|INACTIVE|NO_LOCATION)(?::([A-Z]\d+(?:-\d+)?))?');
 
   /// The message for an area-check refusal, or null for any other error.
   static String? forError(Object error) {
@@ -29,6 +31,8 @@ abstract final class AreaMessages {
         return outside;
       case 'INACTIVE':
         return inactive;
+      case 'NO_LOCATION':
+        return noLocation;
       default:
         final code = match.group(2);
         return code == null ? outside : otherPart(code);

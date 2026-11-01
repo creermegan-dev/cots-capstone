@@ -51,9 +51,23 @@ class MainActivity : FlutterActivity() {
                             requestPhotoAccessThenPick()
                         }
                     }
+                    "photoLocationAllowed" -> result.success(photoLocationAllowed())
                     else -> result.notImplemented()
                 }
             }
+    }
+
+    // Stage 7: true when the app may read the GPS saved in photos.
+    private fun photoLocationAllowed(): Boolean {
+        if (Build.VERSION.SDK_INT < 29) return true
+        val read = if (Build.VERSION.SDK_INT >= 33) {
+            Manifest.permission.READ_MEDIA_IMAGES
+        } else {
+            Manifest.permission.READ_EXTERNAL_STORAGE
+        }
+        return checkSelfPermission(read) == PackageManager.PERMISSION_GRANTED &&
+            checkSelfPermission(Manifest.permission.ACCESS_MEDIA_LOCATION) ==
+            PackageManager.PERMISSION_GRANTED
     }
 
     // Photo location is only readable from the original file, which Android
