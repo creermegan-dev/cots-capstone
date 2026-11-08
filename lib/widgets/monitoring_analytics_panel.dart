@@ -11,6 +11,7 @@ import '../services/supabase_record_service.dart';
 import '../models/cots_confidence_policy.dart';
 import '../models/monitoring_analytics.dart';
 import '../models/scan_record_model.dart';
+import '../models/zone_directory_summary.dart';
 import '../services/scan_record_repository.dart';
 import 'cots_loading_skeleton.dart';
 
@@ -25,13 +26,19 @@ class MonitoringAnalyticsPanel extends StatefulWidget {
       this.recordsStream,
       this.now,
       this.trailingBuilder,
-      this.removalMethodLoader});
+      this.removalMethodLoader,
+      this.useSiteTerminology = false,
+      this.showHeaderFilters = true});
   final Stream<List<ScanRecordModel>>? recordsStream;
   final DateTime? now;
   final Widget Function(BuildContext, List<ScanRecordModel>)? trailingBuilder;
 
   /// Stage 3: defaults to the database summary (Supabase only).
   final RemovalMethodLoader? removalMethodLoader;
+
+  /// When false, the date picker and zone dropdown at the top of the panel are hidden.
+  final bool showHeaderFilters;
+  final bool useSiteTerminology;
 
   @override
   State<MonitoringAnalyticsPanel> createState() =>
@@ -102,45 +109,126 @@ class _MonitoringAnalyticsPanelState extends State<MonitoringAnalyticsPanel> {
           return Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
-                Wrap(
-                    spacing: 12,
-                    runSpacing: 10,
-                    crossAxisAlignment: WrapCrossAlignment.center,
-                    children: [
-                      OutlinedButton.icon(
-                          onPressed: _chooseDates,
-                          icon: const Icon(Icons.date_range),
-                          label: Text(
-                              '${DateFormat('MMM d, yyyy').format(_range.start)} – ${DateFormat('MMM d, yyyy').format(_range.end)}')),
-                      SizedBox(
-                          width: 240,
-                          child: DropdownButtonFormField<String>(
-                            key: ValueKey(selectedZone),
-                            initialValue: selectedZone ?? '',
-                            isExpanded: true,
-                            decoration: const InputDecoration(
-                                labelText: 'Monitoring zone',
-                                border: OutlineInputBorder()),
-                            items: [
-                              const DropdownMenuItem(
-                                  value: '', child: Text('All zones')),
-                              for (final z in zones)
+                if (widget.showHeaderFilters) ...[
+                  Wrap(
+                      spacing: 12,
+                      runSpacing: 10,
+                      crossAxisAlignment: WrapCrossAlignment.center,
+                      children: [
+                        OutlinedButton.icon(
+                            onPressed: _chooseDates,
+                            style: OutlinedButton.styleFrom(
+                              foregroundColor: const Color(0xFF1E293B),
+                              backgroundColor: Colors.white,
+                              minimumSize: const Size(0, 44),
+                              padding: const EdgeInsets.symmetric(
+                                  horizontal: 14, vertical: 10),
+                              side: const BorderSide(color: Color(0xFFCBD5E1)),
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(10),
+                              ),
+                              elevation: 0,
+                            ),
+                            icon: const Icon(Icons.calendar_today_outlined,
+                                size: 16, color: Color(0xFF008D94)),
+                            label: Text(
+                                '${DateFormat('MMM d, yyyy').format(_range.start)} – ${DateFormat('MMM d, yyyy').format(_range.end)}',
+                                style: const TextStyle(
+                                    fontSize: 13.5,
+                                    fontWeight: FontWeight.w600,
+                                    color: Color(0xFF1E293B)))),
+                        SizedBox(
+                            width: 220,
+                            height: 44,
+                            child: DropdownButtonFormField<String>(
+                              key: ValueKey(selectedZone),
+                              initialValue: selectedZone ?? '',
+                              isExpanded: true,
+                              style: const TextStyle(
+                                fontSize: 13.5,
+                                fontWeight: FontWeight.w600,
+                                color: Color(0xFF1E293B),
+                              ),
+                              icon: const Icon(
+                                  Icons.keyboard_arrow_down_rounded,
+                                  size: 20,
+                                  color: Color(0xFF64748B)),
+                              decoration: InputDecoration(
+                                isDense: true,
+                                filled: true,
+                                fillColor: Colors.white,
+                                contentPadding: const EdgeInsets.symmetric(
+                                    horizontal: 12, vertical: 10),
+                                prefixIcon: const Icon(Icons.place_outlined,
+                                    size: 18, color: Color(0xFF008D94)),
+                                prefixIconConstraints: const BoxConstraints(
+                                    minWidth: 36, minHeight: 44),
+                                border: OutlineInputBorder(
+                                  borderRadius: BorderRadius.circular(10),
+                                  borderSide: const BorderSide(
+                                      color: Color(0xFFCBD5E1)),
+                                ),
+                                enabledBorder: OutlineInputBorder(
+                                  borderRadius: BorderRadius.circular(10),
+                                  borderSide: const BorderSide(
+                                      color: Color(0xFFCBD5E1)),
+                                ),
+                                focusedBorder: OutlineInputBorder(
+                                  borderRadius: BorderRadius.circular(10),
+                                  borderSide: const BorderSide(
+                                      color: Color(0xFF008D94), width: 1.5),
+                                ),
+                              ),
+                              items: [
                                 DropdownMenuItem(
-                                    value: z,
-                                    child: Text(z,
-                                        overflow: TextOverflow.ellipsis))
-                            ],
-                            onChanged: (value) => setState(
-                                () => _zone = value == '' ? null : value),
-                          )),
-                    ]),
-                const SizedBox(height: 16),
+                                    value: '',
+                                    child: Text(widget.useSiteTerminology
+                                        ? 'All sites'
+                                        : 'All zones')),
+                                for (final z in zones)
+                                  DropdownMenuItem(
+                                      value: z,
+                                      child: Text(z,
+                                          overflow: TextOverflow.ellipsis))
+                              ],
+                              onChanged: (value) => setState(
+                                  () => _zone = value == '' ? null : value),
+                            )),
+                      ]),
+                  const SizedBox(height: 16),
+                ],
                 if (data.captures.isEmpty)
-                  const Padding(
-                      padding: EdgeInsets.only(bottom: 16),
-                      child: Text(
-                          'No detection records for these dates and zone.',
-                          key: ValueKey('analytics-empty'))),
+                  Padding(
+                      padding: const EdgeInsets.only(bottom: 16),
+                      child: Container(
+                        key: const ValueKey('analytics-empty'),
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 14, vertical: 10),
+                        decoration: BoxDecoration(
+                          color: const Color(0xFFF8FAFC),
+                          borderRadius: BorderRadius.circular(10),
+                          border: Border.all(color: const Color(0xFFE2E8F0)),
+                        ),
+                        child: Row(
+                          children: [
+                            const Icon(Icons.info_outline_rounded,
+                                size: 17, color: Color(0xFF64748B)),
+                            const SizedBox(width: 8),
+                            Expanded(
+                              child: Text(
+                                widget.useSiteTerminology
+                                    ? 'No detection records for these dates and site.'
+                                    : 'No detection records for these dates and zone.',
+                                style: const TextStyle(
+                                  color: Color(0xFF475569),
+                                  fontSize: 13,
+                                  fontWeight: FontWeight.w500,
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                      )),
                 LayoutBuilder(builder: (context, constraints) {
                   final columns = constraints.maxWidth >= 1000
                       ? 3
@@ -149,59 +237,69 @@ class _MonitoringAnalyticsPanelState extends State<MonitoringAnalyticsPanel> {
                           : 1;
                   final width =
                       (constraints.maxWidth - (columns - 1) * 12) / columns;
-                  final metrics = <(String, String, String)>[
+                  final metrics = <(String, String, String, IconData, Color)>[
                     (
                       HonestReport.confirmedLabel,
                       '${data.accepted}',
-                      'Every COTS found is removed. COTS the Expert rejected are not counted.'
+                      'Every COTS found is removed. COTS the Expert rejected are not counted.',
+                      Icons.verified_outlined,
+                      const Color(0xFF008D94),
                     ),
                     (
                       HonestReport.waitingLabel,
                       '${data.pending}',
-                      '${data.pendingRecords} record(s), including other Divers\' records in assigned zones.'
+                      '${data.pendingSubmissionCount} submission(s), including other Divers\' records in assigned ${widget.useSiteTerminology ? 'sites' : 'zones'}.',
+                      Icons.schedule_rounded,
+                      const Color(0xFFD97706),
                     ),
                     (
                       HonestReport.notAcceptedLabel,
                       '${data.rejected}',
-                      'Rejected by the Expert or below 20% confidence.'
+                      'Rejected by the Expert or below 20% confidence.',
+                      Icons.cancel_outlined,
+                      const Color(0xFFDC2626),
                     ),
                     (
-                      'Monitoring captures',
-                      '${data.captures.length}',
-                      'Removal evidence and survey summaries excluded.'
+                      'Monitoring submissions',
+                      '${data.submissionCount}',
+                      'Removal evidence and survey summaries excluded.',
+                      Icons.camera_alt_outlined,
+                      const Color(0xFF2563EB),
                     ),
                     (
-                      'Zones with records',
-                      '${data.byZone.keys.where((z) => z != 'Unassigned').length}',
-                      'Zones represented by the selected captures.'
+                      widget.useSiteTerminology
+                          ? 'Sites with records'
+                          : 'Zones with records',
+                      widget.useSiteTerminology
+                          ? '${SiteDirectorySummary.fromRecords(data.captures).where((row) => row.reports > 0).length}'
+                          : '${data.byZone.keys.where((z) => z != 'Unassigned').length}',
+                      widget.useSiteTerminology
+                          ? 'Sites represented by the selected captures.'
+                          : 'Zones represented by the selected captures.',
+                      Icons.explore_outlined,
+                      const Color(0xFF7C3AED),
                     ),
                     (
                       'Overall confidence',
                       data.averageConfidence == null
                           ? '—'
                           : '${data.averageConfidence!.round()}%',
-                      'Average across individual COTS detections.'
+                      'Average across individual COTS detections.',
+                      Icons.insights_rounded,
+                      const Color(0xFF0D9488),
                     ),
                   ];
                   return Wrap(spacing: 12, runSpacing: 12, children: [
                     for (final m in metrics)
                       SizedBox(
                           width: width,
-                          child: _card(
-                              m.$1,
-                              Column(
-                                  crossAxisAlignment: CrossAxisAlignment.start,
-                                  children: [
-                                    Text(m.$2,
-                                        key: ValueKey('metric-${m.$1}'),
-                                        style: const TextStyle(
-                                            fontSize: 28,
-                                            fontWeight: FontWeight.w800,
-                                            color: kPrimaryTeal)),
-                                    Text(m.$3,
-                                        style: const TextStyle(
-                                            color: kMutedGray, fontSize: 12)),
-                                  ]))),
+                          child: _MetricStatCard(
+                            title: m.$1,
+                            value: m.$2,
+                            description: m.$3,
+                            icon: m.$4,
+                            accentColor: m.$5,
+                          )),
                   ]);
                 }),
                 const SizedBox(height: 16),
@@ -228,7 +326,11 @@ class _MonitoringAnalyticsPanelState extends State<MonitoringAnalyticsPanel> {
                           if (points.isNotEmpty) _trendChart(points),
                         ])),
                 const SizedBox(height: 16),
-                _card('Confirmed COTS by zone', _zoneChart(data)),
+                _card(
+                    widget.useSiteTerminology
+                        ? 'Confirmed COTS by site'
+                        : 'Confirmed COTS by zone',
+                    _zoneChart(data)),
                 const SizedBox(height: 16),
                 _card(
                     'Verification status',
@@ -267,6 +369,7 @@ class _MonitoringAnalyticsPanelState extends State<MonitoringAnalyticsPanel> {
                 _card(
                     'Removal methods',
                     _RemovalMethods(
+                      useSiteTerminology: widget.useSiteTerminology,
                       from: _range.start,
                       to: _range.end,
                       zone: selectedZone,
@@ -382,16 +485,111 @@ class _MonitoringAnalyticsPanelState extends State<MonitoringAnalyticsPanel> {
         decoration: BoxDecoration(
             color: Colors.white,
             borderRadius: BorderRadius.circular(14),
-            boxShadow: kSoftCardShadow),
+            border: Border.all(color: const Color(0xFFE2E8F0)),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withValues(alpha: 0.03),
+                blurRadius: 10,
+                offset: const Offset(0, 2),
+              ),
+            ]),
         child:
             Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
           Text(title,
               style: const TextStyle(
                   fontWeight: FontWeight.w800, color: kTextNavy, fontSize: 16)),
-          const SizedBox(height: 12),
+          const SizedBox(height: 14),
           child,
         ]),
       );
+}
+
+class _MetricStatCard extends StatelessWidget {
+  const _MetricStatCard({
+    required this.title,
+    required this.value,
+    required this.description,
+    required this.icon,
+    required this.accentColor,
+  });
+
+  final String title;
+  final String value;
+  final String description;
+  final IconData icon;
+  final Color accentColor;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.all(18),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: const Color(0xFFE2E8F0)),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.03),
+            blurRadius: 10,
+            offset: const Offset(0, 2),
+          ),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Expanded(
+                child: Text(
+                  title,
+                  style: const TextStyle(
+                    fontWeight: FontWeight.w700,
+                    color: Color(0xFF1E293B),
+                    fontSize: 13.5,
+                    height: 1.25,
+                  ),
+                ),
+              ),
+              const SizedBox(width: 8),
+              Container(
+                width: 32,
+                height: 32,
+                decoration: BoxDecoration(
+                  color: accentColor.withValues(alpha: 0.10),
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                alignment: Alignment.center,
+                child: Icon(icon, color: accentColor, size: 17),
+              ),
+            ],
+          ),
+          const SizedBox(height: 10),
+          Text(
+            value,
+            key: ValueKey('metric-$title'),
+            style: TextStyle(
+              fontSize: 28,
+              fontWeight: FontWeight.w800,
+              color: accentColor,
+              height: 1.0,
+              letterSpacing: -0.5,
+            ),
+          ),
+          const SizedBox(height: 8),
+          Text(
+            description,
+            style: const TextStyle(
+              color: Color(0xFF64748B),
+              fontSize: 11.5,
+              height: 1.35,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
 }
 
 /// Stage 3: confirmed COTS per removal method, as a pie with the numbers
@@ -402,12 +600,14 @@ class _RemovalMethods extends StatefulWidget {
     required this.to,
     required this.zone,
     required this.loader,
+    this.useSiteTerminology = false,
   });
 
   final DateTime from;
   final DateTime to;
   final String? zone;
   final RemovalMethodLoader? loader;
+  final bool useSiteTerminology;
 
   @override
   State<_RemovalMethods> createState() => _RemovalMethodsState();
@@ -449,21 +649,19 @@ class _RemovalMethodsState extends State<_RemovalMethods> {
 
   @override
   Widget build(BuildContext context) {
-    const note = Text(
+    final note = Text(
         'Confirmed COTS only: records waiting for the Expert count after '
-        'approval. Zones are never marked cleared; density is calculated for '
+        'approval. ${widget.useSiteTerminology ? 'Sites' : 'Zones'} are never marked cleared; density is calculated for '
         'each monthly visit.',
-        style: TextStyle(color: kMutedGray, fontSize: 12));
+        style: const TextStyle(color: kMutedGray, fontSize: 12));
     final future = _future;
     if (future == null) {
-      return const Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text('Removal method counts are available with the Supabase '
-                'backend.'),
-            SizedBox(height: 8),
-            note,
-          ]);
+      return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        const Text('Removal method counts are available with the Supabase '
+            'backend.'),
+        const SizedBox(height: 8),
+        note,
+      ]);
     }
     return FutureBuilder<List<RemovalMethodCount>>(
       future: future,
@@ -487,12 +685,15 @@ class _RemovalMethodsState extends State<_RemovalMethods> {
         final rows = snapshot.data!;
         final total = rows.fold<int>(0, (sum, row) => sum + row.cots);
         if (total == 0) {
-          return const Column(
+          return Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text('No confirmed removals for these dates and zone.',
-                    key: ValueKey('removal-methods-empty')),
-                SizedBox(height: 8),
+                Text(
+                    widget.useSiteTerminology
+                        ? 'No confirmed removals for these dates and site.'
+                        : 'No confirmed removals for these dates and zone.',
+                    key: const ValueKey('removal-methods-empty')),
+                const SizedBox(height: 8),
                 note,
               ]);
         }

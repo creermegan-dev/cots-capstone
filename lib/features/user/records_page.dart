@@ -1,4 +1,5 @@
-import 'package:cots_monitor/widgets/app_back_icon_button.dart';
+import 'dart:async';
+
 import 'package:firebase_auth/firebase_auth.dart' hide AuthProvider;
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
@@ -7,14 +8,17 @@ import 'package:provider/provider.dart';
 import '../../models/activity_type.dart';
 import '../../models/cots_confidence_policy.dart';
 import '../../models/scan_record_model.dart';
+import '../../models/submission_group.dart';
 import '../../providers/auth_provider.dart';
 import '../../services/scan_record_repository.dart';
 import '../../services/offline_submission_service.dart';
 import 'cots_map_page.dart';
+import 'follow_up_page.dart';
+import 'widgets/records_section_tabs.dart';
 import 'profile_page.dart';
 import 'user_bottom_nav.dart';
 import 'user_record_details_page.dart';
-import '../../widgets/cots_loading_skeleton.dart';
+import 'user_submission_details_page.dart';
 
 /// One user submission row in the records list.
 class ScanRecord {
@@ -28,6 +32,9 @@ class ScanRecord {
     required this.confidencePercent,
     required this.scanSubmittedAt,
     required this.zone,
+    this.group,
+    this.pendingSync = false,
+    this.searchText = '',
   });
 
   final String recordId;
@@ -36,14 +43,17 @@ class ScanRecord {
   final String activityType;
   final String status;
   final int cotsDetected;
-  final int confidencePercent;
+  final int? confidencePercent;
+  final SubmissionGroup? group;
+  final bool pendingSync;
+  final String searchText;
   final String scanSubmittedAt;
   final String zone;
 }
 
 ScanRecord _scanRecordFromModel(ScanRecordModel model) {
   final when = model.submittedAt ?? model.dateTaken ?? DateTime.now();
-  final formatted = DateFormat('MMM d, yyyy h:mm a').format(when);
+  final formatted = DateFormat('MMM d, yyyy h:mm a').format(when.toLocal());
   return ScanRecord(
     recordId: model.id,
     displayId: model.displayRecordId,
@@ -66,6 +76,9 @@ Color _statusColor(String status) {
     case 'Under Review':
     case 'Requires Expert Validation':
     case 'Pending Verification':
+    case 'Pending synchronization':
+    case 'Processing evidence':
+    case 'Partially accepted':
       return kModerate;
     case 'Retake Photo':
     case 'Rejected':
@@ -76,7 +89,8 @@ Color _statusColor(String status) {
 }
 
 class RecordsPage extends StatefulWidget {
-  const RecordsPage({super.key});
+  const RecordsPage({super.key, this.recordsStream});
+  final Stream<List<ScanRecordModel>>? recordsStream;
 
   @override
   State<RecordsPage> createState() => _RecordsPageState();
@@ -86,9 +100,19 @@ class _RecordsPageState extends State<RecordsPage> {
   final TextEditingController _search = TextEditingController();
   String? _statusFilter;
   int _visibleCount = 8;
+  Stream<List<ScanRecordModel>>? _recordsStream;
+  String? _recordsUid;
+  Timer? _retryTimer;
+
+  void _retryRecords() {
+    _retryTimer?.cancel();
+    _retryTimer = null;
+    if (mounted) setState(() => _recordsStream = null);
+  }
 
   @override
   void dispose() {
+    _retryTimer?.cancel();
     _search.dispose();
     super.dispose();
   }
@@ -114,10 +138,16 @@ class _RecordsPageState extends State<RecordsPage> {
     return _allRecords.where((r) {
       if (_statusFilter != null && r.status != _statusFilter) return false;
       if (q.isEmpty) return true;
-      final hay = '${r.displayId} ${r.submittedBy} ${r.activityType} ${r.zone}'
-          .toLowerCase();
+      final hay =
+          '${r.displayId} ${r.submittedBy} ${r.activityType} ${r.zone} ${r.searchText}'
+              .toLowerCase();
       return hay.contains(q);
     }).toList();
+  }
+
+  void _submitSearch() {
+    setState(() => _visibleCount = 8);
+    FocusScope.of(context).unfocus();
   }
 
   void _openFilters() {
@@ -155,6 +185,11 @@ class _RecordsPageState extends State<RecordsPage> {
                   _filterChip('Submitted', 'Submitted'),
                   _filterChip('Pending Validation', 'Pending Validation'),
                   _filterChip('Completed Monitoring', 'Completed Monitoring'),
+                  _filterChip('Accepted', 'Accepted'),
+                  _filterChip('Partially accepted', 'Partially accepted'),
+                  _filterChip(
+                      'Pending synchronization', 'Pending synchronization'),
+                  _filterChip('Processing evidence', 'Processing evidence'),
                   _filterChip('Needs Correction', 'Needs Correction'),
                 ],
               ),
@@ -193,6 +228,15 @@ class _RecordsPageState extends State<RecordsPage> {
         (authProvider.usesSupabase
             ? null
             : FirebaseAuth.instance.currentUser?.uid);
+    if (uid != null && (_recordsStream == null || _recordsUid != uid)) {
+      if (_recordsUid != uid) {
+        _allModels = const [];
+        _allRecords = const [];
+      }
+      _recordsUid = uid;
+      _recordsStream =
+          widget.recordsStream ?? ScanRecordRepository.watchForUser(uid);
+    }
 
     return Scaffold(
       backgroundColor: kGray,
@@ -202,10 +246,7 @@ class _RecordsPageState extends State<RecordsPage> {
         elevation: 0,
         backgroundColor: Colors.white,
         surfaceTintColor: Colors.transparent,
-        leading: AppBackIconButton(
-          onPressed: () => Navigator.of(context).maybePop(),
-          iconColor: kNavy,
-        ),
+        automaticallyImplyLeading: false,
         title: const Text(
           'Records',
           style: TextStyle(
@@ -215,6 +256,13 @@ class _RecordsPageState extends State<RecordsPage> {
           ),
         ),
         centerTitle: true,
+        // "My records" | "Monthly visits" (Follow-up moved here, 2026-11-06).
+        bottom: RecordsSectionTabs(
+          active: RecordsSection.records,
+          onOpen: (context, _) => Navigator.of(context).pushReplacement(
+              recordsSectionRoute((_) => const FollowUpPage(),
+                  name: userFollowUpRoute)),
+        ),
       ),
       floatingActionButton: userShellScanFab(context),
       floatingActionButtonLocation: FloatingActionButtonLocation.centerDocked,
@@ -227,32 +275,31 @@ class _RecordsPageState extends State<RecordsPage> {
       body: uid == null
           ? const Center(
               child: Text(
-                'Sign in to view your GoPro submissions.',
+                'Sign in to view your COTS photo submissions.',
                 style: TextStyle(color: kNavy),
               ),
             )
           : StreamBuilder<List<ScanRecordModel>>(
-              stream: ScanRecordRepository.watchForUser(uid),
+              stream: _recordsStream,
               builder: (context, snapshot) {
                 if (snapshot.connectionState == ConnectionState.waiting &&
                     !snapshot.hasData) {
-                  return const CotsPageLoading(label: 'Loading records');
+                  return _buildBody(context, unavailable: true, loading: true);
                 }
                 if (snapshot.hasError) {
-                  return Center(
-                    child: Padding(
-                      padding: const EdgeInsets.all(24),
-                      child: Text(
-                        'Could not load records.\n${snapshot.error}',
-                        textAlign: TextAlign.center,
-                        style: const TextStyle(color: kNavy),
-                      ),
-                    ),
-                  );
+                  if (widget.recordsStream == null) {
+                    _retryTimer ??=
+                        Timer(const Duration(seconds: 15), _retryRecords);
+                  }
+                  return _buildBody(context, unavailable: true);
                 }
 
-                _allModels = snapshot.data ?? [];
-                _allRecords = _allModels.map(_scanRecordFromModel).toList();
+                _retryTimer?.cancel();
+                _retryTimer = null;
+
+                _allModels = (snapshot.data ?? [])
+                    .where((record) => record.uid == uid)
+                    .toList();
 
                 return _buildBody(context);
               },
@@ -260,10 +307,53 @@ class _RecordsPageState extends State<RecordsPage> {
     );
   }
 
-  Widget _buildBody(BuildContext context) {
+  Widget _buildBody(BuildContext context,
+      {bool unavailable = false, bool loading = false}) {
+    final offline = context.watch<OfflineSubmissionService>();
+    final local = offline.pendingSubmissions
+        .where((task) => task.record != null && task.record!.uid == _recordsUid)
+        .toList();
+    final pendingIds = local.map((task) => task.record!.id).toSet();
+    final groups = SubmissionGroup.fromRecords([
+      ..._allModels,
+      ...local.map((task) => task.record!),
+    ]);
+    _allRecords = groups.map((group) {
+      final pending =
+          group.records.any((record) => pendingIds.contains(record.id));
+      if (!group.hasBatch && !pending) {
+        return _scanRecordFromModel(group.records.single);
+      }
+      final first = group.records.first;
+      final time = group.latestSubmittedAt;
+      return ScanRecord(
+          recordId: group.key,
+          displayId: group.displayId,
+          submittedBy: first.submittedBy,
+          activityType:
+              '${group.photoCount} photo${group.photoCount == 1 ? '' : 's'}',
+          status: group.statusLabel(pendingSync: pending),
+          cotsDetected: group.detectedCount,
+          confidencePercent: null,
+          scanSubmittedAt: time == null
+              ? 'Unknown'
+              : DateFormat('MMM d, yyyy h:mm a').format(time.toLocal()),
+          zone: first.zone,
+          group: group,
+          pendingSync: pending,
+          searchText: group.records
+              .map((r) => '${r.displayRecordId} ${r.imageName}')
+              .join(' '));
+    }).toList();
+    final pendingSubmissionCount = _allRecords
+            .where((r) => r.pendingSync)
+            .length +
+        offline.pendingSubmissions.where((task) => task.record == null).length;
     final filtered = _filtered;
     final shown = filtered.take(_visibleCount).toList();
     final hasMore = _visibleCount < filtered.length;
+    final hasSearchOrFilter =
+        _search.text.trim().isNotEmpty || _statusFilter != null;
 
     return SafeArea(
       bottom: false,
@@ -274,6 +364,27 @@ class _RecordsPageState extends State<RecordsPage> {
             child: ListView(
               padding: const EdgeInsets.fromLTRB(16, 8, 16, 100),
               children: [
+                if (unavailable)
+                  Card(
+                      child: Padding(
+                    padding: const EdgeInsets.all(12),
+                    child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                              loading
+                                  ? 'Connecting to records…'
+                                  : 'Saved records unavailable while disconnected',
+                              style:
+                                  const TextStyle(fontWeight: FontWeight.bold)),
+                          const Text(
+                              'Pending submissions below are saved on this device. Reconnect to synchronize and refresh server records.'),
+                          if (!loading)
+                            TextButton(
+                                onPressed: _retryRecords,
+                                child: const Text('Retry records')),
+                        ]),
+                  )),
                 const Text(
                   'RECORDS PAGE',
                   style: TextStyle(
@@ -285,7 +396,7 @@ class _RecordsPageState extends State<RecordsPage> {
                 ),
                 const SizedBox(height: 6),
                 Text(
-                  'View your GoPro detection submissions and verification status.',
+                  'View your COTS photo submissions and verification status.',
                   style: TextStyle(
                     fontSize: 13,
                     color: Colors.grey.shade700,
@@ -319,7 +430,7 @@ class _RecordsPageState extends State<RecordsPage> {
                               child: Text(
                                 offline.isSyncing
                                     ? 'Synchronizing pending submissions…'
-                                    : '${offline.pendingCount} submission${offline.pendingCount == 1 ? '' : 's'} pending synchronization',
+                                    : '$pendingSubmissionCount submission${pendingSubmissionCount == 1 ? '' : 's'} pending synchronization',
                                 style: const TextStyle(
                                   color: Color(0xFF684500),
                                   fontWeight: FontWeight.w700,
@@ -340,7 +451,29 @@ class _RecordsPageState extends State<RecordsPage> {
                   },
                 ),
                 const SizedBox(height: 16),
-                _summaryRow(),
+                Consumer<OfflineSubmissionService>(
+                    builder: (context, offline, _) {
+                  final pending = offline.pendingSubmissions
+                      .where((task) => task.record == null)
+                      .toList();
+                  if (pending.isEmpty) return const SizedBox.shrink();
+                  return Column(
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      children: [
+                        const Text('Saved on this device',
+                            style: TextStyle(fontWeight: FontWeight.bold)),
+                        for (final task in pending)
+                          Card(
+                              child: ListTile(
+                            leading: const Icon(Icons.cloud_upload_outlined),
+                            title: Text(task.name),
+                            subtitle: Text(
+                                'Pending synchronization${task.createdAt == null ? '' : '\n${DateFormat('MMM d, yyyy h:mm a').format(task.createdAt!.toLocal())}'}'),
+                            isThreeLine: task.createdAt != null,
+                          )),
+                      ]);
+                }),
+                if (!unavailable || _allRecords.isNotEmpty) _summaryRow(),
                 const SizedBox(height: 16),
                 Row(
                   children: [
@@ -348,14 +481,20 @@ class _RecordsPageState extends State<RecordsPage> {
                       child: TextField(
                         controller: _search,
                         onChanged: (_) => setState(() => _visibleCount = 8),
+                        textInputAction: TextInputAction.search,
+                        onSubmitted: (_) => _submitSearch(),
                         decoration: InputDecoration(
                           hintText: 'Search by record ID or activity',
                           hintStyle: TextStyle(
                             fontSize: 13,
                             color: Colors.grey.shade500,
                           ),
-                          prefixIcon: Icon(Icons.search,
-                              color: Colors.grey.shade600, size: 22),
+                          prefixIcon: IconButton(
+                            onPressed: _submitSearch,
+                            tooltip: 'Search records',
+                            icon: Icon(Icons.search,
+                                color: Colors.grey.shade600, size: 22),
+                          ),
                           filled: true,
                           fillColor: Colors.white,
                           contentPadding: const EdgeInsets.symmetric(
@@ -427,34 +566,68 @@ class _RecordsPageState extends State<RecordsPage> {
                       borderRadius: BorderRadius.circular(12),
                       border: Border.all(color: Colors.grey.shade200),
                     ),
-                    child: const Text(
-                      'No submissions yet. Tap + to upload a GoPro detection.',
-                      style: TextStyle(color: kNavy, height: 1.4),
-                    ),
+                    child: hasSearchOrFilter
+                        ? Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              const Text(
+                                'No matching records',
+                                style: TextStyle(color: kNavy, height: 1.4),
+                              ),
+                              const SizedBox(height: 8),
+                              TextButton(
+                                onPressed: () => setState(() {
+                                  _search.clear();
+                                  _statusFilter = null;
+                                  _visibleCount = 8;
+                                }),
+                                style: TextButton.styleFrom(
+                                  minimumSize: const Size(0, 48),
+                                ),
+                                child: const Text('Clear search and filters'),
+                              ),
+                            ],
+                          )
+                        : Text(
+                            unavailable
+                                ? 'Server records will appear after reconnecting. Pending submissions are listed separately above.'
+                                : 'No submissions yet. Tap + to upload COTS photos.',
+                            style: const TextStyle(color: kNavy, height: 1.4),
+                          ),
                   )
                 else
                   ...shown.map((r) => Padding(
                         padding: const EdgeInsets.only(bottom: 12),
-                        child: _RecordCard(
-                          record: r,
-                          onTap: () {
-                            ScanRecordModel? model;
-                            for (final m in _allModels) {
-                              if (m.id == r.recordId) {
-                                model = m;
-                                break;
-                              }
-                            }
-                            if (model != null) {
-                              Navigator.of(context).push<void>(
-                                MaterialPageRoute<void>(
-                                  builder: (context) =>
-                                      UserRecordDetailsPage(record: model!),
-                                ),
-                              );
-                            }
-                          },
-                        ),
+                        child: r.group != null
+                            ? _GroupedRecordCard(
+                                record: r,
+                                onTap: () => Navigator.of(context)
+                                    .push<void>(MaterialPageRoute(
+                                  builder: (_) => UserSubmissionDetailsPage(
+                                      initialGroup: r.group!),
+                                )),
+                              )
+                            : _RecordCard(
+                                record: r,
+                                onTap: () {
+                                  ScanRecordModel? model;
+                                  for (final m in _allModels) {
+                                    if (m.id == r.recordId) {
+                                      model = m;
+                                      break;
+                                    }
+                                  }
+                                  if (model != null) {
+                                    Navigator.of(context).push<void>(
+                                      MaterialPageRoute<void>(
+                                        builder: (context) =>
+                                            UserRecordDetailsPage(
+                                                record: model!),
+                                      ),
+                                    );
+                                  }
+                                },
+                              ),
                       )),
                 if (hasMore)
                   Center(
@@ -602,7 +775,7 @@ class _RecordsPageState extends State<RecordsPage> {
               'AI detection confidence is below 80%. Forwarded to the Expert for manual verification.'),
           const SizedBox(height: 6),
           _guideRow(kHigh, 'Retake Photo',
-              'Confidence too low (0–${CotsConfidencePolicy.adminReviewMin - 1}%) — capture a clearer GoPro image.'),
+              'Confidence too low (0–${CotsConfidencePolicy.adminReviewMin - 1}%) — take a clearer COTS photo.'),
           const SizedBox(height: 12),
           Row(
             crossAxisAlignment: CrossAxisAlignment.start,
@@ -656,6 +829,47 @@ class _RecordsPageState extends State<RecordsPage> {
       ],
     );
   }
+}
+
+class _GroupedRecordCard extends StatelessWidget {
+  const _GroupedRecordCard({required this.record, required this.onTap});
+  final ScanRecord record;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) => Card(
+        child: InkWell(
+          onTap: onTap,
+          borderRadius: BorderRadius.circular(12),
+          child: Padding(
+            padding: const EdgeInsets.all(16),
+            child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  Row(children: [
+                    Expanded(
+                        child: Text(record.displayId,
+                            style: const TextStyle(
+                                fontWeight: FontWeight.w800, color: kNavy))),
+                    const Icon(Icons.chevron_right),
+                  ]),
+                  const SizedBox(height: 6),
+                  Text(
+                      '${record.activityType} · ${record.cotsDetected} COTS detected',
+                      style: const TextStyle(fontWeight: FontWeight.w600)),
+                  const SizedBox(height: 6),
+                  Text(record.status,
+                      style: TextStyle(
+                          color: _statusColor(record.status),
+                          fontWeight: FontWeight.w600)),
+                  Text('Site: ${record.zone}'),
+                  Text('Submitted by ${record.submittedBy}'),
+                  Text('Latest activity: ${record.scanSubmittedAt}'),
+                  const Text('Confidence and GPS are shown for each photo.'),
+                ]),
+          ),
+        ),
+      );
 }
 
 class _RecordCard extends StatelessWidget {
@@ -737,7 +951,8 @@ class _RecordCard extends StatelessWidget {
                             ],
                           ),
                         ),
-                        Container(
+                        Flexible(
+                            child: Container(
                           padding: const EdgeInsets.symmetric(
                             horizontal: 10,
                             vertical: 4,
@@ -758,17 +973,18 @@ class _RecordCard extends StatelessWidget {
                                 ),
                               ),
                               const SizedBox(width: 6),
-                              Text(
+                              Flexible(
+                                  child: Text(
                                 record.status,
                                 style: TextStyle(
                                   fontSize: 11,
                                   fontWeight: FontWeight.w700,
                                   color: stColor,
                                 ),
-                              ),
+                              )),
                             ],
                           ),
-                        ),
+                        )),
                       ],
                     ),
                     const SizedBox(height: 10),

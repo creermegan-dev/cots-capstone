@@ -6,6 +6,7 @@ import 'package:pdf/pdf.dart';
 import 'package:pdf/widgets.dart' as pw;
 
 import '../features/admin/models/admin_record_table_row.dart';
+import '../models/staff_submission_rows.dart';
 
 /// Builds and saves filtered administrator report exports.
 class AdminReportExportService {
@@ -15,24 +16,27 @@ class AdminReportExportService {
     'Report ID',
     'Type',
     'Submitted By',
-    'Zone',
+    'Site',
     'Submitted On',
     'COTS confirmed',
     'COTS waiting',
     'COTS not accepted',
     'Confidence',
     'Status',
+    'Photos',
+    'Photo IDs',
   ];
 
   Uint8List buildCsv(List<AdminRecordTableRow> rows) {
     final output = StringBuffer()..writeln(_headers.map(_csvCell).join(','));
-    for (final row in rows) {
+    for (final row in StaffSubmissionRows.group(rows)) {
       output.writeln(_values(row).map(_csvCell).join(','));
     }
     return Uint8List.fromList(utf8.encode('\ufeff$output'));
   }
 
   Future<Uint8List> buildPdf(List<AdminRecordTableRow> rows) async {
+    rows = StaffSubmissionRows.group(rows);
     final document = pw.Document(
       title: 'COTS Monitor Reports',
       author: 'COTS Monitor',
@@ -113,8 +117,12 @@ class AdminReportExportService {
         '${row.cotsTally.confirmed}',
         '${row.cotsTally.waiting}',
         '${row.cotsTally.notAccepted}',
-        '${row.confidencePercent}%',
+        row.isSubmissionSummary ? 'Per photo' : '${row.confidencePercent}%',
         row.displayStatusLabel,
+        '${row.isSubmissionSummary ? row.submissionPhotos.length : 1}',
+        row.isSubmissionSummary
+            ? row.submissionPhotos.map((photo) => photo.recordId).join('; ')
+            : row.recordId,
       ];
 
   String _csvCell(String value) => '"${value.replaceAll('"', '""')}"';

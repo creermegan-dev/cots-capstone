@@ -8,11 +8,10 @@ import '../layout/admin_nav_entries.dart';
 import '../layout/admin_responsive_chrome.dart';
 import '../models/admin_record_table_row.dart';
 import '../theme/admin_theme.dart';
-import 'admin_alerts_screen.dart';
+import 'admin_alerts_notifications_screen.dart';
 import 'admin_analytics_screen.dart';
 import 'admin_dashboard_screen.dart';
 import 'admin_map_monitoring_screen.dart';
-import 'admin_notifications_screen.dart';
 import 'admin_placeholder_screen.dart';
 import 'admin_records_submissions_screen.dart';
 import 'admin_reports_screen.dart';
@@ -80,12 +79,11 @@ class _AdminShellScreenState extends State<AdminShellScreen> {
               1 => const AdminMapMonitoringScreen(),
               2 => const AdminZonesScreen(),
               3 => const AdminRecordsSubmissionsScreen(viewOnly: true),
-              4 => const AdminAlertsScreen(),
-              5 => const AdminNotificationsScreen(),
-              6 => const AdminAnalyticsScreen(),
-              7 => const AdminReportsScreen(),
-              8 => const AdminUsersScreen(),
-              9 => const AdminSettingsScreen(),
+              4 => const AdminAlertsNotificationsScreen(),
+              5 => const AdminAnalyticsScreen(),
+              6 => const AdminReportsScreen(),
+              7 => const AdminUsersScreen(),
+              8 => const AdminSettingsScreen(),
               _ => AdminPlaceholderScreen(
                   title: kAdminShellPageTitles[
                       _index.clamp(0, kAdminShellPageTitles.length - 1)],

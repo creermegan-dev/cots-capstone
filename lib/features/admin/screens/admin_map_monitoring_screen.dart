@@ -1,12 +1,15 @@
 import 'package:flutter/material.dart';
 
 import '../../../models/scan_record_model.dart';
+import '../../../models/submission_group.dart';
+import '../../../models/zone_directory_summary.dart';
 import '../../../services/scan_record_repository.dart';
 import '../../../widgets/cots_loading_skeleton.dart';
-import '../../../widgets/monitoring_record_map.dart';
+import '../widgets/map_monitoring/admin_zone_monitoring_map.dart';
 import '../layout/admin_breakpoints.dart';
 import '../theme/admin_theme.dart';
 import '../widgets/admin_dashboard_header.dart';
+import '../widgets/admin_stat_card.dart';
 
 class AdminMapMonitoringScreen extends StatefulWidget {
   const AdminMapMonitoringScreen({super.key});
@@ -58,7 +61,7 @@ class _AdminMapMonitoringScreenState extends State<AdminMapMonitoringScreen> {
               else ...[
                 _summary(snapshot.data!),
                 const SizedBox(height: 14),
-                MonitoringRecordMap(records: snapshot.data!),
+                AdminZoneMonitoringMap(records: snapshot.data!),
               ],
             ],
           ),
@@ -71,47 +74,53 @@ class _AdminMapMonitoringScreenState extends State<AdminMapMonitoringScreen> {
     final located = records
         .where((record) => record.latitude != null && record.longitude != null)
         .toList();
-    final zones = located
-        .map((record) => record.zone)
-        .where((zone) => zone.isNotEmpty && zone != 'Unassigned')
-        .toSet();
-    return Wrap(
-      spacing: 12,
-      runSpacing: 12,
-      children: [
-        _summaryCard('Saved records', '${records.length}', Icons.description),
-        _summaryCard(
-            'Mapped records', '${located.length}', Icons.location_on_outlined),
-        _summaryCard('Monitoring areas', '${zones.length}', Icons.map_outlined),
-      ],
-    );
-  }
-
-  Widget _summaryCard(String label, String value, IconData icon) {
-    return Container(
-      width: 210,
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: Colors.black.withValues(alpha: 0.06)),
-      ),
-      child: Row(
+    final zones = SiteDirectorySummary.fromRecords(located)
+        .where((row) => row.reports > 0)
+        .toList();
+    return LayoutBuilder(builder: (context, constraints) {
+      final columns = constraints.maxWidth >= 900
+          ? 3
+          : constraints.maxWidth >= 520
+              ? 2
+              : 1;
+      final width = (constraints.maxWidth - 12 * (columns - 1)) / columns;
+      return Wrap(
+        spacing: 12,
+        runSpacing: 12,
         children: [
-          Icon(icon, color: AdminColors.statBlue),
-          const SizedBox(width: 12),
-          Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(value,
-                  style: const TextStyle(
-                      fontSize: 22, fontWeight: FontWeight.w900)),
-              Text(label, style: const TextStyle(color: AdminColors.muted)),
-            ],
+          SizedBox(
+            width: width,
+            child: AdminStatCard(
+              title: 'Saved submissions',
+              value: '${SubmissionGroup.fromRecords(records).length}',
+              subtitle: 'Saved field submissions',
+              icon: Icons.description_outlined,
+              accentColor: AdminColors.statBlue,
+            ),
+          ),
+          SizedBox(
+            width: width,
+            child: AdminStatCard(
+              title: 'Mapped photos',
+              value: '${located.length}',
+              subtitle: 'Photos with original saved coordinates',
+              icon: Icons.location_on_outlined,
+              accentColor: AdminColors.statGreen,
+            ),
+          ),
+          SizedBox(
+            width: width,
+            child: AdminStatCard(
+              title: 'Monitoring sites',
+              value: '${zones.length}',
+              subtitle: 'Sites represented in mapped captures',
+              icon: Icons.map_outlined,
+              accentColor: AdminColors.statPurple,
+            ),
           ),
         ],
-      ),
-    );
+      );
+    });
   }
 
   Widget _errorCard(Object? error) {

@@ -337,26 +337,25 @@ class _SignupScreenState extends State<SignupScreen> {
   }
 
   Widget _buildFooter(AuthProvider auth) {
-    return Column(
+    return Wrap(
+      alignment: WrapAlignment.center,
+      crossAxisAlignment: WrapCrossAlignment.center,
       children: [
-        TextButton.icon(
-          onPressed: auth.isBusy ? null : _goLogin,
-          icon: const Icon(Icons.arrow_back_rounded, size: 18),
-          label: const Text('Back to Login'),
-          style: TextButton.styleFrom(
-            foregroundColor: AuthTokens.focusTeal,
-          ),
+        Text(
+          'Already have an account? ',
+          style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                color: authUseDesktopFields(context)
+                    ? AuthTokens.subtitleGray
+                    : kMutedGray,
+              ),
         ),
-        const SizedBox(height: 4),
-        TextButton(
-          onPressed: auth.isBusy ? null : _goLanding,
+        GestureDetector(
+          onTap: auth.isBusy ? null : _goLogin,
           child: Text(
-            'Back to Landing',
+            'Log In',
             style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                  color: authUseDesktopFields(context)
-                      ? AuthTokens.subtitleGray
-                      : kMutedGray,
-                  fontWeight: FontWeight.w600,
+                  color: AuthTokens.focusTeal,
+                  fontWeight: FontWeight.w700,
                 ),
           ),
         ),
@@ -378,7 +377,8 @@ class _SignupScreenState extends State<SignupScreen> {
 
     return AuthResponsiveScaffold(
       mobileAppBarTitle: 'Create Account',
-      showMobileBackButton: true,
+      showMobileBackButton: false,
+      onBackToLanding: auth.isBusy ? null : _goLanding,
       mobileHeader: const AuthMobileHeader(),
       desktopHeader: const AuthCardHeader(
         title: 'Create Account',

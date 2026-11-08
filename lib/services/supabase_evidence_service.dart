@@ -537,6 +537,7 @@ abstract final class PrivateEvidenceSessionGuard {
   static Future<Uint8List?> download({
     required String? Function() sessionKey,
     required Future<Uint8List> Function() downloader,
+    void Function(Object error)? onError,
   }) async {
     final before = sessionKey();
     if (before == null || before.isEmpty) return null;
@@ -544,7 +545,8 @@ abstract final class PrivateEvidenceSessionGuard {
       final bytes = await downloader();
       if (sessionKey() != before) return null;
       return bytes.isEmpty ? null : bytes;
-    } catch (_) {
+    } catch (error) {
+      onError?.call(error);
       return null;
     }
   }

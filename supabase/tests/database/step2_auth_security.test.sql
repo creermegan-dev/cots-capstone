@@ -43,10 +43,12 @@ select is(
   'step2-3@example.invalid',
   'Administrator directory contains the account email needed for support'
 );
+select set_config('request.jwt.claim.sub',pg_temp.uid(2)::text,true);
 select lives_ok(
   $$select public.verify_personnel(pg_temp.uid(3),true,true)$$,
-  'Administrator retains field-verification control'
+  'Expert holds field-verification control'
 );
+select set_config('request.jwt.claim.sub',pg_temp.uid(1)::text,true);
 select ok(
   (select field_verified from public.profiles where id=pg_temp.uid(3)),
   'Verified flag is persisted by the backend operation'

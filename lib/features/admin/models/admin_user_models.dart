@@ -14,6 +14,7 @@ class AdminUserTableRow {
     required this.joined,
     this.phone = '',
     this.assignedArea = '',
+    this.verificationStatus = 'Not recorded',
   });
 
   final String id;
@@ -25,6 +26,7 @@ class AdminUserTableRow {
   final String joined;
   final String phone;
   final String assignedArea;
+  final String verificationStatus;
 
   String get initials => adminUserInitials(name);
 }

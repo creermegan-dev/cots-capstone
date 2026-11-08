@@ -28,8 +28,9 @@ class UserRecordDetailsPage extends StatelessWidget {
 
   static final _dateFmt = DateFormat('MMM d, yyyy h:mm a');
 
-  String get _dateCaptured =>
-      record.dateTaken != null ? _dateFmt.format(record.dateTaken!) : 'Unknown';
+  String get _dateCaptured => record.dateTaken != null
+      ? _dateFmt.format(record.dateTaken!.toLocal())
+      : 'Unknown';
 
   /// Date taken with where it came from; a visit's date is picked by the
   /// Diver, so it shows without a time.
@@ -38,11 +39,11 @@ class UserRecordDetailsPage extends StatelessWidget {
       : PhotoSource.dateTaken(
           record.timeSource == 'manual'
               ? DateFormat('MMM d, yyyy').format(record.dateTaken!)
-              : _dateFmt.format(record.dateTaken!),
+              : _dateFmt.format(record.dateTaken!.toLocal()),
           record.timeSource);
 
   String get _dateUploaded => record.submittedAt != null
-      ? _dateFmt.format(record.submittedAt!)
+      ? _dateFmt.format(record.submittedAt!.toLocal())
       : _dateCaptured;
 
   String get _userRemarks => record.notes.trim().isEmpty
@@ -548,7 +549,8 @@ class UserRecordDetailsPage extends StatelessWidget {
               record.latitude == null || record.longitude == null
                   ? 'Not available'
                   : record.formattedCoordinates),
-          _kv('Location from', PhotoSource.locationLabel(record.locationSource)),
+          _kv('Location from',
+              PhotoSource.locationLabel(record.locationSource)),
           _kv('Upload method', 'Gallery upload'),
           _kv('Date taken', _dateTaken),
           _kv('Date uploaded', _dateUploaded),
@@ -605,6 +607,7 @@ class UserRecordDetailsPage extends StatelessWidget {
             imageHeight: imgH,
             items: _detectionItems,
             recordId: record.id,
+            recordCollection: record.recordCollection,
             imageUrl: record.imageUrl.isNotEmpty
                 ? record.imageUrl
                 : record.submittedImageUrl,

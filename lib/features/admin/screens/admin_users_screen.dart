@@ -1,12 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
-import 'package:provider/provider.dart';
 
-import '../../../core/supabase_config.dart';
 import '../../../models/user_model.dart';
-import '../../../providers/auth_provider.dart';
 import '../../../services/personnel_repository.dart';
-import '../../../services/follow_up_reassignment_repository.dart';
 import '../models/admin_user_models.dart';
 import '../theme/admin_theme.dart';
 import '../widgets/admin_dashboard_header.dart';
@@ -15,7 +11,9 @@ import '../widgets/admin_user_profile_modal.dart';
 import '../../../widgets/cots_loading_skeleton.dart';
 
 class AdminUsersScreen extends StatefulWidget {
-  const AdminUsersScreen({super.key});
+  const AdminUsersScreen({super.key, this.usersStream});
+
+  final Stream<List<UserModel>>? usersStream;
 
   @override
   State<AdminUsersScreen> createState() => _AdminUsersScreenState();
@@ -36,6 +34,7 @@ class _AdminUsersScreenState extends State<AdminUsersScreen> {
     AdminDataTableColumn('Role', 200, headerAlign: TextAlign.center),
     AdminDataTableColumn('Organization', 180),
     AdminDataTableColumn('Status', 100, headerAlign: TextAlign.center),
+    AdminDataTableColumn('Expert verification', 180),
     AdminDataTableColumn('Date Joined', 120),
     AdminDataTableColumn('Actions', 96, headerAlign: TextAlign.right),
   ];
@@ -80,6 +79,11 @@ class _AdminUsersScreenState extends State<AdminUsersScreen> {
                     : user.role,
             organization: user.organization,
             active: user.isActive,
+            verificationStatus: user.isAdmin || user.isExpert
+                ? 'Not applicable'
+                : user.fieldPersonnelVerified
+                    ? 'Verified'
+                    : 'Awaiting verification',
             joined: user.createdAt == null
                 ? 'Not available'
                 : DateFormat('MMM d, yyyy').format(user.createdAt!),
@@ -107,6 +111,11 @@ class _AdminUsersScreenState extends State<AdminUsersScreen> {
     }).toList();
   }
 
+  void _submitSearch() {
+    setState(() => _page = 0);
+    FocusScope.of(context).unfocus();
+  }
+
   void _openProfile(AdminUserTableRow row) {
     showAdminUserProfileDialog(context, AdminUserProfileData.fromTableRow(row));
   }
@@ -124,7 +133,7 @@ class _AdminUsersScreenState extends State<AdminUsersScreen> {
   @override
   Widget build(BuildContext context) {
     return StreamBuilder<List<UserModel>>(
-      stream: PersonnelRepository.watchUsers(),
+      stream: widget.usersStream ?? PersonnelRepository.watchUsers(),
       builder: (context, snapshot) {
         if (snapshot.hasError) {
           return Center(child: Text('Could not load users: ${snapshot.error}'));
@@ -159,8 +168,6 @@ class _AdminUsersScreenState extends State<AdminUsersScreen> {
         children: [
           _header(),
           const SizedBox(height: 18),
-          const _PersonnelVerificationPanel(),
-          const SizedBox(height: 18),
           _statRow(allRows),
           const SizedBox(height: 18),
           _filterCard(),
@@ -176,7 +183,8 @@ class _AdminUsersScreenState extends State<AdminUsersScreen> {
   Widget _header() {
     return AdminDashboardHeader(
       title: 'Users',
-      subtitle: 'Manage user accounts, roles, and organization access.',
+      subtitle:
+          'Read-only account directory and personnel verification status. Verification decisions belong to Experts.',
       onRefreshTap: _onUsersHeaderRefresh,
     );
   }
@@ -231,12 +239,18 @@ class _AdminUsersScreenState extends State<AdminUsersScreen> {
               child: TextField(
                 controller: _searchCtrl,
                 onChanged: (_) => setState(() => _page = 0),
-                decoration: const InputDecoration(
+                textInputAction: TextInputAction.search,
+                onSubmitted: (_) => _submitSearch(),
+                decoration: InputDecoration(
                   hintText: 'Search users...',
-                  prefixIcon: Icon(Icons.search_rounded),
+                  prefixIcon: IconButton(
+                    onPressed: _submitSearch,
+                    tooltip: 'Search users',
+                    icon: const Icon(Icons.search_rounded),
+                  ),
                   isDense: true,
                   filled: true,
-                  fillColor: Color(0xFFF7F9FC),
+                  fillColor: const Color(0xFFF7F9FC),
                 ),
               ),
             ),
@@ -353,7 +367,7 @@ class _AdminUsersScreenState extends State<AdminUsersScreen> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
-                AdminDataTableHeader(columns: _tableColumns),
+                const AdminDataTableHeader(columns: _tableColumns),
                 for (final r in pageRows)
                   AdminDataTableClickableRow(
                     columnWidths: colMap,
@@ -439,6 +453,7 @@ class _AdminUsersScreenState extends State<AdminUsersScreen> {
               .withValues(alpha: 0.14),
         ),
       ),
+      AdminDataTableCells.text(r.verificationStatus),
       AdminDataTableCells.text(r.joined,
           style: TextStyle(
               fontSize: 12, color: AdminColors.muted.withValues(alpha: 0.95))),
@@ -454,13 +469,6 @@ class _AdminUsersScreenState extends State<AdminUsersScreen> {
               onPressed: () => _openProfile(r),
               icon: Icon(Icons.visibility_outlined,
                   size: 20, color: AdminColors.statBlue.withValues(alpha: 0.9)),
-            ),
-            IconButton(
-              padding: EdgeInsets.zero,
-              constraints: const BoxConstraints(minWidth: 32, minHeight: 32),
-              onPressed: () {},
-              icon: Icon(Icons.more_vert_rounded,
-                  size: 20, color: AdminColors.muted.withValues(alpha: 0.85)),
             ),
           ],
         ),
@@ -510,11 +518,11 @@ class _AdminUsersScreenState extends State<AdminUsersScreen> {
                   style: TextStyle(fontWeight: FontWeight.w900, fontSize: 14)),
               const SizedBox(height: 10),
               _legendLine(const Color(0xFF6A1B9A), 'Administrator',
-                  'Full system access and management'),
+                  'System oversight and technical preferences'),
               _legendLine(
                   AdminColors.statBlue,
                   'Marine Conservation Officer / Field Officer',
-                  'Monitoring and review access'),
+                  'Field monitoring and submission access'),
               _legendLine(AdminColors.statGreen, 'LGU Staff / BFAR Staff',
                   'Data submission and monitoring access'),
               _legendLine(const Color(0xFFF57C00), 'Researcher',
@@ -592,334 +600,6 @@ class _AdminUsersScreenState extends State<AdminUsersScreen> {
         ],
       ),
       child: child,
-    );
-  }
-}
-
-class _PersonnelVerificationPanel extends StatefulWidget {
-  const _PersonnelVerificationPanel();
-
-  @override
-  State<_PersonnelVerificationPanel> createState() =>
-      _PersonnelVerificationPanelState();
-}
-
-class _PersonnelVerificationPanelState
-    extends State<_PersonnelVerificationPanel> {
-  String? _savingUid;
-
-  Future<void> _setVerified(UserModel user, bool verified) async {
-    final action = verified ? 'verify' : 'revoke verification for';
-    final confirmed = await showDialog<bool>(
-      context: context,
-      builder: (dialogContext) => AlertDialog(
-        title:
-            Text(verified ? 'Verify field personnel?' : 'Revoke verification?'),
-        content: Text(
-          'Do you want to $action ${user.fullName}? '
-          '${verified ? 'Only confirm credentials that were checked outside the app.' : 'They will no longer be eligible for new assignments.'}',
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(dialogContext, false),
-            child: const Text('Cancel'),
-          ),
-          FilledButton(
-            onPressed: () => Navigator.pop(dialogContext, true),
-            child: Text(verified ? 'Verify' : 'Revoke'),
-          ),
-        ],
-      ),
-    );
-    if (confirmed != true || !mounted) return;
-
-    final admin = context.read<AuthProvider>().userModel;
-    setState(() => _savingUid = user.uid);
-    try {
-      await PersonnelRepository.setVerification(
-        userId: user.uid,
-        verified: verified,
-        verifiedBy: admin?.uid ?? '',
-      );
-      if (!SupabaseConfig.isConfigured) {
-        await FollowUpReassignmentRepository.publishPersonnel(
-            [user.copyWith(fieldPersonnelVerified: verified)]);
-      }
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(
-            verified
-                ? '${user.fullName} is now verified field personnel.'
-                : '${user.fullName} is no longer verified field personnel.',
-          ),
-        ),
-      );
-    } catch (error) {
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Could not update verification: $error')),
-      );
-    } finally {
-      if (mounted) setState(() => _savingUid = null);
-    }
-  }
-
-  Future<void> _beginRecovery(UserModel user) async {
-    final controller = TextEditingController();
-    try {
-      final reference = await showDialog<String>(
-        context: context,
-        builder: (dialogContext) => AlertDialog(
-          title: const Text('Approve supervised recovery?'),
-          content: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                'Confirm that ${user.fullName.isEmpty ? user.email : user.fullName} '
-                'passed your identity check. This approval expires after 15 minutes.',
-              ),
-              const SizedBox(height: 16),
-              TextField(
-                controller: controller,
-                autofocus: true,
-                maxLength: 200,
-                decoration: const InputDecoration(
-                  labelText: 'Verification reference',
-                  hintText: 'Example: in-person ID check',
-                ),
-              ),
-            ],
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(dialogContext),
-              child: const Text('Cancel'),
-            ),
-            FilledButton(
-              onPressed: () {
-                final value = controller.text.trim();
-                if (value.isNotEmpty) Navigator.pop(dialogContext, value);
-              },
-              child: const Text('Approve'),
-            ),
-          ],
-        ),
-      );
-      if (reference == null || !mounted) return;
-      setState(() => _savingUid = user.uid);
-      final requestId = await PersonnelRepository.beginSupervisedRecovery(
-        userId: user.uid,
-        verificationReference: reference,
-      );
-      if (!mounted) return;
-      await showDialog<void>(
-        context: context,
-        builder: (dialogContext) => AlertDialog(
-          title: const Text('Recovery approved'),
-          content: SelectableText(
-            'Request ID: $requestId\n\nUse the owner recovery tool within '
-            '15 minutes. Enter the new password privately in that tool.',
-          ),
-          actions: [
-            FilledButton(
-              onPressed: () => Navigator.pop(dialogContext),
-              child: const Text('Done'),
-            ),
-          ],
-        ),
-      );
-    } catch (error) {
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Could not approve recovery: $error')),
-      );
-    } finally {
-      controller.dispose();
-      if (mounted) setState(() => _savingUid = null);
-    }
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: AdminColors.statGreen.withValues(alpha: 0.2)),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withValues(alpha: 0.06),
-            blurRadius: 18,
-            offset: const Offset(0, 6),
-          ),
-        ],
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          const Row(
-            children: [
-              Icon(Icons.verified_user_outlined, color: AdminColors.statGreen),
-              SizedBox(width: 10),
-              Expanded(
-                child: Text(
-                  'Field Personnel Verification',
-                  style: TextStyle(
-                    fontWeight: FontWeight.w900,
-                    fontSize: 15,
-                    color: AdminColors.headerTitle,
-                  ),
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 6),
-          const Text(
-            'Confirm only credentials checked with the issuing organization. '
-            'Verified users become available for intervention and temporary follow-up assignment.',
-            style: TextStyle(color: AdminColors.muted, fontSize: 12.5),
-          ),
-          const SizedBox(height: 12),
-          StreamBuilder<List<UserModel>>(
-            stream: PersonnelRepository.watchUsers(),
-            builder: (context, snapshot) {
-              if (snapshot.connectionState == ConnectionState.waiting &&
-                  !snapshot.hasData) {
-                return const CotsLoadingSkeleton(
-                    layout: CotsSkeletonLayout.list,
-                    label: 'Loading registered users');
-              }
-              if (snapshot.hasError) {
-                return Text(
-                  'Could not load registered users: ${snapshot.error}',
-                  style: const TextStyle(color: AdminColors.statRed),
-                );
-              }
-              final users = (snapshot.data ?? const <UserModel>[])
-                  .where((u) => !u.isAdmin && !u.isExpert && u.isActive)
-                  .toList();
-              if (users.isEmpty) {
-                return const Text('No eligible registered users found.');
-              }
-              return Column(
-                children: [
-                  if (!SupabaseConfig.isConfigured)
-                    OutlinedButton.icon(
-                      icon: const Icon(Icons.publish_outlined),
-                      label:
-                          const Text('Publish follow-up personnel directory'),
-                      onPressed: _savingUid != null
-                          ? null
-                          : () async {
-                              setState(() => _savingUid = 'directory');
-                              try {
-                                await FollowUpReassignmentRepository
-                                    .publishPersonnel(snapshot.data ?? []);
-                                if (context.mounted) {
-                                  ScaffoldMessenger.of(context).showSnackBar(
-                                      const SnackBar(
-                                          content: Text(
-                                              'Follow-up personnel directory published.')));
-                                }
-                              } catch (error) {
-                                if (context.mounted) {
-                                  ScaffoldMessenger.of(context).showSnackBar(
-                                      SnackBar(
-                                          content: Text(
-                                              'Could not publish directory: $error')));
-                                }
-                              } finally {
-                                if (mounted) setState(() => _savingUid = null);
-                              }
-                            },
-                    ),
-                  for (var index = 0; index < users.length; index++) ...[
-                    if (index > 0) const Divider(height: 18),
-                    _personnelRow(users[index]),
-                  ],
-                ],
-              );
-            },
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _personnelRow(UserModel user) {
-    final verified = user.fieldPersonnelVerified;
-    final busy = _savingUid == user.uid;
-    return Row(
-      children: [
-        CircleAvatar(
-          backgroundColor:
-              (verified ? AdminColors.statGreen : AdminColors.muted)
-                  .withValues(alpha: 0.14),
-          child: Icon(
-            verified ? Icons.verified_rounded : Icons.person_outline_rounded,
-            color: verified ? AdminColors.statGreen : AdminColors.muted,
-          ),
-        ),
-        const SizedBox(width: 10),
-        Expanded(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                user.fullName.isEmpty ? user.email : user.fullName,
-                style: const TextStyle(
-                  fontWeight: FontWeight.w800,
-                  color: AdminColors.headerTitle,
-                ),
-              ),
-              Text(
-                [
-                  if (user.role.isNotEmpty) user.role,
-                  if (user.organization.isNotEmpty) user.organization,
-                  if (user.assignedArea.isNotEmpty) user.assignedArea,
-                ].join(' · '),
-                style: const TextStyle(fontSize: 12, color: AdminColors.muted),
-              ),
-            ],
-          ),
-        ),
-        const SizedBox(width: 10),
-        Wrap(
-          spacing: 8,
-          runSpacing: 8,
-          children: [
-            if (SupabaseConfig.isConfigured)
-              IconButton.outlined(
-                onPressed: busy ? null : () => _beginRecovery(user),
-                tooltip: 'Approve supervised password recovery',
-                icon: const Icon(Icons.key_rounded, size: 18),
-              ),
-            OutlinedButton.icon(
-              onPressed: busy ? null : () => _setVerified(user, !verified),
-              icon: busy
-                  ? const SizedBox(
-                      width: 16,
-                      height: 16,
-                      child: CircularProgressIndicator(strokeWidth: 2),
-                    )
-                  : Icon(
-                      verified
-                          ? Icons.verified_user_outlined
-                          : Icons.fact_check_outlined,
-                      size: 18,
-                    ),
-              label: Text(verified ? 'Verified' : 'Verify'),
-              style: OutlinedButton.styleFrom(
-                foregroundColor:
-                    verified ? AdminColors.statGreen : AdminColors.statBlue,
-              ),
-            ),
-          ],
-        ),
-      ],
     );
   }
 }

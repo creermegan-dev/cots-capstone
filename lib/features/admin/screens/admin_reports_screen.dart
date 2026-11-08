@@ -1,11 +1,15 @@
 import 'package:flutter/material.dart';
 
 import '../../../models/cots_tally.dart';
+import '../../../models/staff_submission_rows.dart';
+import '../../user/user_submission_details_page.dart';
+import '../../../models/zone_directory_summary.dart';
 import '../../../services/admin_report_export_service.dart';
 import '../../../services/scan_record_repository.dart';
 import '../../../widgets/cots_loading_skeleton.dart';
 import '../models/admin_record_table_row.dart';
 import '../theme/admin_theme.dart';
+import '../widgets/admin_dashboard_header.dart';
 import '../widgets/admin_data_table.dart';
 import 'admin_record_details_screen.dart';
 
@@ -23,7 +27,7 @@ class _AdminReportsScreenState extends State<AdminReportsScreen> {
   String _type = 'All Types';
   String _status = 'All Status';
   String _confidence = 'All Confidence Levels';
-  String _zone = 'All Zones';
+  String _zone = 'All Sites';
   int _page = 0;
   int _rowsPerPage = 10;
   bool _exporting = false;
@@ -35,6 +39,14 @@ class _AdminReportsScreenState extends State<AdminReportsScreen> {
 
   late Stream<List<AdminRecordTableRow>> _recordsStream;
   int _refreshGeneration = 0;
+
+  void _submitSearch() {
+    setState(() {
+      _page = 0;
+      _selectedStatIndex = _syncedStatSelection();
+    });
+    FocusScope.of(context).unfocus();
+  }
 
   void _onReportsRefresh() {
     if (!mounted) return;
@@ -101,6 +113,8 @@ class _AdminReportsScreenState extends State<AdminReportsScreen> {
     'All Status',
     'Accepted',
     'Under Review',
+    'Partially accepted',
+    'Processing evidence',
     'Rejected'
   ];
   static const _confidences = [
@@ -125,13 +139,19 @@ class _AdminReportsScreenState extends State<AdminReportsScreen> {
     return rows.where((r) {
       final byQ = q.isEmpty ||
           r.id.toLowerCase().contains(q) ||
+          r.source.submissionPhotos.any((photo) =>
+              photo.recordId.toLowerCase().contains(q) ||
+              photo.imageName.toLowerCase().contains(q)) ||
           r.submittedBy.toLowerCase().contains(q) ||
           r.zone.toLowerCase().contains(q);
       final byT = _type == 'All Types' || r.typeLabel == _type;
       final byS = _status == 'All Status' || _statusOf(r).label == _status;
       final byC = _confidence == 'All Confidence Levels' ||
-          r.confidenceBand == _confidence;
-      final byZ = _zone == 'All Zones' || r.zone == _zone;
+          (r.source.isSubmissionSummary
+              ? r.source.submissionPhotos.any((photo) =>
+                  _ReportRow.fromRecord(photo).confidenceBand == _confidence)
+              : r.confidenceBand == _confidence);
+      final byZ = _zone == 'All Sites' || r.zone == _zone;
       return byQ && byT && byS && byC && byZ;
     }).toList();
   }
@@ -159,7 +179,7 @@ class _AdminReportsScreenState extends State<AdminReportsScreen> {
   }
 
   int? _syncedStatSelection() {
-    if (_searchCtrl.text.trim().isNotEmpty || _zone != 'All Zones') {
+    if (_searchCtrl.text.trim().isNotEmpty || _zone != 'All Sites') {
       return null;
     }
     return _matchingStatCardIndex();
@@ -216,7 +236,9 @@ class _AdminReportsScreenState extends State<AdminReportsScreen> {
           );
         }
         return _buildReports(
-          snapshot.data!.map(_ReportRow.fromRecord).toList(),
+          StaffSubmissionRows.group(snapshot.data!)
+              .map(_ReportRow.fromRecord)
+              .toList(),
         );
       },
     );
@@ -224,9 +246,9 @@ class _AdminReportsScreenState extends State<AdminReportsScreen> {
 
   Widget _buildReports(List<_ReportRow> rows) {
     final zones = <String>{for (final row in rows) row.zone}.toList()..sort();
-    final zoneOptions = ['All Zones', ...zones];
+    final zoneOptions = ['All Sites', ...zones];
     if (!zoneOptions.contains(_zone)) {
-      _zone = 'All Zones';
+      _zone = 'All Sites';
     }
     final filtered = _filtered(rows);
     final pageCount = (filtered.length / _rowsPerPage).ceil().clamp(1, 999);
@@ -241,11 +263,11 @@ class _AdminReportsScreenState extends State<AdminReportsScreen> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          _header(zoneOptions, filtered),
+          _header(filtered),
           const SizedBox(height: 18),
           _statCards(rows),
           const SizedBox(height: 18),
-          _filterBar(),
+          _filterBar(zoneOptions),
           const SizedBox(height: 14),
           _tableCard(pageRows, start, end, filtered.length, pageCount),
           const SizedBox(height: 20),
@@ -310,127 +332,60 @@ class _AdminReportsScreenState extends State<AdminReportsScreen> {
     );
   }
 
-  Widget _header(List<String> zoneOptions, List<_ReportRow> filteredRows) {
-    return LayoutBuilder(
-      builder: (context, c) {
-        final narrow = c.maxWidth < 780;
-        final actions = [
-          OutlinedButton.icon(
-            onPressed: () {},
-            icon: AdminDateTimeTokens.dateChipIcon(),
-            label: Text(AdminDateTimeTokens.currentDateRangeLabel,
-                style: AdminDateTimeTokens.dateRangeChipTextStyle),
-            style: AdminDateTimeTokens.dateRangeOutlinedButtonStyle(),
-          ),
-          const SizedBox(width: 10),
-          OutlinedButton.icon(
-            onPressed: _onReportsRefresh,
-            icon: AdminDateTimeTokens.refreshIcon,
-            label: const Text('Refresh',
-                style: AdminDateTimeTokens.refreshChipTextStyle),
-            style: AdminDateTimeTokens.refreshOutlinedButtonStyle(),
-          ),
-          const SizedBox(width: 10),
-          SizedBox(
-            width: narrow ? double.infinity : 140,
-            child: _dropdownShell(
-              child: DropdownButtonHideUnderline(
-                child: DropdownButton<String>(
-                  value: _zone,
-                  isExpanded: true,
-                  icon: const Icon(Icons.filter_alt_outlined, size: 20),
-                  items: zoneOptions
-                      .map((e) => DropdownMenuItem(value: e, child: Text(e)))
-                      .toList(),
-                  onChanged: (v) => setState(() {
-                    _zone = v ?? 'All Zones';
-                    _page = 0;
-                    _selectedStatIndex = _syncedStatSelection();
-                  }),
-                ),
-              ),
-            ),
-          ),
-          const SizedBox(width: 10),
+  Widget _header(List<_ReportRow> filteredRows) {
+    return AdminDashboardHeader(
+      title: 'Reports',
+      subtitle:
+          'All system reports submitted by users. Detection reports are reviewed by admin based on confidence level.',
+      onRefreshTap: _onReportsRefresh,
+      trailingExtra: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
           OutlinedButton.icon(
             onPressed: filteredRows.isEmpty || _exporting
                 ? null
                 : () => _exportReports(filteredRows, asPdf: true),
-            icon: const Icon(Icons.picture_as_pdf_outlined, size: 18),
+            icon: const Icon(Icons.picture_as_pdf_outlined, size: 16),
             label: const Text('Export PDF'),
             style: OutlinedButton.styleFrom(
               foregroundColor: AdminColors.statRed,
               side: BorderSide(
                   color: AdminColors.statRed.withValues(alpha: 0.35)),
               backgroundColor: Colors.white,
+              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 9),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(10),
+              ),
+              textStyle: const TextStyle(
+                fontSize: 13,
+                fontWeight: FontWeight.w600,
+              ),
             ),
           ),
-          const SizedBox(width: 10),
+          const SizedBox(width: 8),
           OutlinedButton.icon(
             onPressed: filteredRows.isEmpty || _exporting
                 ? null
                 : () => _exportReports(filteredRows, asPdf: false),
-            icon: const Icon(Icons.table_view_outlined, size: 18),
+            icon: const Icon(Icons.table_view_outlined, size: 16),
             label: const Text('Export CSV'),
             style: OutlinedButton.styleFrom(
               foregroundColor: AdminColors.statGreen,
               side: BorderSide(
                   color: AdminColors.statGreen.withValues(alpha: 0.35)),
               backgroundColor: Colors.white,
+              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 9),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(10),
+              ),
+              textStyle: const TextStyle(
+                fontSize: 13,
+                fontWeight: FontWeight.w600,
+              ),
             ),
           ),
-        ];
-        if (narrow) {
-          return Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              const Text('Reports',
-                  style: TextStyle(
-                      fontSize: 30,
-                      fontWeight: FontWeight.w800,
-                      color: AdminColors.headerTitle)),
-              const SizedBox(height: 8),
-              Text(
-                'All system reports submitted by users. Detection reports are reviewed by admin based on confidence level.',
-                style: TextStyle(
-                    fontSize: 13,
-                    fontWeight: FontWeight.w600,
-                    color: AdminColors.muted.withValues(alpha: 0.95),
-                    height: 1.4),
-              ),
-              const SizedBox(height: 14),
-              Wrap(spacing: 10, runSpacing: 10, children: actions),
-            ],
-          );
-        }
-        return Row(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  const Text('Reports',
-                      style: TextStyle(
-                          fontSize: 30,
-                          fontWeight: FontWeight.w800,
-                          color: AdminColors.headerTitle)),
-                  const SizedBox(height: 8),
-                  Text(
-                    'All system reports submitted by users. Detection reports are reviewed by admin based on confidence level.',
-                    style: TextStyle(
-                        fontSize: 13,
-                        fontWeight: FontWeight.w600,
-                        color: AdminColors.muted.withValues(alpha: 0.95),
-                        height: 1.4),
-                  ),
-                ],
-              ),
-            ),
-            ...actions,
-          ],
-        );
-      },
+        ],
+      ),
     );
   }
 
@@ -454,8 +409,12 @@ class _AdminReportsScreenState extends State<AdminReportsScreen> {
         rows.where((r) => r.status == _RepStatus.forReview).length;
     final accepted =
         rows.where((r) => r.status == _RepStatus.autoApproved).length;
-    final zoneCount =
-        rows.map((r) => r.zone).where((z) => z != 'Unassigned').toSet().length;
+    final zoneCount = rows
+        .map((r) => SiteDirectorySummary.siteIdForLocation(r.zone,
+            latitude: r.source.latitude, longitude: r.source.longitude))
+        .whereType<String>()
+        .toSet()
+        .length;
     final rejected = rows.where((r) => r.status == _RepStatus.rejected).length;
     final specs = [
       _StatSpec(
@@ -469,8 +428,8 @@ class _AdminReportsScreenState extends State<AdminReportsScreen> {
           'Reports needing expert review', AdminColors.statGreen),
       _StatSpec(2, Icons.check_circle_outline_rounded, 'Accepted', '$accepted',
           'Verified or policy-accepted', AdminColors.statPurple),
-      _StatSpec(3, Icons.map_outlined, 'Reef Zone Summary', '$zoneCount',
-          'Zones with reports', AdminColors.statYellow),
+      _StatSpec(3, Icons.map_outlined, 'Site Summary', '$zoneCount',
+          'Sites with reports', AdminColors.statYellow),
       _StatSpec(4, Icons.cancel_outlined, 'Rejected', '$rejected',
           'Rejected or retake required', AdminColors.statRed),
     ];
@@ -513,7 +472,7 @@ class _AdminReportsScreenState extends State<AdminReportsScreen> {
     );
   }
 
-  Widget _filterBar() {
+  Widget _filterBar(List<String> zoneOptions) {
     return _card(
       child: LayoutBuilder(
         builder: (context, c) {
@@ -527,12 +486,38 @@ class _AdminReportsScreenState extends State<AdminReportsScreen> {
                   _page = 0;
                   _selectedStatIndex = _syncedStatSelection();
                 }),
-                decoration: const InputDecoration(
+                textInputAction: TextInputAction.search,
+                onSubmitted: (_) => _submitSearch(),
+                decoration: InputDecoration(
                   hintText: 'Search reports...',
-                  prefixIcon: Icon(Icons.search_rounded),
+                  prefixIcon: IconButton(
+                    onPressed: _submitSearch,
+                    tooltip: 'Search reports',
+                    icon: const Icon(Icons.search_rounded),
+                  ),
                   isDense: true,
                   filled: true,
-                  fillColor: Color(0xFFF7F9FC),
+                  fillColor: const Color(0xFFF7F9FC),
+                ),
+              ),
+            ),
+            SizedBox(
+              width: narrow ? double.infinity : 150,
+              child: _dropdownShell(
+                child: DropdownButtonHideUnderline(
+                  child: DropdownButton<String>(
+                    value: _zone,
+                    isExpanded: true,
+                    icon: const Icon(Icons.filter_alt_outlined, size: 20),
+                    items: zoneOptions
+                        .map((e) => DropdownMenuItem(value: e, child: Text(e)))
+                        .toList(),
+                    onChanged: (v) => setState(() {
+                      _zone = v ?? 'All Sites';
+                      _page = 0;
+                      _selectedStatIndex = _syncedStatSelection();
+                    }),
+                  ),
                 ),
               ),
             ),
@@ -856,9 +841,19 @@ class _AdminReportsScreenState extends State<AdminReportsScreen> {
   }
 
   Future<void> _openReportForRow(_ReportRow report) async {
+    if (report.source.isSubmissionSummary) {
+      await Navigator.of(context).push<void>(MaterialPageRoute(
+          builder: (_) => UserSubmissionDetailsPage(
+              initialGroup: StaffSubmissionRows.groupFor(report.source),
+              includePendingPhotos: false,
+              photoPageBuilder: (record) => AdminRecordDetailsScreen(
+                  row: record.toAdminTableRow(1), viewOnly: true))));
+      return;
+    }
     await Navigator.of(context).push<AdminRecordTableRow?>(
       MaterialPageRoute<AdminRecordTableRow?>(
-        builder: (_) => AdminRecordDetailsScreen(row: report.source),
+        builder: (_) =>
+            AdminRecordDetailsScreen(row: report.source, viewOnly: true),
       ),
     );
   }
@@ -993,16 +988,22 @@ extension on _ReportType {
       };
 }
 
-enum _RepStatus { autoApproved, forReview, rejected }
+enum _RepStatus { autoApproved, forReview, rejected, processing, partial }
 
 extension on _RepStatus {
   String get label => switch (this) {
         _RepStatus.autoApproved => 'Accepted',
         _RepStatus.forReview => 'Under Review',
         _RepStatus.rejected => 'Rejected',
+        _RepStatus.processing => 'Processing evidence',
+        _RepStatus.partial => 'Partially accepted',
       };
 
   (Color fg, Color bg) get colors => switch (this) {
+        _RepStatus.processing || _RepStatus.partial => (
+            AdminColors.statYellow,
+            AdminColors.statYellow.withValues(alpha: 0.14)
+          ),
         _RepStatus.autoApproved => (
             AdminColors.statGreen,
             AdminColors.statGreen.withValues(alpha: 0.14)
@@ -1042,15 +1043,22 @@ class _ReportRow {
     final status = switch (record.displayStatusLabel) {
       'Rejected' => _RepStatus.rejected,
       'Under Review' => _RepStatus.forReview,
+      'Processing evidence' => _RepStatus.processing,
+      'Partially accepted' => _RepStatus.partial,
       _ => _RepStatus.autoApproved,
     };
     final review = switch (status) {
+      _RepStatus.processing => 'Photo evidence is still processing.',
+      _RepStatus.partial =>
+        'Some COTS were accepted; see each photo for decisions.',
       _RepStatus.rejected =>
         'Rejected by an expert or below the retake threshold.',
       _RepStatus.forReview => 'Waiting for expert verification.',
-      _RepStatus.autoApproved => record.adminConfirmed
-          ? 'Verified by an expert.'
-          : 'Accepted by the confidence policy.',
+      _RepStatus.autoApproved => record.isSubmissionSummary
+          ? 'All required photo reviews are complete. See each photo for decisions.'
+          : record.adminConfirmed
+              ? 'Verified by an expert.'
+              : 'Accepted by the confidence policy.',
     };
     return _ReportRow(
       record.recordId,
@@ -1086,6 +1094,7 @@ class _ReportRow {
   }
 
   Color get confidenceColor {
+    if (source.isSubmissionSummary) return AdminColors.muted;
     if (confidencePct >= 80) return AdminColors.statGreen;
     if (confidencePct >= 20) return AdminColors.statYellow;
     return AdminColors.statRed;
@@ -1158,7 +1167,7 @@ class _TableHeader extends StatelessWidget {
                 _headerCell('Report ID', TextAlign.left),
                 _headerCell('Type', TextAlign.left),
                 _headerCell('Submitted By', TextAlign.left),
-                _headerCell('Zone', TextAlign.left),
+                _headerCell('Site', TextAlign.left),
                 _headerCell('Submitted On', TextAlign.left),
                 _headerCell('Confidence', TextAlign.left),
                 _headerCell('Status', TextAlign.left),
@@ -1358,7 +1367,9 @@ class _ReportTableRowState extends State<_ReportTableRow> {
                         ),
                         _bodyCell(
                           _badge(
-                              '${r.confidencePct}% ${r.confidenceBand}',
+                              r.source.isSubmissionSummary
+                                  ? 'Per photo'
+                                  : '${r.confidencePct}% ${r.confidenceBand}',
                               r.confidenceColor,
                               r.confidenceColor.withValues(alpha: 0.13)),
                           align: Alignment.centerLeft,

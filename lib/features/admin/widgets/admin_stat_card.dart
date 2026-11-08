@@ -30,9 +30,13 @@ class AdminStatCard extends StatelessWidget {
     final card = Container(
       padding: const EdgeInsets.all(18),
       decoration: BoxDecoration(
-        color: selected ? accentColor.withValues(alpha: 0.08) : AdminColors.cardWhite,
+        color: selected
+            ? accentColor.withValues(alpha: 0.08)
+            : AdminColors.cardWhite,
         borderRadius: BorderRadius.circular(14),
-        border: selected ? Border.all(color: accentColor.withValues(alpha: 0.45), width: 2) : null,
+        border: selected
+            ? Border.all(color: accentColor.withValues(alpha: 0.45), width: 2)
+            : null,
         boxShadow: [
           BoxShadow(
             color: Colors.black.withValues(alpha: 0.06),

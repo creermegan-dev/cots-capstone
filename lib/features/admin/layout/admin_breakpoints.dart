@@ -14,7 +14,8 @@ abstract final class AdminBreakpoints {
   /// Shell / dashboard “wide” content (two-column charts, etc.).
   static const double contentWide = 1100;
 
-  static double widthOf(BuildContext context) => MediaQuery.sizeOf(context).width;
+  static double widthOf(BuildContext context) =>
+      MediaQuery.sizeOf(context).width;
 
   static bool isMobileWidth(double w) => w < mobile;
   static bool isTabletWidth(double w) => w >= mobile && w < desktop;
@@ -22,7 +23,8 @@ abstract final class AdminBreakpoints {
 
   static bool isMobile(BuildContext context) => isMobileWidth(widthOf(context));
   static bool isTablet(BuildContext context) => isTabletWidth(widthOf(context));
-  static bool isDesktop(BuildContext context) => isDesktopWidth(widthOf(context));
+  static bool isDesktop(BuildContext context) =>
+      isDesktopWidth(widthOf(context));
 
   /// Horizontal padding for scrollable admin pages.
   static EdgeInsets pagePadding(double w) {

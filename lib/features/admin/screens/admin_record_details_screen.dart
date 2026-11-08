@@ -1,13 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
-import '../../../core/supabase_config.dart';
-
 import '../../auth/auth_navigation.dart';
 import '../../../models/cots_confidence_policy.dart';
 import '../../../models/intervention_assignment_model.dart';
 import '../../../models/photo_source.dart';
-import '../../../models/record_collection.dart';
 import '../../../models/user_model.dart';
 import '../../../models/zone_review.dart';
 import '../../../providers/auth_provider.dart';
@@ -23,6 +20,7 @@ import '../../../widgets/cots_detection_image_overlay.dart';
 import '../layout/admin_breakpoints.dart';
 import '../layout/admin_responsive_chrome.dart';
 import '../widgets/admin_back_icon_button.dart';
+import '../widgets/admin_dashboard_header.dart';
 import '../widgets/admin_record_details_dialogs.dart';
 import 'admin_shell_screen.dart';
 import '../../../widgets/cots_loading_skeleton.dart';
@@ -208,13 +206,9 @@ class _AdminRecordDetailsScreenState extends State<AdminRecordDetailsScreen> {
         (i) => i.band == CotsVerificationBand.retakeRequired,
       );
 
-  // Scheduled removal tasks are Firebase-only. In the Supabase version the
-  // detecting Diver removes COTS immediately, so there is nothing to assign.
-  bool get _canManageAssignment =>
-      !SupabaseConfig.isConfigured &&
-      widget.viewOnly &&
-      !widget.expertContext &&
-      _row.recordCollection == RecordCollection.captures;
+  // Legacy Firebase assignment controls previously appeared in admin oversight.
+  // Keep them hidden until expert assignment permissions are updated in Stage 2.
+  bool get _canManageAssignment => false;
 
   int get _lowConfidenceReviewedCount {
     var count = 0;
@@ -659,75 +653,11 @@ class _AdminRecordDetailsScreenState extends State<AdminRecordDetailsScreen> {
   }
 
   Widget _header(BuildContext context) {
-    final dateBtn = OutlinedButton.icon(
-      onPressed: () {},
-      icon: AdminDateTimeTokens.dateChipIcon(),
-      label: Text(AdminDateTimeTokens.currentDateRangeLabel,
-          style: AdminDateTimeTokens.dateRangeChipTextStyle),
-      style: AdminDateTimeTokens.dateRangeOutlinedButtonStyle(),
-    );
-
-    final refreshBtn = OutlinedButton.icon(
-      onPressed: _onRecordDetailsRefresh,
-      icon: AdminDateTimeTokens.refreshIcon,
-      label: const Text('Refresh',
-          style: AdminDateTimeTokens.refreshChipTextStyle),
-      style: AdminDateTimeTokens.refreshOutlinedButtonStyle(),
-    );
-
-    const titleCol = Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text(
-          'Record / Submission Details',
-          style: TextStyle(
-            fontSize: 26,
-            fontWeight: FontWeight.w800,
-            color: AdminColors.headerTitle,
-            letterSpacing: -0.5,
-            decoration: TextDecoration.none,
-          ),
-        ),
-      ],
-    );
-
-    final backBtn = AdminBackIconButton(onPressed: _popWithRow);
-
-    return LayoutBuilder(
-      builder: (context, c) {
-        final narrow = c.maxWidth < 720;
-        if (narrow) {
-          return Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              backBtn,
-              const SizedBox(height: 4),
-              titleCol,
-              const SizedBox(height: 14),
-              Wrap(
-                spacing: 10,
-                runSpacing: 10,
-                children: [
-                  dateBtn,
-                  refreshBtn,
-                ],
-              ),
-            ],
-          );
-        }
-        return Row(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            backBtn,
-            const SizedBox(width: 6),
-            Expanded(child: titleCol),
-            const SizedBox(width: 12),
-            dateBtn,
-            const SizedBox(width: 10),
-            refreshBtn,
-          ],
-        );
-      },
+    return AdminDashboardHeader(
+      leading: AdminBackIconButton(onPressed: _popWithRow),
+      title: 'Record / Submission Details',
+      subtitle: 'Inspect citizen science submission and verification status.',
+      onRefreshTap: _onRecordDetailsRefresh,
     );
   }
 
@@ -1016,16 +946,18 @@ class _AdminRecordDetailsScreenState extends State<AdminRecordDetailsScreen> {
           _kv('Date uploaded', r.dateUploaded),
           _kv('User remarks', r.userRemarks),
           const SizedBox(height: 6),
-          Row(
+          Wrap(
+            spacing: 8,
+            runSpacing: 6,
+            crossAxisAlignment: WrapCrossAlignment.center,
             children: [
               const Text(
-                'Auto Zone Assignment',
+                'Auto Site Assignment',
                 style: TextStyle(
                     fontSize: 12.5,
                     fontWeight: FontWeight.w700,
                     color: AdminColors.muted),
               ),
-              const SizedBox(width: 8),
               Container(
                 padding:
                     const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
@@ -1112,7 +1044,7 @@ class _AdminRecordDetailsScreenState extends State<AdminRecordDetailsScreen> {
                 ],
               ] else ...[
                 _kv('Assigned to', assignment.assignedToName),
-                _kv('Zone', assignment.zone),
+                _kv('Site', assignment.zone),
                 _kv(
                   'Due date',
                   assignment.dueAt == null
@@ -1165,7 +1097,7 @@ class _AdminRecordDetailsScreenState extends State<AdminRecordDetailsScreen> {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
           content: Text(
-            'Verify at least one field personnel account in Admin → Users first.',
+            'Field personnel verification is required. Expert verification controls will be enabled in Stage 2.',
           ),
         ),
       );
@@ -1201,7 +1133,7 @@ class _AdminRecordDetailsScreenState extends State<AdminRecordDetailsScreen> {
                       DropdownMenuItem(
                         value: person.uid,
                         child: Text(
-                          '${person.fullName} · ${person.assignedArea.isEmpty ? 'Any zone' : person.assignedArea}',
+                          '${person.fullName} · ${person.assignedArea.isEmpty ? 'Any site' : person.assignedArea}',
                           overflow: TextOverflow.ellipsis,
                         ),
                       ),
@@ -1788,12 +1720,14 @@ class _AdminRecordDetailsScreenState extends State<AdminRecordDetailsScreen> {
             Icon(Icons.flag_outlined,
                 size: 18, color: AdminColors.muted.withValues(alpha: 0.9)),
             const SizedBox(width: 8),
-            const Text(
-              'Status Information',
-              style: TextStyle(
-                fontWeight: FontWeight.w800,
-                fontSize: 14,
-                color: AdminColors.headerTitle,
+            const Expanded(
+              child: Text(
+                'Status Information',
+                style: TextStyle(
+                  fontWeight: FontWeight.w800,
+                  fontSize: 14,
+                  color: AdminColors.headerTitle,
+                ),
               ),
             ),
           ],
@@ -1872,11 +1806,13 @@ class _AdminRecordDetailsScreenState extends State<AdminRecordDetailsScreen> {
             children: [
               Icon(icon, size: 22, color: AdminColors.statBlue),
               const SizedBox(width: 8),
-              Text(title,
-                  style: const TextStyle(
-                      fontSize: 16,
-                      fontWeight: FontWeight.w800,
-                      color: AdminColors.headerTitle)),
+              Expanded(
+                child: Text(title,
+                    style: const TextStyle(
+                        fontSize: 16,
+                        fontWeight: FontWeight.w800,
+                        color: AdminColors.headerTitle)),
+              ),
             ],
           ),
           const SizedBox(height: 14),
@@ -2050,9 +1986,11 @@ class _LegendDot extends StatelessWidget {
             height: 8,
             decoration: BoxDecoration(color: color, shape: BoxShape.circle)),
         const SizedBox(width: 6),
-        Text(label,
-            style: TextStyle(
-                fontSize: 11, color: AdminColors.muted.withValues(alpha: 0.9))),
+        Flexible(
+          child: Text(label,
+              style: TextStyle(
+                  fontSize: 11, color: AdminColors.muted.withValues(alpha: 0.9))),
+        ),
       ],
     );
   }

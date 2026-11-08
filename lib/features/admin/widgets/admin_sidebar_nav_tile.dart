@@ -44,7 +44,8 @@ class AdminSidebarNavTile extends StatelessWidget {
                   boxShadow: selected
                       ? [
                           BoxShadow(
-                            color: AdminColors.navActive.withValues(alpha: 0.35),
+                            color:
+                                AdminColors.navActive.withValues(alpha: 0.35),
                             blurRadius: 12,
                             offset: const Offset(0, 4),
                           ),
@@ -58,7 +59,9 @@ class AdminSidebarNavTile extends StatelessWidget {
                     Icon(
                       icon,
                       size: 22,
-                      color: selected ? AdminColors.navTextActive : AdminColors.navText,
+                      color: selected
+                          ? AdminColors.navTextActive
+                          : AdminColors.navText,
                     ),
                     if (badge != null && badge! > 0)
                       Positioned(
@@ -67,7 +70,8 @@ class AdminSidebarNavTile extends StatelessWidget {
                         child: Container(
                           width: 8,
                           height: 8,
-                          decoration: const BoxDecoration(color: Color(0xFFE53935), shape: BoxShape.circle),
+                          decoration: const BoxDecoration(
+                              color: Color(0xFFE53935), shape: BoxShape.circle),
                         ),
                       ),
                   ],
@@ -109,7 +113,9 @@ class AdminSidebarNavTile extends StatelessWidget {
                 Icon(
                   icon,
                   size: 22,
-                  color: selected ? AdminColors.navTextActive : AdminColors.navText,
+                  color: selected
+                      ? AdminColors.navTextActive
+                      : AdminColors.navText,
                 ),
                 const SizedBox(width: 12),
                 Expanded(
@@ -118,13 +124,16 @@ class AdminSidebarNavTile extends StatelessWidget {
                     style: TextStyle(
                       fontWeight: FontWeight.w600,
                       fontSize: 13.5,
-                      color: selected ? AdminColors.navTextActive : AdminColors.navText,
+                      color: selected
+                          ? AdminColors.navTextActive
+                          : AdminColors.navText,
                     ),
                   ),
                 ),
                 if (badge != null && badge! > 0)
                   Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                    padding:
+                        const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
                     decoration: BoxDecoration(
                       color: const Color(0xFFE53935),
                       borderRadius: BorderRadius.circular(10),

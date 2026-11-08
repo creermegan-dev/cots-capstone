@@ -64,7 +64,7 @@ class CotsZone {
   final String dateCreated;
   final List<StatusHistoryItem> statusHistory;
 
-  /// Builds a map/detail zone card from a Davao Gulf coastal barangay.
+  /// Builds a map/detail card from a dive site.
   factory CotsZone.fromCoastalBarangay(GulfCoastalBarangay barangay) {
     final hash = barangay.id.hashCode.abs();
     final level = switch (hash % 3) {
@@ -90,7 +90,7 @@ class CotsZone {
     return CotsZone(
       id: barangay.id,
       label: barangay.areaCode,
-      name: barangay.name,
+      name: barangay.displayName,
       position: barangay.centroid,
       level: level,
       density: density,
@@ -102,8 +102,8 @@ class CotsZone {
       location: coords,
       radius: '100 m² survey unit',
       reason: barangay.beachNote ??
-          'Coastal monitoring barangay along Davao Gulf.',
-      dateCreated: 'Davao Gulf coastal GIS',
+          'Dive site in ${barangay.name}, Samal.',
+      dateCreated: 'Samal dive sites map',
       statusHistory: [
         StatusHistoryItem(
           date: '—',
@@ -118,7 +118,7 @@ class CotsZone {
   }
 }
 
-/// Sample map cards, one per monitoring area (its first part). The map page
+/// Sample map cards, one per dive site. The map page
 /// still shows generated sample levels until Stage 8 brings real data.
 List<CotsZone>? _sampleZonesCache;
 List<CotsZone> get kSampleZones => _sampleZonesCache ??= DavaoGulfGeography

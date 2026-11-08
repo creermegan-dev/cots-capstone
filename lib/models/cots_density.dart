@@ -1,4 +1,6 @@
-/// COTS infestation level from density (Dumas et al., 2020).
+/// COTS infestation level from density, adapted from Dumas et al. (2020):
+/// Low up to and including 15 COTS/ha, Moderate above 15 up to 100, High above
+/// 100 (user rule, 2026-11-05).
 ///
 /// density (COTS/ha) = field-observed COTS / (surveyed reef area m² / 10,000)
 ///
@@ -6,8 +8,8 @@
 /// `cots_private.density_level` in
 /// supabase/migrations/20261030000600_infestation_density.sql.
 abstract final class CotsDensity {
-  /// Below this is Low (non-outbreak).
-  static const moderateFrom = 15.0;
+  /// Up to and including this is Low (non-outbreak).
+  static const lowUpTo = 15.0;
 
   /// Above this is High (confirmed outbreak); up to and including it is Moderate.
   static const highAbove = 100.0;
@@ -28,7 +30,7 @@ abstract final class CotsDensity {
 
   static String? level(double? perHectare) {
     if (perHectare == null) return null;
-    if (perHectare < moderateFrom) return 'Low';
+    if (perHectare <= lowUpTo) return 'Low';
     if (perHectare <= highAbove) return 'Moderate';
     return 'High';
   }

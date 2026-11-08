@@ -18,6 +18,10 @@ class AdminSidebar extends StatelessWidget {
     this.railCollapsed = false,
     this.onToggleRail,
     this.badgeFor,
+    this.entries,
+    this.panelSubtitle = 'Admin Panel',
+    this.userName = 'Admin User',
+    this.userRole = 'Super Administrator',
   });
 
   final int selectedIndex;
@@ -29,6 +33,10 @@ class AdminSidebar extends StatelessWidget {
   final bool showRailToggle;
   final bool railCollapsed;
   final VoidCallback? onToggleRail;
+  final List<AdminNavEntry>? entries;
+  final String panelSubtitle;
+  final String userName;
+  final String userRole;
 
   @override
   Widget build(BuildContext context) {
@@ -58,11 +66,11 @@ class AdminSidebar extends StatelessWidget {
         ),
         child: Stack(
           children: [
-            Positioned.fill(
+            const Positioned.fill(
               child: DecoratedBox(
                 decoration: BoxDecoration(
                   gradient: RadialGradient(
-                    center: const Alignment(-0.8, -0.9),
+                    center: Alignment(-0.8, -0.9),
                     radius: 1.2,
                     colors: [
                       AdminColors.sidebarAccentGlow,
@@ -76,7 +84,8 @@ class AdminSidebar extends StatelessWidget {
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
                 Padding(
-                  padding: EdgeInsets.fromLTRB(compact ? 10 : 20, compact ? 16 : 28, compact ? 10 : 20, compact ? 10 : 20),
+                  padding: EdgeInsets.fromLTRB(compact ? 10 : 20,
+                      compact ? 16 : 28, compact ? 10 : 20, compact ? 10 : 20),
                   child: compact
                       ? Column(
                           children: [
@@ -96,14 +105,19 @@ class AdminSidebar extends StatelessWidget {
                                 shape: BoxShape.circle,
                                 border: Border.all(color: Colors.white24),
                                 gradient: const LinearGradient(
-                                  colors: [Color(0xFF26A69A), Color(0xFF00897B)],
+                                  colors: [
+                                    Color(0xFF26A69A),
+                                    Color(0xFF00897B)
+                                  ],
                                 ),
                               ),
                               child: const Stack(
                                 alignment: Alignment.center,
                                 children: [
-                                  Icon(Icons.waves_rounded, color: Colors.white54, size: 22),
-                                  Icon(Icons.star_rounded, color: Color(0xFFFF7043), size: 20),
+                                  Icon(Icons.waves_rounded,
+                                      color: Colors.white54, size: 22),
+                                  Icon(Icons.star_rounded,
+                                      color: Color(0xFFFF7043), size: 20),
                                 ],
                               ),
                             ),
@@ -115,10 +129,13 @@ class AdminSidebar extends StatelessWidget {
                             if (showRailToggle && onToggleRail != null) ...[
                               IconButton(
                                 padding: EdgeInsets.zero,
-                                constraints: const BoxConstraints(minWidth: 36, minHeight: 36),
+                                constraints: const BoxConstraints(
+                                    minWidth: 36, minHeight: 36),
                                 tooltip: 'Collapse to icons',
                                 onPressed: onToggleRail,
-                                icon: const Icon(Icons.keyboard_double_arrow_left_rounded, color: Colors.white70),
+                                icon: const Icon(
+                                    Icons.keyboard_double_arrow_left_rounded,
+                                    color: Colors.white70),
                               ),
                               const SizedBox(width: 4),
                             ],
@@ -129,14 +146,19 @@ class AdminSidebar extends StatelessWidget {
                                 shape: BoxShape.circle,
                                 border: Border.all(color: Colors.white24),
                                 gradient: const LinearGradient(
-                                  colors: [Color(0xFF26A69A), Color(0xFF00897B)],
+                                  colors: [
+                                    Color(0xFF26A69A),
+                                    Color(0xFF00897B)
+                                  ],
                                 ),
                               ),
                               child: const Stack(
                                 alignment: Alignment.center,
                                 children: [
-                                  Icon(Icons.waves_rounded, color: Colors.white54, size: 22),
-                                  Icon(Icons.star_rounded, color: Color(0xFFFF7043), size: 20),
+                                  Icon(Icons.waves_rounded,
+                                      color: Colors.white54, size: 22),
+                                  Icon(Icons.star_rounded,
+                                      color: Color(0xFFFF7043), size: 20),
                                 ],
                               ),
                             ),
@@ -148,7 +170,8 @@ class AdminSidebar extends StatelessWidget {
                                   Text(
                                     'COTS MONITORING SYSTEM',
                                     style: TextStyle(
-                                      color: Colors.white.withValues(alpha: 0.95),
+                                      color:
+                                          Colors.white.withValues(alpha: 0.95),
                                       fontWeight: FontWeight.w800,
                                       fontSize: 11.5,
                                       letterSpacing: 0.6,
@@ -157,9 +180,10 @@ class AdminSidebar extends StatelessWidget {
                                   ),
                                   const SizedBox(height: 4),
                                   Text(
-                                    'Admin Panel',
+                                    panelSubtitle,
                                     style: TextStyle(
-                                      color: Colors.cyanAccent.withValues(alpha: 0.65),
+                                      color: Colors.cyanAccent
+                                          .withValues(alpha: 0.65),
                                       fontWeight: FontWeight.w600,
                                       fontSize: 12,
                                     ),
@@ -170,13 +194,15 @@ class AdminSidebar extends StatelessWidget {
                           ],
                         ),
                 ),
-                if (!compact) const AdminShellSearchBar(padding: EdgeInsets.fromLTRB(20, 0, 20, 8)),
+                if (!compact)
+                  const AdminShellSearchBar(
+                      padding: EdgeInsets.fromLTRB(20, 0, 20, 8)),
                 Expanded(
                   child: ListView.builder(
                     padding: const EdgeInsets.only(bottom: 12),
-                    itemCount: kAdminNavEntries.length,
+                    itemCount: (entries ?? kAdminNavEntries).length,
                     itemBuilder: (context, i) {
-                      final e = kAdminNavEntries[i];
+                      final e = (entries ?? kAdminNavEntries)[i];
                       if (e is AdminNavSectionHeader) {
                         if (compact) return const SizedBox(height: 8);
                         return Padding(
@@ -184,7 +210,8 @@ class AdminSidebar extends StatelessWidget {
                           child: Text(
                             e.title,
                             style: TextStyle(
-                              color: AdminColors.navText.withValues(alpha: 0.55),
+                              color:
+                                  AdminColors.navText.withValues(alpha: 0.55),
                               fontSize: 10.5,
                               fontWeight: FontWeight.w700,
                               letterSpacing: 1.2,
@@ -215,7 +242,8 @@ class AdminSidebar extends StatelessWidget {
                       child: CircleAvatar(
                         radius: 18,
                         backgroundColor: Colors.white.withValues(alpha: 0.12),
-                        child: const Icon(Icons.person_rounded, color: Colors.white70, size: 20),
+                        child: const Icon(Icons.person_rounded,
+                            color: Colors.white70, size: 20),
                       ),
                     ),
                   )
@@ -227,25 +255,27 @@ class AdminSidebar extends StatelessWidget {
                         CircleAvatar(
                           radius: 22,
                           backgroundColor: Colors.white.withValues(alpha: 0.12),
-                          child: const Icon(Icons.person_rounded, color: Colors.white70),
+                          child: const Icon(Icons.person_rounded,
+                              color: Colors.white70),
                         ),
                         const SizedBox(width: 12),
                         Expanded(
                           child: Column(
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
-                              const Text(
-                                'Admin User',
-                                style: TextStyle(
+                              Text(
+                                userName,
+                                style: const TextStyle(
                                   color: Colors.white,
                                   fontWeight: FontWeight.w700,
                                   fontSize: 14,
                                 ),
                               ),
                               Text(
-                                'Super Administrator',
+                                userRole,
                                 style: TextStyle(
-                                  color: Colors.cyanAccent.withValues(alpha: 0.55),
+                                  color:
+                                      Colors.cyanAccent.withValues(alpha: 0.55),
                                   fontSize: 12,
                                   fontWeight: FontWeight.w500,
                                 ),
@@ -257,7 +287,8 @@ class AdminSidebar extends StatelessWidget {
                     ),
                   ),
                 Padding(
-                  padding: EdgeInsets.fromLTRB(compact ? 8 : 12, 0, compact ? 8 : 12, compact ? 12 : 20),
+                  padding: EdgeInsets.fromLTRB(
+                      compact ? 8 : 12, 0, compact ? 8 : 12, compact ? 12 : 20),
                   child: AdminSidebarNavTile(
                     icon: Icons.logout_rounded,
                     label: 'Logout',

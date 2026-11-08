@@ -7,10 +7,12 @@ import '../../../models/app_notification.dart';
 import '../../../models/area_handover.dart';
 import '../../../models/follow_up_monitoring_model.dart';
 import '../../../models/follow_up_reassignment.dart';
+import '../../../models/site_partner.dart';
 import '../../../services/auth_service.dart';
 import '../../../services/follow_up_reassignment_repository.dart';
 import '../../../services/scan_record_repository.dart';
 import '../../../services/supabase_follow_up_service.dart';
+import '../../../services/site_partner_service.dart';
 import '../../../services/supabase_handover_service.dart';
 import '../../../widgets/cots_loading_skeleton.dart';
 import '../../admin/models/admin_record_table_row.dart';
@@ -27,6 +29,7 @@ class ExpertActionsController extends ChangeNotifier {
     Stream<List<FollowUpReassignment>> Function()? reassignments,
     Future<List<FollowUpSurveyModel>> Function()? visits,
     AreaHandoverApi? handovers,
+    SitePartnerApi? sitePartners,
     bool? supabase,
     DateTime Function()? clock,
     this.refreshEvery = SupabaseFollowUpService.refreshInterval,
@@ -43,6 +46,10 @@ class ExpertActionsController extends ChangeNotifier {
         _handoverApi = handovers ??
             ((supabase ?? SupabaseConfig.isConfigured)
                 ? const AreaHandoverApi()
+                : null),
+        _partnerApi = sitePartners ??
+            ((supabase ?? SupabaseConfig.isConfigured)
+                ? const SitePartnerApi()
                 : null);
 
   /// How often monthly visits and handovers are checked again. The records
@@ -54,17 +61,20 @@ class ExpertActionsController extends ChangeNotifier {
   final Stream<List<FollowUpReassignment>> Function() _reassignmentsSource;
   final Future<List<FollowUpSurveyModel>> Function()? _visitsSource;
   final AreaHandoverApi? _handoverApi;
+  final SitePartnerApi? _partnerApi;
 
   static const _recordsName = 'records';
   static const _visitsName = 'monthly visits';
   static const _reassignmentsName = 'reassignment requests';
   static const _handoversName = 'area handovers';
+  static const _partnersName = 'site partners';
 
   List<AdminRecordTableRow> _records = const [];
   List<FollowUpSurveyModel> _visits = const [];
   List<FollowUpReassignment> _reassignments = const [];
   List<AreaHandover> _handovers = const [];
   List<AreaMissedMonths> _missedMonths = const [];
+  List<SitePartnerRequest> _sitePartners = const [];
   final _waitingFor = <String>{};
   final _errors = <String, String>{};
   List<ExpertActionItem>? _items;
@@ -90,6 +100,7 @@ class ExpertActionsController extends ChangeNotifier {
         reassignments: _reassignments,
         handovers: _handovers,
         missedMonths: _missedMonths,
+        sitePartners: _sitePartners,
         now: _clock(),
       );
 
@@ -104,6 +115,7 @@ class ExpertActionsController extends ChangeNotifier {
       _reassignmentsName,
       if (_visitsSource != null) _visitsName,
       if (_handoverApi != null) _handoversName,
+      if (_partnerApi != null) _partnersName,
     ]);
     _recordsSub = _recordsSource().listen(
       (rows) {
@@ -129,7 +141,34 @@ class ExpertActionsController extends ChangeNotifier {
   /// Checks monthly visits and handovers again.
   Future<void> refresh() async {
     if (!_started || _disposed) return;
-    await Future.wait([_loadVisits(), _loadHandovers()]);
+    await Future.wait([_loadVisits(), _loadHandovers(), _loadPartners()]);
+  }
+
+  Future<void> _loadPartners() async {
+    final api = _partnerApi;
+    if (api == null) return;
+    try {
+      _sitePartners = await api.requests();
+      _answered(_partnersName);
+    } catch (error) {
+      _failed(_partnersName, error);
+    }
+  }
+
+  /// Stage 10: the Expert approves or declines a site partner candidate.
+  /// Returns an error message, or null when it worked.
+  Future<String?> decideSitePartner(String requestId,
+      {required bool approve}) async {
+    final api = _partnerApi;
+    if (api == null) return 'Site partners need the Supabase version.';
+    try {
+      await api.decide(requestId, approve: approve);
+      return null;
+    } catch (error) {
+      return AuthService.messageFor(error);
+    } finally {
+      await _loadPartners();
+    }
   }
 
   Future<void> _loadVisits() async {
@@ -214,6 +253,43 @@ class ExpertNotificationsScreen extends StatefulWidget {
 
 class _ExpertNotificationsScreenState extends State<ExpertNotificationsScreen> {
   bool _showAll = false;
+  bool _deciding = false;
+
+  Future<void> _decidePartner(ExpertActionItem item,
+      {required bool approve}) async {
+    final name = item.detail.split(' · ').first;
+    final ok = await showDialog<bool>(
+          context: context,
+          builder: (dialogContext) => AlertDialog(
+            title: Text(approve ? 'Approve $name?' : 'Decline $name?'),
+            content: Text(approve
+                ? '$name becomes the site partner. Any other candidates for '
+                    'this site are closed ("Place already filled"). A site '
+                    'partner cannot be removed later.'
+                : '$name will be told. The place stays open.'),
+            actions: [
+              TextButton(
+                  onPressed: () => Navigator.pop(dialogContext, false),
+                  child: const Text('Back')),
+              FilledButton(
+                  onPressed: () => Navigator.pop(dialogContext, true),
+                  child: Text(approve ? 'Approve' : 'Decline')),
+            ],
+          ),
+        ) ??
+        false;
+    if (!ok || !mounted) return;
+    setState(() => _deciding = true);
+    final error =
+        await widget.actions.decideSitePartner(item.id, approve: approve);
+    if (!mounted) return;
+    setState(() => _deciding = false);
+    ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+        content: Text(error ??
+            (approve
+                ? '$name is now the site partner.'
+                : '$name was not approved.'))));
+  }
 
   @override
   void initState() {
@@ -264,7 +340,8 @@ class _ExpertNotificationsScreenState extends State<ExpertNotificationsScreen> {
                     onSelected: (_) => setState(() => _showAll = false),
                   ),
                   ChoiceChip(
-                    label: const Text(ExpertNotificationsScreen.allNoticesLabel),
+                    label:
+                        const Text(ExpertNotificationsScreen.allNoticesLabel),
                     selected: _showAll,
                     onSelected: (_) => setState(() => _showAll = true),
                   ),
@@ -297,6 +374,11 @@ class _ExpertNotificationsScreenState extends State<ExpertNotificationsScreen> {
         for (final error in actions.errors)
           Card(
             color: AdminColors.cardWhite,
+            elevation: 0,
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(12),
+              side: const BorderSide(color: Color(0xFFE2E8F0)),
+            ),
             child: ListTile(
               leading: const Icon(Icons.cloud_off_rounded,
                   color: AdminColors.statRed),
@@ -316,6 +398,11 @@ class _ExpertNotificationsScreenState extends State<ExpertNotificationsScreen> {
         for (final item in items)
           Card(
             color: AdminColors.cardWhite,
+            elevation: 0,
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(12),
+              side: const BorderSide(color: Color(0xFFE2E8F0)),
+            ),
             child: ListTile(
               leading: Icon(_icon(item.kind), color: _color(item.kind)),
               title: Text(item.title,
@@ -325,15 +412,31 @@ class _ExpertNotificationsScreenState extends State<ExpertNotificationsScreen> {
                 children: [
                   Text(item.detail),
                   const SizedBox(height: 4),
-                  Text('Open ${item.place.label}',
-                      style: const TextStyle(
-                          fontSize: 12,
-                          fontWeight: FontWeight.w700,
-                          color: AdminColors.statBlue)),
+                  if (item.decidedHere)
+                    Wrap(spacing: 8, children: [
+                      TextButton(
+                          onPressed: _deciding
+                              ? null
+                              : () => _decidePartner(item, approve: false),
+                          child: const Text('Decline')),
+                      FilledButton(
+                          onPressed: _deciding
+                              ? null
+                              : () => _decidePartner(item, approve: true),
+                          child: const Text('Approve')),
+                    ])
+                  else
+                    Text('Open ${item.place.label}',
+                        style: const TextStyle(
+                            fontSize: 12,
+                            fontWeight: FontWeight.w700,
+                            color: AdminColors.statBlue)),
                 ],
               ),
-              trailing: const Icon(Icons.chevron_right_rounded),
-              onTap: widget.onOpen == null
+              trailing: item.decidedHere
+                  ? null
+                  : const Icon(Icons.chevron_right_rounded),
+              onTap: widget.onOpen == null || item.decidedHere
                   ? null
                   : () => widget.onOpen!(item.place),
             ),
@@ -349,6 +452,7 @@ class _ExpertNotificationsScreenState extends State<ExpertNotificationsScreen> {
         ExpertActionKind.reassignment => Icons.swap_horiz_rounded,
         ExpertActionKind.handover => Icons.swap_horiz_rounded,
         ExpertActionKind.missedMonths => Icons.event_busy_outlined,
+        ExpertActionKind.sitePartner => Icons.group_add_outlined,
       };
 
   static Color _color(ExpertActionKind kind) => switch (kind) {
@@ -360,5 +464,6 @@ class _ExpertNotificationsScreenState extends State<ExpertNotificationsScreen> {
         ExpertActionKind.handover =>
           AdminColors.statPurple,
         ExpertActionKind.missedMonths => AdminColors.statRed,
+        ExpertActionKind.sitePartner => AdminColors.statGreen,
       };
 }

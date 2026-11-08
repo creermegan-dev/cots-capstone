@@ -86,7 +86,7 @@ abstract final class SupabaseRecordService {
         .maybeSingle();
     if (area == null) {
       throw StateError(
-        'Monitoring area ${assignment.barangay.id} is not configured in Supabase.',
+        'Site ${assignment.barangay.displayName} is not configured in Supabase.',
       );
     }
 
@@ -333,8 +333,9 @@ abstract final class SupabaseRecordService {
         if (decisions[i] != PerCotsAdminDecision.pending)
           {
             'item_id': itemIds[i],
-            'decision':
-                decisions[i] == PerCotsAdminDecision.confirmed ? 'approve' : 'reject',
+            'decision': decisions[i] == PerCotsAdminDecision.confirmed
+                ? 'approve'
+                : 'reject',
           },
     ];
   }
@@ -625,6 +626,8 @@ abstract final class SupabaseRecordService {
       notes: row['notes']?.toString() ?? '',
       submittedAt: DateTime.tryParse(row['submitted_at']?.toString() ?? ''),
       monitoringAreaId: code,
+      encounterId: row['encounter_id']?.toString() ?? '',
+      serverStatus: row['status']?.toString() ?? '',
       municipality: area['municipality']?.toString() ?? '',
       barangay: area['barangay']?.toString() ?? '',
       dateTaken: DateTime.tryParse(row['captured_at']?.toString() ?? ''),
@@ -635,9 +638,8 @@ abstract final class SupabaseRecordService {
       imageHeight: (row['source_height'] as num?)?.round() ?? 0,
       adminConfirmed: review.confirmed,
       adminRejected: review.rejected,
-      adminReviewedBy: review.reviewerId.isEmpty
-          ? ''
-          : names[review.reviewerId] ?? 'Expert',
+      adminReviewedBy:
+          review.reviewerId.isEmpty ? '' : names[review.reviewerId] ?? 'Expert',
       adminReviewedAt: review.reviewedAt,
       adminCotsDecisions: review.itemDecisions,
       zoneAssignedTo: row['zone_review_assigned_to']?.toString() ?? '',
@@ -757,7 +759,8 @@ abstract final class SupabaseRecordService {
 
   /// Creates the encounter that groups an encounter's photos, once. Each
   /// photo upload calls this; retries and later photos reuse the same row.
-  static Future<String> _ensureEncounter(String encounterKey, String uid) async {
+  static Future<String> _ensureEncounter(
+      String encounterKey, String uid) async {
     final encounterId = stableUuid('encounter', encounterKey);
     try {
       await _client.from('encounters').insert({

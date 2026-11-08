@@ -47,7 +47,7 @@ class _ExpertReassignmentsScreenState extends State<ExpertReassignmentsScreen> {
                           .contains(r.status)))
               .toList();
           return ListView(padding: const EdgeInsets.all(16), children: [
-            const Text('Reassignments',
+            const Text('Assignments & Reassignments',
                 style: TextStyle(
                     fontSize: 22,
                     fontWeight: FontWeight.w800,
@@ -70,6 +70,12 @@ class _ExpertReassignmentsScreenState extends State<ExpertReassignmentsScreen> {
                   child: Text('No requests requiring Expert attention.')),
             for (final request in requests)
               Card(
+                color: AdminColors.cardWhite,
+                elevation: 0,
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(12),
+                  side: const BorderSide(color: Color(0xFFE2E8F0)),
+                ),
                 child: Padding(
                     padding: const EdgeInsets.all(16),
                     child: Column(

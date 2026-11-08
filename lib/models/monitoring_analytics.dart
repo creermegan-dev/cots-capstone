@@ -4,6 +4,7 @@ import 'activity_type.dart';
 import 'cots_confidence_policy.dart';
 import 'record_collection.dart';
 import 'scan_record_model.dart';
+import 'submission_group.dart';
 
 /// Stage 3: honest totals. Each COTS is photographed once, so photo counts add
 /// up; totals use CONFIRMED COTS, with the rest waiting or not accepted.
@@ -75,11 +76,16 @@ class MonitoringAnalytics {
   final Map<String, int> byZone = {};
   final List<int> confidenceBands =
       List.filled(CotsVerificationBand.values.length, 0);
+
   /// [totalCots] is everything the AI detected; [accepted] (confirmed),
   /// [pending] (waiting for the Expert) and [rejected] (not accepted) add up
   /// to it. [byZone] and the trend use confirmed COTS.
   int totalCots = 0, accepted = 0, pending = 0, rejected = 0;
   int pendingRecords = 0;
+  int get submissionCount => SubmissionGroup.fromRecords(captures).length;
+  int get pendingSubmissionCount => SubmissionGroup.fromRecords(captures)
+      .where((group) => group.cotsTally.waiting > 0)
+      .length;
   double confidenceSum = 0;
   double? get averageConfidence =>
       totalCots == 0 ? null : confidenceSum / totalCots;

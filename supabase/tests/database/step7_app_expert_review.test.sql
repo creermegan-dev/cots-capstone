@@ -22,7 +22,9 @@ select public.appoint_initial_role('administrator',pg_temp.uid(1));
 select public.appoint_initial_role('expert',pg_temp.uid(2));
 select set_config('request.jwt.claim.sub',pg_temp.uid(1)::text,true);
 set local role authenticated;
+select set_config('request.jwt.claim.sub',pg_temp.uid(2)::text,true);
 select public.verify_personnel(pg_temp.uid(3),true,true);
+select set_config('request.jwt.claim.sub',pg_temp.uid(1)::text,true);
 reset role;
 
 insert into public.monitoring_areas(id,code,name,geography_version)

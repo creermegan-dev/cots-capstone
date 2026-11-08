@@ -19,9 +19,9 @@ class UserDashboardAnalytics {
         to: start.subtract(const Duration(days: 1)));
     // Stage 3: confirmed COTS, not the raw AI count.
     totalCots = data.accepted;
-    totalScans = data.captures.length;
+    totalScans = data.submissionCount;
     cotsTrendPct = _change(current.accepted, previous.accepted);
-    scansTrendPct = _change(current.captures.length, previous.captures.length);
+    scansTrendPct = _change(current.submissionCount, previous.submissionCount);
     periodLabel =
         '${DateFormat('MMM d').format(start)} – ${DateFormat('MMM d').format(end)}';
     final points = data.trend(start, end, 'Daily');

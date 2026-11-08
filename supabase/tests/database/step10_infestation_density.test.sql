@@ -20,7 +20,8 @@ select is(cots_private.density_per_ha(12, 2500), 48.00, '12 COTS over 2,500 m² 
 select is(cots_private.density_per_ha(120, 10000), 120.00, '120 COTS over 1 ha is 120 COTS/ha');
 select is(cots_private.density_per_ha(5, null), null, 'No surveyed area, no density');
 select is(cots_private.density_level(14.99), 'Low', 'Below 15 is Low');
-select is(cots_private.density_level(15), 'Moderate', 'Exactly 15 is Moderate');
+select is(cots_private.density_level(15), 'Low', 'Exactly 15 is Low (user rule 2026-11-05)');
+select is(cots_private.density_level(15.01), 'Moderate', 'Above 15 is Moderate');
 select is(cots_private.density_level(100), 'Moderate', 'Exactly 100 is Moderate');
 select is(cots_private.density_level(100.01), 'High', 'Above 100 is High');
 select is(cots_private.density_level(0), 'Low', 'Zero COTS is Low');
@@ -32,7 +33,9 @@ select public.appoint_initial_role('administrator',pg_temp.uid(1));
 select public.appoint_initial_role('expert',pg_temp.uid(2));
 select pg_temp.act(1);
 set local role authenticated;
+select set_config('request.jwt.claim.sub',pg_temp.uid(2)::text,true);
 select public.verify_personnel(pg_temp.uid(3),true,true);
+select set_config('request.jwt.claim.sub',pg_temp.uid(1)::text,true);
 reset role;
 insert into public.monitoring_areas(id,code,name,geography_version)
 values(pg_temp.uid(10),'DENSITY-TEST','Density Reef','test-only');

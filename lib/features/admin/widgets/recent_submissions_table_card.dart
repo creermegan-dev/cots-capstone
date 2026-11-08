@@ -19,7 +19,7 @@ class RecentSubmissionsTableCard extends StatefulWidget {
     AdminDataTableColumn('#', 44, headerAlign: TextAlign.center),
     AdminDataTableColumn('Date and Time', 196),
     AdminDataTableColumn('Diver/User', 180),
-    AdminDataTableColumn('Reef Zone', 100, headerAlign: TextAlign.center),
+    AdminDataTableColumn('Site', 100, headerAlign: TextAlign.center),
     AdminDataTableColumn('COTS Detected', 100, headerAlign: TextAlign.right),
     AdminDataTableColumn('Validation Status', 140,
         headerAlign: TextAlign.center),

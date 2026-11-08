@@ -63,14 +63,14 @@ class _ExpertAssessmentsScreenState extends State<ExpertAssessmentsScreen> {
           widget.confirm ?? SupabaseFollowUpService.confirmAssessment;
       await confirm(surveyId: visit.id, level: level, reason: reason);
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Level saved: $level.')));
+      ScaffoldMessenger.of(context)
+          .showSnackBar(SnackBar(content: Text('Level saved: $level.')));
       _refresh();
     } catch (error) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-          content:
-              Text('Could not save the level: ${AuthService.messageFor(error)}')));
+          content: Text(
+              'Could not save the level: ${AuthService.messageFor(error)}')));
     } finally {
       if (mounted) setState(() => _savingId = null);
     }
@@ -129,7 +129,8 @@ class _ExpertAssessmentsScreenState extends State<ExpertAssessmentsScreen> {
                 final visits = snapshot.data!;
                 if (visits.isEmpty) {
                   return const Center(
-                      child: Text('No completed visits are waiting for an assessment.'));
+                      child: Text(
+                          'No completed visits are waiting for an assessment.'));
                 }
                 return ListView.separated(
                   itemCount: visits.length,
@@ -140,6 +141,11 @@ class _ExpertAssessmentsScreenState extends State<ExpertAssessmentsScreen> {
                     final busy = _savingId == visit.id;
                     return Card(
                       color: AdminColors.cardWhite,
+                      elevation: 0,
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(12),
+                        side: const BorderSide(color: Color(0xFFE2E8F0)),
+                      ),
                       child: Padding(
                         padding: const EdgeInsets.all(16),
                         child: Column(
@@ -154,8 +160,7 @@ class _ExpertAssessmentsScreenState extends State<ExpertAssessmentsScreen> {
                             if (visit.earlyVisitNote != null)
                               EarlyVisitFlag(note: visit.earlyVisitNote!),
                             const SizedBox(height: 8),
-                            Text(
-                                '${followUpCountSummary(visit)}\n'
+                            Text('${followUpCountSummary(visit)}\n'
                                 'Surveyed area: ${visit.surveyedAreaSquareMeters == null ? 'Not recorded' : '${visit.surveyedAreaSquareMeters!.toStringAsFixed(2)} m²'}\n'
                                 'Density: ${CotsDensity.describe(visit.densityPerHectare, calculated)}'),
                             if (calculated != null)
@@ -243,8 +248,9 @@ class _ChooseLevelDialogState extends State<_ChooseLevelDialog> {
                     ? Icons.radio_button_checked
                     : Icons.radio_button_unchecked),
                 title: Text(CotsDensity.outbreakLabel(level)),
-                subtitle:
-                    level == widget.calculated ? const Text('Calculated') : null,
+                subtitle: level == widget.calculated
+                    ? const Text('Calculated')
+                    : null,
                 onTap: () => setState(() {
                   _level = level;
                   _error = null;

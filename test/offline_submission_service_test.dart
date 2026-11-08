@@ -1,4 +1,5 @@
 import 'dart:io';
+import 'dart:async';
 import 'dart:typed_data';
 
 import 'package:cots_monitor/models/activity_type.dart';
@@ -22,6 +23,38 @@ void main() {
     }
   });
 
+  test('background sync cannot delete a photo while Submit saves progress',
+      () async {
+    final started = Completer<void>();
+    final release = Completer<void>();
+    var uploads = 0;
+    final service = OfflineSubmissionService(
+      directoryProvider: () async => temporaryDirectory,
+      enableAutomaticSync: false,
+      recordUploader: (task, image) async {
+        uploads++;
+        if (uploads == 1) {
+          started.complete();
+          await release.future;
+          // Reproduce the evidence progress write that failed on the phone.
+          await File('${image.parent.path}/metadata.json')
+              .writeAsString('{"progress":"linked"}', flush: true);
+        }
+      },
+    );
+    await service.initialize();
+    final foreground = _submit(service, id: 'batch-photo-1', uid: 'diver-a');
+    await started.future;
+    await service.syncPending();
+    final uploadsDuringForeground = uploads;
+    release.complete();
+    final result = await foreground;
+    expect(result.isPending, isFalse);
+    expect(uploadsDuringForeground, 1);
+    expect(service.pendingCount, 0);
+    service.dispose();
+  });
+
   test('offline submission survives restart and uploads later', () async {
     var online = false;
     var uploads = 0;
@@ -41,8 +74,8 @@ void main() {
 
     expect(result.isPending, isTrue);
     expect(first.pendingCount, 1);
+    expect(first.pendingSubmissions.single.name, 'cots.jpg');
 
-    online = true;
     final restarted = OfflineSubmissionService(
       directoryProvider: () async => temporaryDirectory,
       recordUploader: uploader,
@@ -50,9 +83,12 @@ void main() {
     );
     await restarted.initialize();
     await restarted.setActiveUser('diver-a');
+    expect(restarted.pendingSubmissions.single.id, 'record-1');
+    online = true;
     await restarted.syncPending();
 
     expect(restarted.pendingCount, 0);
+    expect(restarted.pendingSubmissions, isEmpty);
     expect(uploads, greaterThanOrEqualTo(2));
   });
 
@@ -75,6 +111,7 @@ void main() {
     await service.syncPending();
     expect(successfulUploads, 0);
     expect(service.pendingCount, 0);
+    expect(service.pendingSubmissions, isEmpty);
 
     await service.setActiveUser('diver-a');
     await service.syncPending();

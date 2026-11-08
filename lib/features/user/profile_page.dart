@@ -2,7 +2,6 @@ import 'package:cots_monitor/widgets/app_back_icon_button.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
-import '../../core/user_shell_theme.dart';
 import '../../models/user_model.dart';
 import '../../providers/auth_provider.dart';
 import '../../services/auth_service.dart';
@@ -52,6 +51,7 @@ class ProfilePage extends StatelessWidget {
       backgroundColor: kGray,
       extendBody: true,
       appBar: AppBar(
+        automaticallyImplyLeading: false,
         backgroundColor: Colors.white,
         elevation: 0,
         scrolledUnderElevation: 0,
@@ -65,12 +65,6 @@ class ProfilePage extends StatelessWidget {
             color: kNavy,
           ),
         ),
-        actions: [
-          IconButton(
-            icon: const Icon(Icons.settings_outlined, color: kNavy),
-            onPressed: () {},
-          ),
-        ],
       ),
       floatingActionButton: userShellScanFab(context),
       floatingActionButtonLocation: FloatingActionButtonLocation.centerDocked,
@@ -413,9 +407,8 @@ class _PersonalInformationPageState extends State<PersonalInformationPage> {
         email: _email.text.trim(),
         phone: _phone.text.trim(),
         organization: _organization ?? '—',
-        assignedArea: _assignedArea.text.trim().isEmpty
-            ? '—'
-            : _assignedArea.text.trim(),
+        assignedArea:
+            _assignedArea.text.trim().isEmpty ? '—' : _assignedArea.text.trim(),
       ),
     );
 

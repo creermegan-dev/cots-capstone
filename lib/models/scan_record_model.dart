@@ -8,6 +8,7 @@ import 'cots_confidence_policy.dart';
 import 'cots_detection_result.dart';
 import 'follow_up_monitoring_model.dart';
 import 'record_collection.dart';
+import 'submission_identity.dart';
 import 'removal_record_model.dart';
 import 'zone_review.dart';
 import 'cots_tally.dart';
@@ -88,6 +89,9 @@ class ScanRecordModel {
   final FollowUpSurveyModel? followUpSurvey;
   final FollowUpSurveyStatus? followUpStatus;
   final CaptureModel? sourceCapture;
+
+  String get encounterId => sourceCapture?.encounterId ?? '';
+  String get monitoringAreaId => sourceCapture?.monitoringAreaId ?? '';
 
   /// Where the location and the time came from (see PhotoSource).
   final String locationSource;
@@ -360,6 +364,16 @@ class ScanRecordModel {
       cotsTally: cotsTally,
       locationSource: locationSource,
       timeSource: timeSource,
+      submissionId: recordCollection == RecordCollection.captures &&
+              sourceCapture?.followUpSurveyId.isNotEmpty != true
+          ? SubmissionIdentity.forBatch(uid, encounterId, monitoringAreaId)
+          : '',
+      encounterId: encounterId,
+      siteId: monitoringAreaId,
+      submittedAt: submittedAt,
+      capturedAt: dateTaken,
+      serverStatus: sourceCapture?.serverStatus ?? '',
+      followUpSurveyId: sourceCapture?.followUpSurveyId ?? '',
     );
   }
 

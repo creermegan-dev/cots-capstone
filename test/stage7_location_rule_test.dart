@@ -25,10 +25,10 @@ void main() {
         PhotoLocationProblem.none);
   });
 
-  test('phone GPS stands in only for photos taken within the last hour', () {
-    expect(check(taken: now.subtract(const Duration(minutes: 59))),
+  test('phone GPS stands in only for photos taken within the last 2 hours', () {
+    expect(check(taken: now.subtract(const Duration(minutes: 119))),
         PhotoLocationProblem.none);
-    expect(check(taken: now.subtract(const Duration(minutes: 61))),
+    expect(check(taken: now.subtract(const Duration(minutes: 121))),
         PhotoLocationProblem.tooOld);
     expect(check(taken: null), PhotoLocationProblem.tooOld);
     expect(check(taken: now.add(const Duration(minutes: 5))),
@@ -63,7 +63,7 @@ void main() {
 
   test('messages are plain and say what to do', () {
     expect(PhotoLocationRule.message(PhotoLocationProblem.tooOld),
-        contains('over an hour ago'));
+        contains('over 2 hours ago'));
     expect(PhotoLocationRule.message(PhotoLocationProblem.noLocation),
         contains('Try again'));
     expect(PhotoLocationRule.message(PhotoLocationProblem.none), isEmpty);

@@ -25,9 +25,10 @@ select throws_ok('update public.setup_state set completed_at=null','23514',null,
 select throws_ok('delete from public.profiles where id=pg_temp.uid(1)','23503',null,'Privileged identity is protected by foreign keys');
 select set_config('request.jwt.claim.sub',pg_temp.uid(1)::text,true);
 set local role authenticated;
-select lives_ok('select public.verify_personnel(pg_temp.uid(3),true,true)','Administrator verifies Diver A');
-select lives_ok('select public.verify_personnel(pg_temp.uid(4),true,true)','Administrator verifies Diver B');
-select lives_ok('select public.verify_personnel(pg_temp.uid(5),true,true)','Administrator verifies Diver C');
+select set_config('request.jwt.claim.sub',pg_temp.uid(2)::text,true);
+select lives_ok('select public.verify_personnel(pg_temp.uid(3),true,true)','Expert verifies Diver A');
+select lives_ok('select public.verify_personnel(pg_temp.uid(4),true,true)','Expert verifies Diver B');
+select lives_ok('select public.verify_personnel(pg_temp.uid(5),true,true)','Expert verifies Diver C');
 select throws_ok('select public.verify_personnel(pg_temp.uid(2),true,true)',null,null,'Personnel verification cannot modify Expert');
 reset role;
 insert into public.monitoring_areas(id,code,name,geography_version)

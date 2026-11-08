@@ -24,7 +24,8 @@ class AdminDeskTopBar extends StatelessWidget {
         mainAxisSize: MainAxisSize.min,
         children: [
           Padding(
-            padding: EdgeInsets.fromLTRB(tight ? 14 : 20, 10, tight ? 14 : 20, 10),
+            padding:
+                EdgeInsets.fromLTRB(tight ? 14 : 20, 10, tight ? 14 : 20, 10),
             child: Align(
               alignment: Alignment.centerLeft,
               child: Text(
@@ -39,7 +40,10 @@ class AdminDeskTopBar extends StatelessWidget {
               ),
             ),
           ),
-          Divider(height: 1, thickness: 1, color: AdminColors.muted.withValues(alpha: 0.12)),
+          Divider(
+              height: 1,
+              thickness: 1,
+              color: AdminColors.muted.withValues(alpha: 0.12)),
         ],
       ),
     );

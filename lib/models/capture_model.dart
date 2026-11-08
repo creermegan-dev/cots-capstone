@@ -22,6 +22,8 @@ class CaptureModel {
     required this.notes,
     required this.submittedAt,
     this.monitoringAreaId = '',
+    this.encounterId = '',
+    this.serverStatus = '',
     this.followUpSurveyId = '',
     this.sourceCollection = RecordCollection.captures,
     this.municipality = '',
@@ -58,6 +60,12 @@ class CaptureModel {
   final String notes;
   final DateTime? submittedAt;
   final String monitoringAreaId;
+
+  /// Original upload batch, retained separately from the individual photo ID.
+  final String encounterId;
+
+  /// Supabase evidence lifecycle; empty for legacy Firebase records.
+  final String serverStatus;
   final String followUpSurveyId;
   final String sourceCollection;
   final String municipality;
@@ -116,6 +124,7 @@ class CaptureModel {
       notes: data['notes'] as String? ?? '',
       submittedAt: _asDateTime(data['submitted_at']),
       monitoringAreaId: data['monitoring_area_id'] as String? ?? '',
+      encounterId: data['encounter_id'] as String? ?? '',
       followUpSurveyId: data['follow_up_survey_id'] as String? ?? '',
       municipality: data['municipality'] as String? ?? '',
       barangay: data['barangay'] as String? ?? '',
@@ -168,6 +177,7 @@ class CaptureModel {
       notes: _readString(fields, 'notes'),
       submittedAt: _readTimestamp(fields, 'submitted_at'),
       monitoringAreaId: _readString(fields, 'monitoring_area_id'),
+      encounterId: _readString(fields, 'encounter_id'),
       followUpSurveyId: _readString(fields, 'follow_up_survey_id'),
       municipality: _readString(fields, 'municipality'),
       barangay: _readString(fields, 'barangay'),

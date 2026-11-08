@@ -1,18 +1,27 @@
+import 'dart:async';
 import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
 import 'package:flutter_map/flutter_map.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:latlong2/latlong.dart';
+import 'package:provider/provider.dart';
 
+import '../../core/supabase_config.dart';
 import '../../core/user_shell_theme.dart';
-import '../../models/cots_zone.dart';
 import '../../models/davao_gulf_geography.dart';
-import '../../widgets/marine_sector_map_label.dart';
+import '../../models/monitoring_analytics.dart';
+import '../../models/scan_record_model.dart';
+import '../../models/submission_group.dart';
+import '../../providers/auth_provider.dart';
+import '../../services/scan_record_repository.dart';
+import '../../services/site_levels_service.dart';
+import '../../services/site_partner_service.dart';
 import 'profile_page.dart';
 import 'records_page.dart';
 import 'user_bottom_nav.dart';
-import 'zone_details_page.dart';
+import 'user_record_details_page.dart';
+import 'user_submission_details_page.dart';
 
 export '../../core/user_shell_theme.dart';
 export '../../models/cots_zone.dart';
@@ -25,45 +34,184 @@ enum BasemapKind {
   satellite,
 }
 
-const String _osmTileUrl =
-    'https://tile.openstreetmap.org/{z}/{x}/{y}.png';
+const String _osmTileUrl = 'https://tile.openstreetmap.org/{z}/{x}/{y}.png';
+
 /// Esri uses `{z}/{y}/{x}` tile order (same grid as OSM; flutter_map substitutes correctly).
 const String _satelliteTileUrl =
     'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}';
 
 // ─── Map page ──────────────────────────────────────────────────────────────
 /// Vertical space reserved for the bottom legend card so zoom controls sit above it.
-const double _kLegendCardApproxHeight = 138;
+const double _kLegendCardApproxHeight = 172;
 const double _kZoomAboveLegendGap = 10;
 
+/// Stage 13: one record on the map. Red shows its confirmed COTS count;
+/// orange means COTS are still waiting for the Expert.
+Marker recordDotMarker(ScanRecordModel record, {VoidCallback? onTap}) {
+  final submissionId = record.toAdminTableRow(1).submissionId;
+  final tally = record.cotsTally;
+  final waiting = tally.waiting > 0;
+  final color = waiting ? const Color(0xFFF59E0B) : const Color(0xFFDC2626);
+  final label = waiting ? '${tally.waiting}' : '${tally.confirmed}';
+  return Marker(
+    point: LatLng(record.latitude!, record.longitude!),
+    width: 30,
+    height: 30,
+    alignment: Alignment.center,
+    child: GestureDetector(
+      onTap: onTap,
+      child: Tooltip(
+        message:
+            '${submissionId.isEmpty ? '' : '$submissionId · '}${record.displayRecordId}\n${record.zone}: ${tally.confirmed} confirmed COTS'
+            '${waiting ? ' · ${tally.waiting} waiting' : ''}',
+        child: Container(
+          alignment: Alignment.center,
+          decoration: BoxDecoration(
+            color: color,
+            shape: BoxShape.circle,
+            border: Border.all(color: Colors.white, width: 2),
+            boxShadow: const [
+              BoxShadow(color: Color(0x40000000), blurRadius: 4),
+            ],
+          ),
+          child: Text(label,
+              style: const TextStyle(
+                  color: Colors.white,
+                  fontSize: 11,
+                  fontWeight: FontWeight.w800)),
+        ),
+      ),
+    ),
+  );
+}
+
+/// Records that can be drawn: one per photo record, with a valid location.
+List<ScanRecordModel> mappableRecords(List<ScanRecordModel> records) => [
+      for (final r in MonitoringAnalytics.fromRecords(records).captures)
+        if (r.latitude != null &&
+            r.longitude != null &&
+            r.latitude!.isFinite &&
+            r.longitude!.isFinite &&
+            r.latitude!.abs() <= 90 &&
+            r.longitude!.abs() <= 180)
+          r,
+    ];
+
 class CotsMapPage extends StatefulWidget {
-  const CotsMapPage({super.key});
+  const CotsMapPage({
+    super.key,
+    this.embedded = false,
+    this.recordMarkers = const [],
+    this.initialCenter = DavaoGulfGeography.sitesCenter,
+    this.initialZoom = DavaoGulfGeography.sitesZoom,
+    this.showMyLocation = true,
+    this.enableSiteZoom = true,
+    this.siteLevels,
+    this.ownRecords,
+    this.mySites,
+  });
+
+  /// Reuses the site map inside admin chrome without diver navigation.
+  final bool embedded;
+  final List<Marker> recordMarkers;
+  final LatLng initialCenter;
+  final double initialZoom;
+  final bool showMyLocation;
+
+  /// Disabled by the read-only photo overview to preserve its camera behavior.
+  final bool enableSiteZoom;
+
+  /// Stage 13 data sources (tests replace them). When null, the Supabase
+  /// version loads them; the Firebase rollback shows the sites without levels.
+  final Future<List<SiteLevel>> Function()? siteLevels;
+
+  /// The signed-in Diver's own records (dots). The admin map passes its
+  /// dots through [recordMarkers] instead.
+  final Stream<List<ScanRecordModel>>? ownRecords;
+
+  /// Codes of the sites where the signed-in Diver is a main Diver.
+  final Future<Set<String>> Function()? mySites;
 
   @override
   State<CotsMapPage> createState() => _CotsMapPageState();
 }
 
+/// Map page (Stages 9 and 13): the dive sites in Samal coloured by their
+/// latest Expert-confirmed level (grey = no data yet), the Diver's own sites
+/// drawn stronger, and one dot per record.
 class _CotsMapPageState extends State<CotsMapPage> {
   final MapController _mapController = MapController();
   MapViewMode _viewMode = MapViewMode.zones;
   BasemapKind _basemap = BasemapKind.standard;
   bool _showInfoBanner = true;
-  double _mapZoom = 8.3;
-  String? _selectedZoneCode;
-  /// Set after a successful My Location fix; shown as a red dot on the map.
+
+  /// Set after a successful My Location fix; shown as a blue dot on the map.
   LatLng? _userLocation;
 
-  static const _overviewZoomCutoff = 9.8;
-  static const _gulfOverview = LatLng(7.05, 125.62);
+  Map<String, SiteLevel> _levels = const {};
+  Set<String> _mySites = const {};
+  List<ScanRecordModel> _records = const [];
+  StreamSubscription<List<ScanRecordModel>>? _recordsSub;
+  bool _loadStarted = false;
 
-  bool get _isDrilledIn => _selectedZoneCode != null;
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    if (_loadStarted) return;
+    _loadStarted = true;
+    _loadMapData();
+  }
 
-  bool get _marineSectorView =>
-      _isDrilledIn && (_selectedMunicipality?.marineSectorLayout ?? false);
+  @override
+  void dispose() {
+    _recordsSub?.cancel();
+    super.dispose();
+  }
 
-  GulfCoastalMunicipality? get _selectedMunicipality {
-    if (_selectedZoneCode == null) return null;
-    return DavaoGulfGeography.municipalityByZoneCode(_selectedZoneCode!);
+  String? get _signedInUid {
+    try {
+      return context.read<AuthProvider>().userModel?.uid;
+    } catch (_) {
+      return null; // No sign-in around this map (tests, previews).
+    }
+  }
+
+  Future<void> _loadMapData() async {
+    final supabase = SupabaseConfig.isConfigured;
+    final levelsSource =
+        widget.siteLevels ?? (supabase ? const SiteLevelsApi().levels : null);
+    final uid = widget.embedded ? null : _signedInUid;
+    final recordsStream = widget.ownRecords ??
+        (!widget.embedded && uid != null
+            ? ScanRecordRepository.watchForUser(uid)
+            : null);
+    final mySitesSource = widget.mySites ??
+        (!widget.embedded && uid != null && supabase
+            ? () async => {
+                  for (final t in await const SitePartnerApi().teams())
+                    if (t.mainDiverUid == uid || t.partnerUid == uid)
+                      t.areaCode,
+                }
+            : null);
+    _recordsSub = recordsStream?.listen((records) {
+      if (mounted) setState(() => _records = mappableRecords(records));
+    }, onError: (_) {});
+    if (levelsSource != null) {
+      try {
+        final levels = await levelsSource();
+        if (mounted) {
+          setState(() => _levels = {for (final l in levels) l.areaCode: l});
+        }
+      } catch (_) {
+        // The sites still show, in grey ("No data yet").
+      }
+    }
+    if (mySitesSource != null) {
+      try {
+        final mine = await mySitesSource();
+        if (mounted) setState(() => _mySites = mine);
+      } catch (_) {}
+    }
   }
 
   void _toggleBasemap() {
@@ -77,7 +225,7 @@ class _CotsMapPageState extends State<CotsMapPage> {
   String get _modePillLabel {
     switch (_viewMode) {
       case MapViewMode.zones:
-        return 'Map View: Zones';
+        return 'Map View: Sites';
       case MapViewMode.heatmap:
         return 'Map View: Heatmap';
       case MapViewMode.density:
@@ -88,224 +236,136 @@ class _CotsMapPageState extends State<CotsMapPage> {
   String get _infoBannerText {
     switch (_viewMode) {
       case MapViewMode.zones:
-        if (_isDrilledIn) {
-          final m = _selectedMunicipality;
-          return '${m?.zoneLabel ?? 'Zone'} · ${m?.name ?? ''} — zoom in to see the parts.';
-        }
-        return 'Davao Gulf zones A–V — tap a zone to view its areas.';
+        return 'Sites are coloured by their latest Expert-confirmed level. '
+            'Dots are records: red = confirmed COTS, orange = waiting.';
       case MapViewMode.heatmap:
-        return 'Heatmap shows COTS density intensity by barangay.';
+        return 'Heatmap of the records: brighter where more COTS were recorded.';
       case MapViewMode.density:
-        return 'Density values (COTS/ha) by coastal barangay.';
+        return 'Density (COTS/ha) of each site from its latest assessed visit.';
     }
   }
 
+  static const _noDataColor = Color(0xFF9CA3AF);
+
+  static Color levelColor(String? level) => switch (level) {
+        'Low' => kLow,
+        'Moderate' => kModerate,
+        'High' => kHigh,
+        _ => _noDataColor,
+      };
+
+  /// Every site on the map, in order (Site 1, Site 2, Site 3).
+  List<GulfMonitoringArea> get _sites => [
+        for (final zone in DavaoGulfGeography.municipalities) ...zone.areas,
+      ];
+
+  /// Heatmap from real records: soft circles, stronger with more COTS.
   List<CircleMarker> _buildHeatmapCircles() {
-    const radii = <double>[4200, 2200, 900];
-    const opacities = <double>[0.10, 0.22, 0.42];
     final out = <CircleMarker>[];
-    for (final zone in kSampleZones) {
-      final c = outbreakColor(zone.level);
-      for (var i = 0; i < radii.length; i++) {
-        out.add(
-          CircleMarker(
-            point: zone.position,
-            radius: radii[i],
-            useRadiusInMeter: true,
-            color: c.withValues(alpha: opacities[i]),
-            borderStrokeWidth: 0,
-            borderColor: Colors.transparent,
-          ),
-        );
+    for (final r in _records) {
+      final count = r.cotsTally.confirmed + r.cotsTally.waiting;
+      if (count <= 0) continue;
+      final strength = (count / 10).clamp(0.15, 1.0);
+      final color = count >= 10
+          ? kHigh
+          : count >= 4
+              ? kModerate
+              : kLow;
+      for (final (radius, alpha) in const [
+        (260.0, 0.12),
+        (140.0, 0.22),
+        (60.0, 0.40)
+      ]) {
+        out.add(CircleMarker(
+          point: LatLng(r.latitude!, r.longitude!),
+          radius: radius,
+          useRadiusInMeter: true,
+          color: color.withValues(alpha: alpha * strength + 0.04),
+          borderStrokeWidth: 0,
+          borderColor: Colors.transparent,
+        ));
       }
     }
     return out;
   }
 
-  List<CircleMarker> _buildDensityCircles() {
-    return kSampleZones
-        .map(
-          (zone) => CircleMarker(
-            point: zone.position,
-            radius: 2800,
-            useRadiusInMeter: true,
-            color: outbreakColor(zone.level).withValues(alpha: 0.14),
-            borderStrokeWidth: 2,
-            borderColor: outbreakColor(zone.level),
-          ),
-        )
-        .toList();
-  }
-
-  void _drillIntoZone(GulfCoastalMunicipality municipality) {
-    final barangays = municipality.barangays;
-    if (barangays.isEmpty) return;
-
-    if (municipality.marineSectorLayout) {
-      _mapController.move(
-        DavaoGulfGeography.panaboMarineSectorCenter,
-        DavaoGulfGeography.panaboMarineSectorZoom,
-      );
-      setState(() {
-        _selectedZoneCode = municipality.zoneCode;
-        _mapZoom = DavaoGulfGeography.panaboMarineSectorZoom;
-      });
-      return;
-    }
-
-    var minLat = 90.0, maxLat = -90.0, minLng = 180.0, maxLng = -180.0;
-    for (final a in municipality.areas) {
-      for (final p in [for (final r in a.rings) ...r]) {
-        minLat = math.min(minLat, p.latitude);
-        maxLat = math.max(maxLat, p.latitude);
-        minLng = math.min(minLng, p.longitude);
-        maxLng = math.max(maxLng, p.longitude);
-      }
-    }
-    final center = LatLng((minLat + maxLat) / 2, (minLng + maxLng) / 2);
-    final spanDeg = math.max(maxLat - minLat, maxLng - minLng);
-    final drillZoom = spanDeg > 0.6
-        ? 10.2
-        : spanDeg > 0.25
-            ? 11.2
-            : 12.4;
-    _mapController.move(center, drillZoom);
-    setState(() {
-      _selectedZoneCode = municipality.zoneCode;
-      _mapZoom = drillZoom;
-    });
-  }
-
-  void _backToZones() {
-    _mapController.move(_gulfOverview, 8.3);
-    setState(() {
-      _selectedZoneCode = null;
-      _mapZoom = 8.3;
-    });
-  }
-
-  List<Polygon> _municipalityPolygons({bool faint = false}) {
-    final municipalities = _isDrilledIn
-        ? [_selectedMunicipality!]
-        : DavaoGulfGeography.municipalities;
-    return municipalities.map((m) {
-      return Polygon(
-        points: m.boundary,
-        color: faint
-            ? kNavy.withValues(alpha: 0.03)
-            : kTeal.withValues(alpha: 0.08),
-        borderColor: faint
-            ? kNavy.withValues(alpha: 0.35)
-            : kNavy.withValues(alpha: 0.75),
-        borderStrokeWidth: faint ? 1 : 2,
-      );
-    }).toList();
-  }
-
-  /// Zoom from which the 1.1 ha parts are drawn as faint lines.
-  static const _partLinesZoom = 14.5;
-
-  /// Zoom from which part codes (e.g. V3-12) are shown.
-  static const _partCodesZoom = 16.5;
-
-  static const _areaPalette = <Color>[
-    Color(0xFF1D9E75),
-    Color(0xFF378ADD),
-    Color(0xFFD4537E),
-    Color(0xFFBA7517),
-    Color(0xFF7F77DD),
-    Color(0xFF639922),
-    Color(0xFFD85A30),
-    Color(0xFF185FA5),
-  ];
-
-  bool _visible(LatLng p) {
-    try {
-      return _mapController.camera.visibleBounds.contains(p);
-    } catch (_) {
-      return true;
-    }
-  }
-
-  /// Areas in soft colours; parts as faint lines when zoomed in (Stage 6 map style).
-  List<Polygon> _barangayPolygons() {
-    final zone = _isDrilledIn ? _selectedMunicipality : null;
-    if (zone == null) return const [];
+  /// The sites, coloured by level; the signed-in Diver's own sites stronger.
+  List<Polygon> _sitePolygons({bool faint = false}) {
     final out = <Polygon>[];
-    for (var i = 0; i < zone.areas.length; i++) {
-      final area = zone.areas[i];
-      final accent = _areaPalette[i % _areaPalette.length];
-      for (final ring in area.rings) {
+    for (final site in _sites) {
+      final color = levelColor(_levels[site.code]?.level);
+      final mine = _mySites.contains(site.code);
+      for (final ring in site.rings) {
         out.add(Polygon(
           points: ring,
-          color: accent.withValues(alpha: 0.28),
-          borderColor: accent.withValues(alpha: 0.85),
-          borderStrokeWidth: 1.6,
-        ));
-      }
-    }
-    if (_mapZoom >= _partLinesZoom) {
-      for (final part in zone.barangays) {
-        if (!_visible(part.centroid)) continue;
-        out.add(Polygon(
-          points: part.polygon,
-          color: Colors.transparent,
-          borderColor: Colors.white.withValues(alpha: 0.55),
-          borderStrokeWidth: 0.6,
+          color: color.withValues(alpha: faint ? 0.10 : 0.30),
+          borderColor:
+              mine ? kNavy : color.withValues(alpha: faint ? 0.5 : 0.95),
+          borderStrokeWidth: mine ? 3.5 : (faint ? 1 : 1.8),
         ));
       }
     }
     return out;
   }
 
-  /// Area codes on the drilled-in zone; part codes only when zoomed in close.
-  List<Marker> _areaLabelMarkers() {
-    final zone = _isDrilledIn ? _selectedMunicipality : null;
-    if (zone == null) return const [];
+  String _levelLine(SiteLevel? level) {
+    if (level?.level == null) return 'No data yet';
+    final density = level!.densityPerHa;
+    return density == null
+        ? level.level!
+        : '${level.level} · ${density.toStringAsFixed(density < 10 ? 1 : 0)} COTS/ha';
+  }
+
+  /// A badge on each site: its name and level (and "Your site").
+  List<Marker> _siteLabelMarkers() {
     final out = <Marker>[];
-    if (_mapZoom >= _partCodesZoom) {
-      for (final part in zone.barangays) {
-        if (out.length >= 300) break;
-        if (!_visible(part.centroid)) continue;
-        out.add(Marker(
-          point: part.centroid,
-          width: 64,
-          height: 18,
-          alignment: Alignment.center,
-          child: GestureDetector(
-            onTap: () => _showPartInfo(part),
-            child: Text(
-              part.id,
-              textAlign: TextAlign.center,
-              style: TextStyle(
-                fontSize: 10,
-                fontWeight: FontWeight.w700,
-                color: kNavy.withValues(alpha: 0.8),
-              ),
-            ),
-          ),
-        ));
-      }
-      return out;
-    }
-    for (final area in zone.areas) {
+    for (final site in _sites) {
+      if (site.parts.isEmpty) continue;
+      final part = site.parts.first;
+      final level = _levels[site.code];
+      final color = levelColor(level?.level);
+      final mine = _mySites.contains(site.code);
       out.add(Marker(
-        point: area.centroid,
-        width: 56,
-        height: 22,
+        point: part.centroid,
+        width: 170,
+        height: mine ? 56 : 42,
         alignment: Alignment.center,
-        child: Container(
-          alignment: Alignment.center,
-          decoration: BoxDecoration(
-            color: Colors.white.withValues(alpha: 0.85),
-            borderRadius: BorderRadius.circular(6),
-          ),
-          child: Text(
-            area.code,
-            style: const TextStyle(
-              fontSize: 11,
-              fontWeight: FontWeight.w800,
-              color: kNavy,
+        child: GestureDetector(
+          onTap: () => _selectSite(site),
+          child: Container(
+            alignment: Alignment.center,
+            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+            decoration: BoxDecoration(
+              color: Color.lerp(Colors.white, color, 0.18)!,
+              borderRadius: BorderRadius.circular(8),
+              border: Border.all(
+                  color: mine ? kNavy : color.withValues(alpha: 0.9),
+                  width: mine ? 2 : 1),
+            ),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text(site.displayName,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(
+                        fontSize: 11,
+                        fontWeight: FontWeight.w800,
+                        color: kNavy)),
+                Text(_levelLine(level),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(
+                        fontSize: 10,
+                        fontWeight: FontWeight.w600,
+                        color: kNavy)),
+                if (mine)
+                  const Text('Your site',
+                      style: TextStyle(
+                          fontSize: 10,
+                          fontWeight: FontWeight.w800,
+                          color: kNavy)),
+              ],
             ),
           ),
         ),
@@ -314,129 +374,107 @@ class _CotsMapPageState extends State<CotsMapPage> {
     return out;
   }
 
-  void _showPartInfo(GulfCoastalBarangay part) {
+  void _selectSite(GulfMonitoringArea area) {
+    final points = area.rings.expand((ring) => ring).toList();
+    if (widget.enableSiteZoom && points.length > 1) {
+      final size = _mapController.camera.nonRotatedSize;
+      final horizontal = math.min(48.0, size.x * 0.12);
+      final bottom = _kLegendCardApproxHeight +
+          96 +
+          (widget.embedded ? 0 : MediaQuery.of(context).padding.bottom + 80);
+      _mapController.fitCamera(CameraFit.bounds(
+        bounds: LatLngBounds.fromPoints(points),
+        padding: EdgeInsets.fromLTRB(horizontal, math.min(160.0, size.y * 0.25),
+            horizontal, math.min(bottom, size.y * 0.4)),
+        maxZoom: 17,
+      ));
+    }
+    if (area.parts.isNotEmpty) _showSiteInfo(area.parts.first);
+  }
+
+  void _onMapTap(TapPosition _, LatLng point) {
+    final part = DavaoGulfGeography.partAt(point.latitude, point.longitude,
+        allowanceMeters: 0);
+    if (part == null) return;
+    for (final site in _sites) {
+      if (site.code == part.areaCode) {
+        _selectSite(site);
+        return;
+      }
+    }
+  }
+
+  void _showSiteInfo(GulfCoastalBarangay site) {
+    final level = _levels[site.id];
     final messenger = ScaffoldMessenger.maybeOf(context);
     messenger?.hideCurrentSnackBar();
     messenger?.showSnackBar(SnackBar(
       content: Text(
-        '${part.displayName} · ${part.municipalityName}\n'
-        'Reef: ${part.reefHectares.toStringAsFixed(2)} ha',
+        '${site.displayName} · Barangay ${site.name}, Samal\n'
+        'Size: ${site.reefHectares.toStringAsFixed(0)} ha · '
+        'Level: ${_levelLine(level)}\n'
+        'Records: ${level?.records ?? 0} · Confirmed COTS: ${level?.confirmedCots ?? 0}',
       ),
     ));
   }
 
-  List<Marker> _marineSectorLabelMarkers() {
-    if (!_marineSectorView || _selectedMunicipality == null) return const [];
-    return _selectedMunicipality!.barangays
-        .map(
-          (b) => Marker(
-            point: b.centroid,
-            width: 72,
-            height: 40,
-            alignment: Alignment.center,
-            child: MarineSectorMapLabel(siteCode: b.siteCode),
-          ),
-        )
-        .toList();
+  void _openRecord(ScanRecordModel record) {
+    final groups = SubmissionGroup.fromRecords(_records);
+    for (final group in groups) {
+      if (group.hasBatch &&
+          group.records.any((photo) =>
+              photo.id == record.id &&
+              photo.uid == record.uid &&
+              photo.recordCollection == record.recordCollection)) {
+        Navigator.of(context).push<void>(MaterialPageRoute(
+            builder: (_) => UserSubmissionDetailsPage(initialGroup: group)));
+        return;
+      }
+    }
+    Navigator.of(context).push<void>(MaterialPageRoute<void>(
+      builder: (_) => UserRecordDetailsPage(record: record),
+    ));
   }
 
   List<Widget> _mapLayers() {
-    final useSatellite = _basemap == BasemapKind.satellite || _marineSectorView;
+    final useSatellite = _basemap == BasemapKind.satellite;
     final layers = <Widget>[
       TileLayer(
         key: ValueKey(useSatellite),
-        urlTemplate: useSatellite
-            ? _satelliteTileUrl
-            : _osmTileUrl,
+        urlTemplate: useSatellite ? _satelliteTileUrl : _osmTileUrl,
         userAgentPackageName: 'com.example.cots_monitor',
       ),
     ];
 
-    if (_viewMode == MapViewMode.heatmap && !_marineSectorView) {
+    layers.add(PolygonLayer(
+        polygons: _sitePolygons(faint: _viewMode == MapViewMode.heatmap)));
+    if (_viewMode == MapViewMode.heatmap) {
       layers.add(CircleLayer(circles: _buildHeatmapCircles()));
-    } else if (_viewMode == MapViewMode.density && !_marineSectorView) {
-      layers.add(CircleLayer(circles: _buildDensityCircles()));
-    }
-
-    if (_viewMode == MapViewMode.zones) {
-      if (_isDrilledIn) {
-        if (!_marineSectorView) {
-          layers.add(PolygonLayer(polygons: _municipalityPolygons(faint: true)));
-        }
-        layers.add(PolygonLayer(polygons: _barangayPolygons()));
-      } else {
-        layers.add(PolygonLayer(polygons: _municipalityPolygons()));
-      }
     }
 
     final markers = <Marker>[];
-    if (_viewMode == MapViewMode.zones) {
-      if (_marineSectorView) {
-        markers.addAll(_marineSectorLabelMarkers());
-      } else if (_isDrilledIn) {
-        markers.addAll(_areaLabelMarkers());
-      } else {
-        for (final m in DavaoGulfGeography.municipalities) {
-          markers.add(_municipalityMarker(m));
-        }
-      }
-    } else if (!_marineSectorView) {
-      for (final zone in kSampleZones) {
-        markers.add(_siteMarker(zone, showDensity: _viewMode == MapViewMode.density));
+    markers.addAll(_siteLabelMarkers());
+    if (_viewMode != MapViewMode.heatmap) {
+      for (final r in _records) {
+        markers.add(recordDotMarker(r, onTap: () => _openRecord(r)));
       }
     }
     if (_userLocation != null) {
       markers.add(_myLocationDotMarker(_userLocation!));
     }
+    markers.addAll(widget.recordMarkers);
     layers.add(MarkerLayer(markers: markers));
+    if (widget.embedded) {
+      layers.add(RichAttributionWidget(attributions: [
+        TextSourceAttribution(
+            useSatellite ? 'Esri World Imagery' : 'OpenStreetMap contributors'),
+      ]));
+    }
 
     return layers;
   }
 
-  Marker _municipalityMarker(GulfCoastalMunicipality municipality) {
-    return Marker(
-      point: municipality.centroid,
-      width: 128,
-      height: 64,
-      alignment: Alignment.center,
-      child: GestureDetector(
-        onTap: () => _drillIntoZone(municipality),
-        child: Container(
-          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
-          decoration: BoxDecoration(
-            color: kNavy.withValues(alpha: 0.92),
-            borderRadius: BorderRadius.circular(10),
-            border: Border.all(color: kTeal.withValues(alpha: 0.85)),
-          ),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Text(
-                municipality.zoneLabel,
-                style: const TextStyle(
-                  color: kTeal,
-                  fontWeight: FontWeight.w800,
-                  fontSize: 12,
-                ),
-              ),
-              Text(
-                municipality.name,
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: const TextStyle(
-                  color: Colors.white,
-                  fontWeight: FontWeight.w600,
-                  fontSize: 10,
-                ),
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-
-  /// Red dot at GPS position after My Location is used.
+  /// Blue dot at the GPS position after My Location is used (red/orange are records).
   Marker _myLocationDotMarker(LatLng point) {
     return Marker(
       point: point,
@@ -447,7 +485,7 @@ class _CotsMapPageState extends State<CotsMapPage> {
         width: 18,
         height: 18,
         decoration: BoxDecoration(
-          color: Colors.red,
+          color: const Color(0xFF2563EB),
           shape: BoxShape.circle,
           border: Border.all(color: Colors.white, width: 2.5),
           boxShadow: const [
@@ -457,65 +495,6 @@ class _CotsMapPageState extends State<CotsMapPage> {
               spreadRadius: 0,
             ),
           ],
-        ),
-      ),
-    );
-  }
-
-  Marker _siteMarker(CotsZone zone, {bool showDensity = false}) {
-    final c = outbreakColor(zone.level);
-
-    return Marker(
-      point: zone.position,
-      width: 48,
-      height: 48,
-      alignment: Alignment.center,
-      child: GestureDetector(
-        onTap: () {
-          Navigator.of(context).push<void>(
-            MaterialPageRoute<void>(
-              builder: (context) => ZoneDetailsPage(zone: zone),
-            ),
-          );
-        },
-        child: Tooltip(
-          message: zone.name,
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Container(
-                width: 40,
-                height: 40,
-                alignment: Alignment.center,
-                decoration: BoxDecoration(
-                  color: kNavy.withValues(alpha: 0.9),
-                  shape: BoxShape.circle,
-                  border: Border.all(color: c, width: 1.6),
-                ),
-                child: Text(
-                  zone.label,
-                  style: TextStyle(
-                    color: c,
-                    fontWeight: FontWeight.w800,
-                    fontSize: 9,
-                    letterSpacing: -0.2,
-                  ),
-                ),
-              ),
-              if (showDensity)
-                Padding(
-                  padding: const EdgeInsets.only(top: 2),
-                  child: Text(
-                    '${zone.density.toStringAsFixed(0)}',
-                    style: TextStyle(
-                      color: c,
-                      fontWeight: FontWeight.w700,
-                      fontSize: 8,
-                    ),
-                  ),
-                ),
-            ],
-          ),
         ),
       ),
     );
@@ -548,20 +527,22 @@ class _CotsMapPageState extends State<CotsMapPage> {
               _layerTile(
                 mode: MapViewMode.zones,
                 icon: Icons.map_outlined,
-                label: 'Zones',
+                label: 'Sites',
               ),
-              const SizedBox(height: 10),
-              _layerTile(
-                mode: MapViewMode.heatmap,
-                icon: Icons.blur_on_outlined,
-                label: 'Heatmap',
-              ),
-              const SizedBox(height: 10),
-              _layerTile(
-                mode: MapViewMode.density,
-                icon: Icons.bubble_chart_outlined,
-                label: 'Density Layer',
-              ),
+              if (!widget.embedded) ...[
+                const SizedBox(height: 10),
+                _layerTile(
+                  mode: MapViewMode.heatmap,
+                  icon: Icons.blur_on_outlined,
+                  label: 'Heatmap',
+                ),
+                const SizedBox(height: 10),
+                _layerTile(
+                  mode: MapViewMode.density,
+                  icon: Icons.bubble_chart_outlined,
+                  label: 'Density Layer',
+                ),
+              ],
             ],
           ),
         );
@@ -676,8 +657,10 @@ class _CotsMapPageState extends State<CotsMapPage> {
 
   @override
   Widget build(BuildContext context) {
-    final bottomOverlay =
-        MediaQuery.of(context).padding.bottom + 80;
+    if (widget.embedded) {
+      return _mapContent(zoomBottom: 16, bottomOverlay: 0);
+    }
+    final bottomOverlay = MediaQuery.of(context).padding.bottom + 80;
     final zoomBottom =
         bottomOverlay + _kLegendCardApproxHeight + _kZoomAboveLegendGap;
 
@@ -717,7 +700,7 @@ class _CotsMapPageState extends State<CotsMapPage> {
                         ),
                         SizedBox(height: 6),
                         Text(
-                          'Monitor Davao Gulf coastal cities and barangays.',
+                          'Monitor the 3 dive sites in Samal.',
                           style: TextStyle(
                             fontSize: 13,
                             color: Color(0xFF6B7280),
@@ -732,7 +715,8 @@ class _CotsMapPageState extends State<CotsMapPage> {
                         ? 'Satellite basemap'
                         : 'Standard map basemap',
                     padding: EdgeInsets.zero,
-                    constraints: const BoxConstraints(minWidth: 40, minHeight: 40),
+                    constraints:
+                        const BoxConstraints(minWidth: 40, minHeight: 40),
                     icon: Icon(
                       _basemap == BasemapKind.standard
                           ? Icons.satellite_alt
@@ -745,47 +729,45 @@ class _CotsMapPageState extends State<CotsMapPage> {
               ),
             ),
             Expanded(
-              child: Stack(
-                children: [
-                  Positioned.fill(
-                    child: ClipRRect(
-                      borderRadius: const BorderRadius.vertical(
-                        top: Radius.circular(16),
-                      ),
-                      child: FlutterMap(
-                        mapController: _mapController,
-                        options: MapOptions(
-                          initialCenter: const LatLng(7.05, 125.62),
-                          initialZoom: 8.3,
-                          interactionOptions: const InteractionOptions(
-                            flags: InteractiveFlag.all,
-                          ),
-                          onMapEvent: (event) {
-                            final zoom = event.camera.zoom;
-                            if ((zoom - _mapZoom).abs() > 0.05) {
-                              setState(() {
-                                _mapZoom = zoom;
-                                if (_isDrilledIn && zoom < _overviewZoomCutoff) {
-                                  _selectedZoneCode = null;
-                                }
-                              });
-                            }
-                          },
-                        ),
-                        children: _mapLayers(),
-                      ),
-                    ),
-                  ),
-                  ..._mapOverlayChildren(
-                    zoomBottom: zoomBottom,
-                    bottomOverlay: bottomOverlay,
-                  ),
-                ],
-              ),
+              child: _mapContent(
+                  zoomBottom: zoomBottom, bottomOverlay: bottomOverlay),
             ),
           ],
         ),
       ),
+    );
+  }
+
+  Widget _mapContent({
+    required double zoomBottom,
+    required double bottomOverlay,
+  }) {
+    return Stack(
+      children: [
+        Positioned.fill(
+          child: ClipRRect(
+            borderRadius: const BorderRadius.vertical(
+              top: Radius.circular(16),
+            ),
+            child: FlutterMap(
+              mapController: _mapController,
+              options: MapOptions(
+                initialCenter: widget.initialCenter,
+                initialZoom: widget.initialZoom,
+                onTap: widget.enableSiteZoom ? _onMapTap : null,
+                interactionOptions: const InteractionOptions(
+                  flags: InteractiveFlag.all,
+                ),
+              ),
+              children: _mapLayers(),
+            ),
+          ),
+        ),
+        ..._mapOverlayChildren(
+          zoomBottom: zoomBottom,
+          bottomOverlay: bottomOverlay,
+        ),
+      ],
     );
   }
 
@@ -794,189 +776,125 @@ class _CotsMapPageState extends State<CotsMapPage> {
     required double bottomOverlay,
   }) {
     return [
-          Positioned(
-            top: 12,
-            left: 12,
-            right: 82,
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Material(
-                  color: Colors.transparent,
-                  child: InkWell(
-                    onTap: _openLayerPicker,
-                    borderRadius: BorderRadius.circular(10),
-                    child: Ink(
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 12,
-                        vertical: 10,
-                      ),
-                      decoration: BoxDecoration(
-                        color: Colors.white,
-                        borderRadius: BorderRadius.circular(10),
-                        boxShadow: const [
-                          BoxShadow(
-                            color: Color(0x14000000),
-                            blurRadius: 8,
-                            offset: Offset(0, 2),
-                          ),
-                        ],
-                      ),
-                      child: Row(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          const Icon(Icons.layers_outlined,
-                              color: kNavy, size: 20),
-                          const SizedBox(width: 8),
-                          Flexible(
-                            child: Text(
-                              _modePillLabel,
-                              style: const TextStyle(
-                                color: kNavy,
-                                fontWeight: FontWeight.w600,
-                                fontSize: 12,
-                              ),
-                              overflow: TextOverflow.ellipsis,
-                            ),
-                          ),
-                          const Icon(Icons.keyboard_arrow_down,
-                              color: kNavy, size: 20),
-                        ],
-                      ),
-                    ),
+      Positioned(
+        top: 12,
+        left: 12,
+        right: 82,
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Material(
+              color: Colors.transparent,
+              child: InkWell(
+                onTap: _openLayerPicker,
+                borderRadius: BorderRadius.circular(10),
+                child: Ink(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 12,
+                    vertical: 10,
                   ),
-                ),
-                if (_isDrilledIn && _viewMode == MapViewMode.zones) ...[
-                  const SizedBox(height: 8),
-                  Material(
+                  decoration: BoxDecoration(
                     color: Colors.white,
                     borderRadius: BorderRadius.circular(10),
-                    elevation: 2,
-                    child: InkWell(
-                      borderRadius: BorderRadius.circular(10),
-                      onTap: _backToZones,
-                      child: const Padding(
-                        padding: EdgeInsets.symmetric(horizontal: 10, vertical: 8),
-                        child: Row(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            Icon(Icons.arrow_back_rounded, color: kNavy, size: 18),
-                            SizedBox(width: 6),
-                            Text(
-                              'All zones',
-                              style: TextStyle(
-                                color: kNavy,
-                                fontWeight: FontWeight.w700,
-                                fontSize: 12,
-                              ),
-                            ),
-                          ],
-                        ),
+                    boxShadow: const [
+                      BoxShadow(
+                        color: Color(0x14000000),
+                        blurRadius: 8,
+                        offset: Offset(0, 2),
                       ),
-                    ),
+                    ],
                   ),
-                ],
-                if (_showInfoBanner) ...[
-                  const SizedBox(height: 8),
-                  Container(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 10,
-                      vertical: 8,
-                    ),
-                    decoration: BoxDecoration(
-                      color: Colors.white,
-                      borderRadius: BorderRadius.circular(10),
-                      boxShadow: const [
-                        BoxShadow(
-                          color: Color(0x14000000),
-                          blurRadius: 8,
-                          offset: Offset(0, 2),
-                        ),
-                      ],
-                    ),
-                    child: Row(
-                      children: [
-                        const Icon(Icons.info_outline,
-                            color: kNavy, size: 18),
-                        const SizedBox(width: 8),
-                        Expanded(
-                          child: Text(
-                            _infoBannerText,
-                            style: const TextStyle(
-                              color: kNavy,
-                              fontSize: 12,
-                              fontWeight: FontWeight.w500,
-                            ),
-                          ),
-                        ),
-                        IconButton(
-                          padding: EdgeInsets.zero,
-                          constraints: const BoxConstraints(
-                            minWidth: 28,
-                            minHeight: 28,
-                          ),
-                          icon: const Icon(Icons.close, size: 18),
-                          onPressed: () =>
-                              setState(() => _showInfoBanner = false),
-                        ),
-                      ],
-                    ),
-                  ),
-                ],
-              ],
-            ),
-          ),
-          Positioned(
-            top: 12,
-            right: 12,
-            child: _mapToolsStrip(),
-          ),
-          if (_isDrilledIn && _viewMode == MapViewMode.zones)
-            Positioned(
-              top: 12,
-              right: 84,
-              child: Material(
-                color: Colors.white,
-                elevation: 2,
-                borderRadius: BorderRadius.circular(10),
-                child: InkWell(
-                  borderRadius: BorderRadius.circular(10),
-                  onTap: _backToZones,
-                  child: const Padding(
-                    padding: EdgeInsets.symmetric(horizontal: 10, vertical: 8),
-                    child: Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Icon(Icons.arrow_back_rounded, size: 18, color: kNavy),
-                        SizedBox(width: 4),
-                        Text(
-                          'Zones',
-                          style: TextStyle(
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      const Icon(Icons.layers_outlined, color: kNavy, size: 20),
+                      const SizedBox(width: 8),
+                      Flexible(
+                        child: Text(
+                          _modePillLabel,
+                          style: const TextStyle(
                             color: kNavy,
-                            fontWeight: FontWeight.w700,
+                            fontWeight: FontWeight.w600,
                             fontSize: 12,
                           ),
+                          overflow: TextOverflow.ellipsis,
                         ),
-                      ],
-                    ),
+                      ),
+                      const Icon(Icons.keyboard_arrow_down,
+                          color: kNavy, size: 20),
+                    ],
                   ),
                 ),
               ),
             ),
-          Positioned(
-            bottom: zoomBottom,
-            right: 12,
-            child: _zoomStrip(),
+            if (_showInfoBanner) ...[
+              const SizedBox(height: 8),
+              Container(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 10,
+                  vertical: 8,
+                ),
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  borderRadius: BorderRadius.circular(10),
+                  boxShadow: const [
+                    BoxShadow(
+                      color: Color(0x14000000),
+                      blurRadius: 8,
+                      offset: Offset(0, 2),
+                    ),
+                  ],
+                ),
+                child: Row(
+                  children: [
+                    const Icon(Icons.info_outline, color: kNavy, size: 18),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: Text(
+                        _infoBannerText,
+                        style: const TextStyle(
+                          color: kNavy,
+                          fontSize: 12,
+                          fontWeight: FontWeight.w500,
+                        ),
+                      ),
+                    ),
+                    IconButton(
+                      padding: EdgeInsets.zero,
+                      constraints: const BoxConstraints(
+                        minWidth: 28,
+                        minHeight: 28,
+                      ),
+                      icon: const Icon(Icons.close, size: 18),
+                      onPressed: () => setState(() => _showInfoBanner = false),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ],
+        ),
+      ),
+      Positioned(
+        top: 12,
+        right: 12,
+        child: _mapToolsStrip(),
+      ),
+      Positioned(
+        bottom: zoomBottom,
+        right: 12,
+        child: _zoomStrip(),
+      ),
+      if (!widget.embedded)
+        Positioned(
+          left: 0,
+          right: 0,
+          bottom: bottomOverlay,
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 12),
+            child: _legendCard(),
           ),
-          Positioned(
-            left: 0,
-            right: 0,
-            bottom: bottomOverlay,
-            child: Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 12),
-              child: _legendCard(),
-            ),
-          ),
+        ),
     ];
   }
 
@@ -999,12 +917,14 @@ class _CotsMapPageState extends State<CotsMapPage> {
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
-          _mapToolTile(
-            icon: Icons.my_location_outlined,
-            label: 'My\nLocation',
-            onTap: _goToMyLocation,
-          ),
-          Divider(height: 1, thickness: 1, color: Colors.grey.shade200),
+          if (widget.showMyLocation)
+            _mapToolTile(
+              icon: Icons.my_location_outlined,
+              label: 'My\nLocation',
+              onTap: _goToMyLocation,
+            ),
+          if (widget.showMyLocation)
+            Divider(height: 1, thickness: 1, color: Colors.grey.shade200),
           _mapToolTile(
             icon: _basemap == BasemapKind.standard
                 ? Icons.satellite_alt
@@ -1112,64 +1032,37 @@ class _CotsMapPageState extends State<CotsMapPage> {
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           const Text(
-            'COTS DENSITY (COTS/ha)',
+            'SITE LEVEL (COTS/ha)',
             style: TextStyle(
               fontWeight: FontWeight.w700,
               fontSize: 13,
               color: kNavy,
             ),
           ),
-          const SizedBox(height: 10),
-          if (_viewMode == MapViewMode.heatmap) ...[
-            Container(
-              height: 12,
-              decoration: BoxDecoration(
-                borderRadius: BorderRadius.circular(6),
-                gradient: const LinearGradient(
-                  colors: [
-                    Color(0xFF1E88E5),
-                    kLow,
-                    kModerate,
-                    kHigh,
-                  ],
-                ),
-              ),
-            ),
-            const SizedBox(height: 8),
-            const Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                Text('Low',
-                    style: TextStyle(fontSize: 11, color: Color(0xFF6B7280))),
-                Text('Moderate',
-                    style: TextStyle(fontSize: 11, color: Color(0xFF6B7280))),
-                Text('High',
-                    style: TextStyle(fontSize: 11, color: Color(0xFF6B7280))),
-              ],
-            ),
-          ] else ...[
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-              children: [
-                _legendDotPair('Low', kLow),
-                _legendDotPair('Moderate', kModerate),
-                _legendDotPair('High', kHigh),
-              ],
-            ),
-            const SizedBox(height: 6),
-            const Text(
-              '0 – 5          5 – 15          > 15',
-              textAlign: TextAlign.center,
-              style: TextStyle(
-                fontSize: 11,
-                fontWeight: FontWeight.w600,
-                color: kNavy,
-              ),
-            ),
-          ],
           const SizedBox(height: 8),
+          Wrap(
+            alignment: WrapAlignment.spaceEvenly,
+            spacing: 10,
+            runSpacing: 4,
+            children: [
+              _legendDotPair('Low ≤15', kLow),
+              _legendDotPair('Moderate 16–100', kModerate),
+              _legendDotPair('High >100', kHigh),
+              _legendDotPair('No data yet', _noDataColor),
+            ],
+          ),
+          const SizedBox(height: 6),
+          Wrap(
+            alignment: WrapAlignment.spaceEvenly,
+            spacing: 10,
+            children: [
+              _legendDotPair('Record: confirmed COTS', const Color(0xFFDC2626)),
+              _legendDotPair('Waiting for Expert', const Color(0xFFF59E0B)),
+            ],
+          ),
+          const SizedBox(height: 6),
           const Text(
-            'Tap on a zone to view more details.',
+            'Tap a site or a record to view more details.',
             style: TextStyle(fontSize: 11, color: Color(0xFF6B7280)),
           ),
         ],

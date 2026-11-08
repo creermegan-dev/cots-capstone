@@ -9,6 +9,20 @@ import '../providers/auth_provider.dart';
 import '../services/follow_up_reassignment_repository.dart';
 import 'cots_loading_skeleton.dart';
 
+/// Stage 11: whether a Diver may record this month's visit. The month's
+/// responsible Diver may; when that is one of the site's main Divers (no
+/// replacement this month), both main Divers may. Same rule as the database
+/// (cots_private.month_ok).
+bool followUpMayRecord({
+  required String responsibleUid,
+  required Set<String> mainDiverUids,
+  required String userUid,
+}) =>
+    userUid.isNotEmpty &&
+    (userUid == responsibleUid ||
+        (mainDiverUids.contains(responsibleUid) &&
+            mainDiverUids.contains(userUid)));
+
 class FollowUpAssessmentLabel extends StatefulWidget {
   const FollowUpAssessmentLabel({super.key, required this.areaId});
   final String areaId;
@@ -20,11 +34,19 @@ class FollowUpAssessmentLabel extends StatefulWidget {
 class _FollowUpAssessmentLabelState extends State<FollowUpAssessmentLabel> {
   late Future<FollowUpInfestationAssessment?> _assessment =
       FollowUpReassignmentRepository.latestAssessment(widget.areaId);
+  // Shown while a reload runs, so the line does not blink.
+  FollowUpInfestationAssessment? _shown;
+  bool _loadedOnce = false;
+
   @override
   void didUpdateWidget(covariant FollowUpAssessmentLabel oldWidget) {
     super.didUpdateWidget(oldWidget);
-    _assessment =
-        FollowUpReassignmentRepository.latestAssessment(widget.areaId);
+    // Reload only for another site; the page rebuilds often.
+    if (oldWidget.areaId != widget.areaId) {
+      _loadedOnce = false;
+      _assessment =
+          FollowUpReassignmentRepository.latestAssessment(widget.areaId);
+    }
   }
 
   @override
@@ -41,10 +63,15 @@ class _FollowUpAssessmentLabelState extends State<FollowUpAssessmentLabel> {
                       const Text('Could not load validated assessment. Retry'));
             }
             if (snapshot.connectionState != ConnectionState.done) {
-              return const CotsLoadingSkeleton(
-                  layout: CotsSkeletonLayout.section);
+              if (!_loadedOnce) {
+                return const CotsLoadingSkeleton(
+                    layout: CotsSkeletonLayout.section);
+              }
+            } else {
+              _shown = snapshot.data;
+              _loadedOnce = true;
             }
-            final assessment = snapshot.data;
+            final assessment = _shown;
             return Text(
                 assessment == null
                     ? 'Latest validated infestation level: Not available'
@@ -126,13 +153,19 @@ class _FollowUpReassignmentActionsState
         final request = matches.isEmpty ? null : matches.first;
         final responsible =
             request?.responsibleUid ?? assignment.primaryDiverUid;
-        final authorized = responsible == user.uid;
+        // Stage 11: either main Diver records the visit, unless a
+        // replacement covers this month.
+        final authorized = followUpMayRecord(
+            responsibleUid: responsible,
+            mainDiverUids: assignment.mainDiverUids,
+            userUid: user.uid);
+        final isMain = assignment.mainDiverUids.contains(user.uid);
         final canStart = authorized &&
-            (user.uid == assignment.primaryDiverUid ||
+            (isMain ||
                 (user.accountRole == 'user' &&
                     user.isActive &&
                     user.fieldPersonnelVerified));
-        final temporary = authorized && user.uid != assignment.primaryDiverUid;
+        final temporary = authorized && !isMain;
         final canRequest = authorized &&
             (request == null ||
                 ['accepted', 'cancelled'].contains(request.status));

@@ -1,9 +1,20 @@
 # Bundled COTS detectors
 
-## Active model: YOLO26s
+## Default model: YOLO11s
+
+Normal builds use `assets/models/yolov8_best.onnx` (the existing YOLO11s
+export despite its historical filename). The input pipeline, thresholds and
+model weights are unchanged. See its specifications below.
+
+The default was restored after a field-photo diagnostic: on that one supplied
+JPG, YOLO11 retained one detection at 81.35%, while YOLO26's highest score was
+14.86%, below the existing threshold. This is a single-image observation,
+not evidence that YOLO11 is better on every image.
+
+## Optional comparison model: YOLO26s
 
 `assets/models/yolo26_best.onnx` is exported from the user's trained
-`YOLO26_Results (1)/weights/best.pt`. It is now the default model.
+`YOLO26_Results (1)/weights/best.pt`. It remains available for comparison.
 
 SHA-256: `e0b0e5e934577706ad60b88fd75ade5992b8da1443b06eedd3cee6b08b874575`.
 
@@ -31,10 +42,10 @@ Fully restart/rebuild to switch models:
 flutter run -d DEVICE_ID
 ```
 
-YOLO11 remains registered and unchanged as a fallback:
+To explicitly select YOLO26 instead:
 
 ```powershell
-flutter run -d DEVICE_ID --dart-define=COTS_MODEL=yolo11
+flutter run -d DEVICE_ID --dart-define=COTS_MODEL=yolo26
 ```
 
 An unsupported `COTS_MODEL` value fails visibly. Historical records are not
@@ -42,7 +53,7 @@ reprocessed or rewritten when the model changes.
 
 Format reference: https://docs.ultralytics.com/guides/end2end-detection/
 
-## Preserved fallback: YOLO11s
+## Default export specifications: YOLO11s
 
 The registered asset remains `assets/models/yolov8_best.onnx` for compatibility.
 Its embedded metadata identifies **Ultralytics YOLO11s**, one class

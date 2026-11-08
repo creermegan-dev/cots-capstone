@@ -34,7 +34,7 @@ void main() {
       'initial_detected_count': 3,
     });
     expect(assignment.areaId, area.id);
-    expect(assignment.areaName, '${area.zoneLabel} · ${area.siteCode}');
+    expect(assignment.areaName, area.displayName);
     expect(assignment.barangay, area.name);
     expect(assignment.primaryDiverUid, 'diver-a');
     expect(assignment.primaryDiverName, 'Diver A');
@@ -164,7 +164,7 @@ void main() {
     expect(request.replacementUid, 'diver-b');
     expect(request.statusLabel, 'Awaiting Acceptance');
     expect(request.data['requested_at'], isA<DateTime>());
-    expect(request.data['area_name'], '${area.zoneLabel} · ${area.siteCode}');
+    expect(request.data['area_name'], area.displayName);
     expect(request.data['proposal_id'], 'prop-1');
     expect(request.data['participants'],
         containsAll(<String>['diver-a', 'diver-b']));

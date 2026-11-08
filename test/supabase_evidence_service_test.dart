@@ -259,6 +259,19 @@ void main() {
     );
     expect(stable, [1, 2, 3]);
   });
+
+  test('private download reports failures without returning private bytes',
+      () async {
+    Object? reported;
+    final failure = StateError('test-only failure');
+    final bytes = await PrivateEvidenceSessionGuard.download(
+      sessionKey: () => 'user-a:token-a',
+      downloader: () async => throw failure,
+      onError: (error) => reported = error,
+    );
+    expect(bytes, isNull);
+    expect(reported, same(failure));
+  });
 }
 
 class _FakeEvidenceGateway implements EvidenceGateway {

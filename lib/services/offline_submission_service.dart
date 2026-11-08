@@ -11,6 +11,12 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../core/supabase_config.dart';
 import '../models/cots_detection_result.dart';
+import '../models/activity_type.dart';
+import '../models/capture_model.dart';
+import '../models/scan_record_model.dart';
+import '../models/record_collection.dart';
+import 'supabase_record_service.dart';
+import 'zone_assignment_service.dart';
 import '../models/follow_up_monitoring_model.dart';
 import 'cots_size_estimator.dart';
 import 'follow_up_monitoring_repository.dart';
@@ -26,6 +32,104 @@ typedef OfflineRecordUploader = Future<void> Function(
 typedef OfflineSurveyUploader = Future<void> Function(
   Map<String, dynamic> task,
 );
+
+class PendingSubmissionSummary {
+  const PendingSubmissionSummary(
+      {required this.id,
+      required this.name,
+      required this.createdAt,
+      this.record});
+  final String id;
+  final String name;
+  final DateTime? createdAt;
+  final ScanRecordModel? record;
+
+  factory PendingSubmissionSummary.fromTask(
+      Map<String, dynamic> task, String directory) {
+    final id = task['id']?.toString() ?? '';
+    final name = task['image_name']?.toString() ?? 'Follow-up survey';
+    final created = DateTime.tryParse(task['created_at']?.toString() ?? '');
+    ScanRecordModel? record;
+    if (task['kind'] == 'record' && task['linked_capture_id'] == null) {
+      try {
+        final detection = Map<String, dynamic>.from(task['detection'] as Map);
+        final latitude = (task['latitude'] as num?)?.toDouble();
+        final longitude = (task['longitude'] as num?)?.toDouble();
+        final site = task['monitoring_area_id']?.toString() ??
+            ZoneAssignmentService.resolveMonitoringArea(
+                    latitude: latitude, longitude: longitude)
+                ?.barangay
+                .areaCode ??
+            '';
+        final supabase = task['version'] == 2;
+        final captureId =
+            supabase ? SupabaseRecordService.stableUuid('capture', id) : id;
+        final batch = task['encounter_id']?.toString() ?? '';
+        final capture = CaptureModel(
+          id: captureId,
+          uid: task['uid'] as String,
+          submittedBy: task['submitted_by']?.toString() ?? 'Diver',
+          imageName: name,
+          aiDetectedCount: (detection['count'] as num).round(),
+          confidence: (detection['confidence'] as num).toDouble(),
+          captureSource: CaptureSource.goProUnderwaterImage,
+          zone: site.isEmpty ? 'Unassigned' : site,
+          notes: task['notes']?.toString() ?? '',
+          submittedAt: created,
+          monitoringAreaId: site,
+          encounterId: batch.isEmpty
+              ? ''
+              : supabase
+                  ? SupabaseRecordService.stableUuid('encounter', batch)
+                  : batch,
+          followUpSurveyId: task['follow_up_survey_id']?.toString() ?? '',
+          serverStatus: 'pending',
+          latitude: latitude,
+          longitude: longitude,
+          confirmedCount: 0,
+          waitingCount: (detection['count'] as num).round(),
+          dateTaken: DateTime.tryParse(task['date_taken']?.toString() ?? ''),
+          detectionBoxes: CotsBoundingBox.listFromDynamic(detection['boxes']),
+          imageWidth: (task['image_width'] as num?)?.round() ?? 0,
+          imageHeight: (task['image_height'] as num?)?.round() ?? 0,
+          locationSource: SupabaseRecordService.gpsSourceFor(
+              hasGps: latitude != null && longitude != null,
+              gpsFromPhoto: task['gps_from_photo'] as bool?),
+          timeSource: task['time_from_photo'] == true ? 'exif' : 'device',
+        );
+        record = ScanRecordModel(
+          id: capture.id,
+          uid: capture.uid,
+          submittedBy: capture.submittedBy,
+          imageName: name,
+          imagePath: '$directory${Platform.pathSeparator}image.jpg',
+          activityType: task['activity_type']?.toString() ??
+              CotsActivityType.detectionOnly,
+          aiDetectedCount: capture.aiDetectedCount,
+          confidence: capture.confidence,
+          captureSource: capture.captureSource,
+          zone: capture.zone,
+          notes: capture.notes,
+          submittedAt: created,
+          dateTaken: capture.dateTaken,
+          latitude: latitude,
+          longitude: longitude,
+          detectionBoxes: capture.detectionBoxes,
+          imageWidth: capture.imageWidth,
+          imageHeight: capture.imageHeight,
+          recordCollection: RecordCollection.captures,
+          sourceCapture: capture,
+          locationSource: capture.locationSource,
+          timeSource: capture.timeSource,
+        );
+      } catch (_) {
+        // Keep the task visible even if an old manifest lacks photo details.
+      }
+    }
+    return PendingSubmissionSummary(
+        id: id, name: name, createdAt: created, record: record);
+  }
+}
 
 enum OfflineSubmitState {
   synchronized,
@@ -75,10 +179,15 @@ class OfflineSubmissionService extends ChangeNotifier
   Timer? _retryTimer;
   bool _initialized = false;
   bool _syncing = false;
+  // Includes tasks being written or uploaded by the foreground submission.
+  // Background retries must never upload or delete an owned directory.
+  final Set<String> _activeTasks = {};
   int _pendingCount = 0;
   String? _activeUserId;
 
   int get pendingCount => _pendingCount;
+  List<PendingSubmissionSummary> _pendingSubmissions = const [];
+  List<PendingSubmissionSummary> get pendingSubmissions => _pendingSubmissions;
   bool get isSyncing => _syncing;
 
   Future<void> initialize() async {
@@ -106,6 +215,8 @@ class OfflineSubmissionService extends ChangeNotifier
     final next = normalized == null || normalized.isEmpty ? null : normalized;
     if (_activeUserId == next) return;
     _activeUserId = next;
+    _pendingSubmissions = const [];
+    _pendingCount = 0;
     await _refreshCount();
     if (next != null) await syncPending();
   }
@@ -184,6 +295,11 @@ class OfflineSubmissionService extends ChangeNotifier
       'linked_capture_id': linkedCaptureId,
       // Groups the photos of one encounter (null for older queued tasks).
       'encounter_id': encounterId,
+      'monitoring_area_id': ZoneAssignmentService.resolveMonitoringArea(
+                  latitude: latitude, longitude: longitude)
+              ?.barangay
+              .areaCode ??
+          '',
       'is_follow_up': isFollowUp,
       'follow_up_survey_id': followUpSurveyId,
       'follow_up_survey_date': followUpSurveyDate?.toUtc().toIso8601String(),
@@ -233,6 +349,8 @@ class OfflineSubmissionService extends ChangeNotifier
       }
       await _refreshCount();
       return OfflineSubmitResult(recordId: submissionId, state: pendingState);
+    } finally {
+      _activeTasks.remove(directory.path);
     }
   }
 
@@ -280,7 +398,10 @@ class OfflineSubmissionService extends ChangeNotifier
       'notes': notes,
     };
     final directory = await _writeTask(task);
-    if (deferUpload) return true;
+    if (deferUpload) {
+      _activeTasks.remove(directory.path);
+      return true;
+    }
     try {
       await _sendSurvey(task);
       await _deleteTask(directory);
@@ -292,6 +413,8 @@ class OfflineSubmissionService extends ChangeNotifier
       }
       await _refreshCount();
       return true;
+    } finally {
+      _activeTasks.remove(directory.path);
     }
   }
 
@@ -307,6 +430,7 @@ class OfflineSubmissionService extends ChangeNotifier
           : <Directory>[];
       tasks.sort((a, b) => a.path.compareTo(b.path));
       for (final directory in tasks) {
+        if (!_activeTasks.add(directory.path)) continue;
         try {
           final metadata =
               File('${directory.path}${Platform.pathSeparator}metadata.json');
@@ -330,6 +454,8 @@ class OfflineSubmissionService extends ChangeNotifier
         } catch (error) {
           if (_pendingState(error) == OfflineSubmitState.networkPending) break;
           // Invalid tasks remain for manual retry and diagnosis.
+        } finally {
+          _activeTasks.remove(directory.path);
         }
       }
     } finally {
@@ -348,19 +474,27 @@ class OfflineSubmissionService extends ChangeNotifier
     final directory = Directory(
       '${root.path}${Platform.pathSeparator}${safeCreatedAt}_$safeId',
     );
-    await directory.create(recursive: true);
-    if (imageBytes != null) {
-      await File('${directory.path}${Platform.pathSeparator}image.jpg')
-          .writeAsBytes(imageBytes, flush: true);
+    if (!_activeTasks.add(directory.path)) {
+      throw StateError('This submission is already being saved.');
     }
-    if (evidenceBytes != null) {
-      await File('${directory.path}${Platform.pathSeparator}evidence.jpg')
-          .writeAsBytes(evidenceBytes, flush: true);
+    try {
+      await directory.create(recursive: true);
+      if (imageBytes != null) {
+        await File('${directory.path}${Platform.pathSeparator}image.jpg')
+            .writeAsBytes(imageBytes, flush: true);
+      }
+      if (evidenceBytes != null) {
+        await File('${directory.path}${Platform.pathSeparator}evidence.jpg')
+            .writeAsBytes(evidenceBytes, flush: true);
+      }
+      await File('${directory.path}${Platform.pathSeparator}metadata.json')
+          .writeAsString(jsonEncode(task), flush: true);
+      await _refreshCount();
+      return directory;
+    } catch (_) {
+      _activeTasks.remove(directory.path);
+      rethrow;
     }
-    await File('${directory.path}${Platform.pathSeparator}metadata.json')
-        .writeAsString(jsonEncode(task), flush: true);
-    await _refreshCount();
-    return directory;
   }
 
   Future<Directory> _queueRoot() async {
@@ -375,6 +509,7 @@ class OfflineSubmissionService extends ChangeNotifier
     final root = await _queueRoot();
     final activeUserId = _activeUserId;
     var count = 0;
+    final summaries = <PendingSubmissionSummary>[];
     if (activeUserId != null) {
       for (final directory in root.listSync().whereType<Directory>()) {
         try {
@@ -383,13 +518,21 @@ class OfflineSubmissionService extends ChangeNotifier
           );
           if (!metadata.existsSync()) continue;
           final task = jsonDecode(await metadata.readAsString());
-          if (task is Map && task['uid'] == activeUserId) count++;
+          if (task is Map && task['uid'] == activeUserId) {
+            count++;
+            summaries.add(PendingSubmissionSummary.fromTask(
+                Map<String, dynamic>.from(task), directory.path));
+          }
         } catch (_) {
           // A corrupt task is ignored here and retained for diagnosis.
         }
       }
     }
+    if (_activeUserId != activeUserId) return;
     _pendingCount = count;
+    summaries.sort((a, b) => (b.createdAt ?? DateTime(1970))
+        .compareTo(a.createdAt ?? DateTime(1970)));
+    _pendingSubmissions = List.unmodifiable(summaries);
     notifyListeners();
   }
 

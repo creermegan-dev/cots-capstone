@@ -79,7 +79,12 @@ class _AreaHandoverButtonState extends State<AreaHandoverButton> {
           assignment: widget.assignment, api: widget.api),
     );
     if (!mounted || sent != true) return;
-    _snack(context, 'Handover requested. The Expert will choose a new Diver.');
+    final partner = widget.assignment.partnerName;
+    _snack(
+        context,
+        partner.isNotEmpty
+            ? '$partner is now Main Diver 1 of ${widget.assignment.areaName}.'
+            : 'Handover requested. The Expert will choose a new Diver.');
     _reload();
   }
 
@@ -145,7 +150,7 @@ class _AreaHandoverButtonState extends State<AreaHandoverButton> {
           return OutlinedButton.icon(
             onPressed: _busy ? null : _ask,
             icon: const Icon(Icons.swap_horiz_rounded),
-            label: const Text('Hand over this area'),
+            label: const Text('Hand over this site'),
             style: OutlinedButton.styleFrom(
                 minimumSize: const Size.fromHeight(48)),
           );
@@ -197,7 +202,7 @@ class _HandoverRequestDialogState extends State<_HandoverRequestDialog> {
 
   @override
   Widget build(BuildContext context) => AlertDialog(
-        title: const Text('Hand over this area'),
+        title: const Text('Hand over this site'),
         scrollable: true,
         content: SizedBox(
           width: 440,
@@ -205,10 +210,14 @@ class _HandoverRequestDialogState extends State<_HandoverRequestDialog> {
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              Text(
-                  'The Expert will choose a new Diver for ${widget.assignment.areaName}. '
-                  'You stay the main Diver until the new Diver accepts. '
-                  'Your past records stay under your name.'),
+              Text(widget.assignment.partnerName.isNotEmpty
+                  // Stage 11: the site partner takes over at once.
+                  ? 'Your site partner ${widget.assignment.partnerName} becomes '
+                      'Main Diver 1 of ${widget.assignment.areaName} right away. '
+                      'The Expert is told. Your past records stay under your name.'
+                  : 'The Expert will choose a new Diver for ${widget.assignment.areaName}. '
+                      'You stay the main Diver until the new Diver accepts. '
+                      'Your past records stay under your name.'),
               const SizedBox(height: 12),
               TextField(
                 key: const ValueKey('handover-reason'),

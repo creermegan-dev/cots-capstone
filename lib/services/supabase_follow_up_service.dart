@@ -224,7 +224,7 @@ abstract final class SupabaseFollowUpService {
       ...row,
       'area_name': area == null
           ? (row['area_label']?.toString() ?? code)
-          : '${area.zoneLabel} · ${area.siteCode}',
+          : area.displayName,
       'barangay': area?.name ?? row['barangay']?.toString() ?? '',
       'municipality': municipality ?? row['municipality']?.toString() ?? '',
     };

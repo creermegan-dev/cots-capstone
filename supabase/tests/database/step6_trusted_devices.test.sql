@@ -30,7 +30,7 @@ $$;
 insert into auth.users(id,email,email_confirmed_at)
 values (pg_temp.uid(1),'device-a@example.invalid',now()),
        (pg_temp.uid(2),'device-b@example.invalid',now());
--- Fixture approval only (the real path is verify_personnel by the Administrator).
+-- Fixture approval only (the real path is verify_personnel by the Expert).
 update public.profiles set field_verified=true, verified_by=id, verified_at=now()
 where id in (pg_temp.uid(1),pg_temp.uid(2));
 

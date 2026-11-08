@@ -11,6 +11,7 @@ import '../core/supabase_config.dart';
 import '../models/pending_email_verification.dart';
 import '../models/user_model.dart';
 import '../services/auth_service.dart';
+import '../services/offline_profile_store.dart';
 import '../services/firestore_user_service.dart';
 import '../services/scan_record_repository.dart';
 import '../services/supabase_auth_service.dart';
@@ -24,6 +25,7 @@ class AuthProvider extends ChangeNotifier {
     WindowsAuthRestService? windowsAuthRestService,
     SupabaseAuthService? supabaseAuthService,
     DeviceSecretSource? deviceSecretSource,
+    OfflineProfileStore? offlineProfileStore,
     // Tests only: forces the Supabase code path without --dart-define.
     bool? useSupabaseForTesting,
   })  : _authOverride = authService,
@@ -31,6 +33,7 @@ class AuthProvider extends ChangeNotifier {
         _windowsAuth = windowsAuthRestService ?? WindowsAuthRestService(),
         _supabaseOverride = supabaseAuthService,
         _deviceSecrets = deviceSecretSource ?? const DeviceIdentity(),
+        _offlineProfiles = offlineProfileStore ?? const OfflineProfileStore(),
         _useSupabaseOverride = useSupabaseForTesting {
     if (usesSupabase) {
       _startSupabase();
@@ -47,6 +50,9 @@ class AuthProvider extends ChangeNotifier {
   final WindowsAuthRestService _windowsAuth;
   final SupabaseAuthService? _supabaseOverride;
   final DeviceSecretSource _deviceSecrets;
+  final OfflineProfileStore _offlineProfiles;
+  bool _usingOfflineProfile = false;
+  bool get usingOfflineProfile => _usingOfflineProfile;
   final bool? _useSupabaseOverride;
 
   AuthService? _auth;
@@ -137,6 +143,7 @@ class AuthProvider extends ChangeNotifier {
       unawaited(
         _applySupabaseSession(
           session,
+          allowOffline: true,
           completeConfirmedSignup: _isConfirmationSession(session),
         ),
       );
@@ -149,6 +156,7 @@ class AuthProvider extends ChangeNotifier {
       unawaited(
         _applySupabaseSession(
           initial,
+          allowOffline: true,
           completeConfirmedSignup: _isConfirmationSession(initial),
         ),
       );
@@ -164,13 +172,17 @@ class AuthProvider extends ChangeNotifier {
     supabase.Session? session, {
     bool completeConfirmedSignup = false,
     bool deviceAlreadyTrusted = false,
+    bool allowOffline = false,
   }) async {
     final generation = ++_supabaseProfileGeneration;
     _supabaseSession = session;
+    _usingOfflineProfile = false;
     _firebaseUser = null;
     _windowsSession = null;
     ScanRecordRepository.setWindowsIdToken(null);
     if (session == null) {
+      await _clearOfflineProfile();
+      if (generation != _supabaseProfileGeneration) return;
       _userModel = null;
       _loadingProfile = false;
       notifyListeners();
@@ -188,9 +200,11 @@ class AuthProvider extends ChangeNotifier {
         final trust = await _registerThisDevice();
         if (generation != _supabaseProfileGeneration) return;
         if (trust != SupabaseAuthService.deviceTrusted) {
+          await _clearOfflineProfile();
           _userModel = null;
           _supabaseSession = null;
-          _lastError = 'For your security, sign in again to verify this device.';
+          _lastError =
+              'For your security, sign in again to verify this device.';
           if (completeConfirmedSignup) {
             // An older confirmation link verified the email; finish its banner.
             SupabaseAuthCallback.markConfirmed();
@@ -224,25 +238,50 @@ class AuthProvider extends ChangeNotifier {
       final profile = await _supabaseAuthService.loadProfile(session.user);
       if (generation != _supabaseProfileGeneration) return;
       if (!profile.isActive) {
+        await _clearOfflineProfile();
         _userModel = null;
         _lastError =
             'This account has been disabled. Contact the Administrator.';
       } else {
         _userModel = profile;
+        try {
+          await _offlineProfiles.save(
+              profile, await _deviceSecrets.readOrCreate());
+        } catch (_) {
+          // A storage failure must not prevent a valid online login.
+        }
       }
-    } catch (error, stack) {
+    } catch (error) {
       if (generation != _supabaseProfileGeneration) return;
-      debugPrint(
-          'AuthProvider: failed to load Supabase profile: $error\n$stack');
-      _userModel = null;
-      _lastError =
-          'Could not load your Supabase profile. ${AuthService.messageFor(error)}';
+      final connectionFailure = OfflineProfileStore.isConnectionFailure(error);
+      UserModel? cached;
+      if (allowOffline && connectionFailure && !completeConfirmedSignup) {
+        try {
+          cached = await _offlineProfiles.restore(
+              session.user.id, await _deviceSecrets.readOrCreate());
+        } catch (_) {}
+      }
+      if (generation != _supabaseProfileGeneration) return;
+      if (!connectionFailure) await _clearOfflineProfile();
+      _userModel = cached;
+      _usingOfflineProfile = cached != null;
+      _lastError = cached != null
+          ? null
+          : connectionFailure
+              ? 'You are offline. Connect once to load and save your profile on this device, then you can reopen the app offline.'
+              : 'Your profile could not be loaded. Reconnect and retry.';
     } finally {
       if (generation == _supabaseProfileGeneration) {
         _loadingProfile = false;
         notifyListeners();
       }
     }
+  }
+
+  Future<void> _clearOfflineProfile() async {
+    try {
+      await _offlineProfiles.clear();
+    } catch (_) {}
   }
 
   Future<void> _onAuthStateChanged(User? user) async {
@@ -306,7 +345,7 @@ class AuthProvider extends ChangeNotifier {
     if (usesSupabase) {
       final session = _supabaseSession;
       if (session == null) return;
-      await _applySupabaseSession(session);
+      await _applySupabaseSession(session, allowOffline: true);
       return;
     }
     if (deferFirebaseUntilFirstUse) {
@@ -877,7 +916,8 @@ class AuthProvider extends ChangeNotifier {
     final methods = SupabaseAuthService.sessionMethods(
       _supabaseAuthService.currentSession,
     );
-    final detail = methods.isEmpty ? '' : ' (sign-in methods: ${methods.join(', ')})';
+    final detail =
+        methods.isEmpty ? '' : ' (sign-in methods: ${methods.join(', ')})';
     return 'This device could not be verified. Sign in again and enter the '
         'newest code within 10 minutes.$detail';
   }
@@ -889,6 +929,7 @@ class AuthProvider extends ChangeNotifier {
     _setBusy(true);
     try {
       if (usesSupabase) {
+        await _clearOfflineProfile();
         await _supabaseAuthService.signOut();
         _supabaseSession = null;
         _userModel = null;

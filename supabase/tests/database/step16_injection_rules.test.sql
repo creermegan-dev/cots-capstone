@@ -89,7 +89,9 @@ select public.appoint_initial_role('administrator',pg_temp.uid(1));
 select public.appoint_initial_role('expert',pg_temp.uid(2));
 select pg_temp.act(1);
 set local role authenticated;
+select set_config('request.jwt.claim.sub',pg_temp.uid(2)::text,true);
 select public.verify_personnel(pg_temp.uid(n),true,true) from generate_series(3,4) n;
+select set_config('request.jwt.claim.sub',pg_temp.uid(1)::text,true);
 reset role;
 update public.profiles set full_name = case id
   when pg_temp.uid(3) then 'Diver Alpha' when pg_temp.uid(4) then 'Diver Bravo' else full_name end;
@@ -183,7 +185,7 @@ select public.record_expert_decision(pg_temp.uid(121),null,'approve','Approved a
 reset role;
 select public.finalize_capture(pg_temp.uid(121));
 select is(pg_temp.body(121),
-  'Another Diver recorded COTS in your area Notice Reef on '
+  'Another Diver recorded COTS at your site Notice Reef on '
   || to_char((now() - interval '3 hours') at time zone 'Asia/Manila', 'FMMonth FMDD, YYYY')
   || '. The Expert approved the record. COTS were injected (Ox bile / bile salts injection) on '
   || cots_private.ph_time_label(now() - interval '3 hours') || '. Wait until '
@@ -203,7 +205,7 @@ select public.record_expert_decision(pg_temp.uid(123),null,'approve','Approved a
 reset role;
 select public.finalize_capture(pg_temp.uid(123));
 select is(pg_temp.body(123),
-  'Another Diver recorded COTS in your area Manual Reef on '
+  'Another Diver recorded COTS at your site Manual Reef on '
   || to_char((now() - interval '3 hours') at time zone 'Asia/Manila', 'FMMonth FMDD, YYYY')
   || '. The Expert approved the record.',
   'Manual removal: the Stage 2 notice is unchanged');

@@ -3,7 +3,14 @@ rem Runs the test suite, then builds the release APK only if all tests pass.
 rem Results are written to tool\last_test.txt and tool\last_build.txt.
 cd /d "%~dp0.."
 echo Running flutter test...
-call flutter test > tool\last_test.txt 2>&1
+rem Check the normal app defaults before exercising older Firebase fixtures.
+call flutter test test/supabase_config_test.dart > tool\last_test.txt 2>&1
+if errorlevel 1 (
+  echo TESTS FAILED - APK not built. > tool\last_build.txt
+  goto done
+)
+rem Older repository fixtures explicitly exercise the Firebase rollback backend.
+call flutter test --dart-define=USE_FIREBASE=true >> tool\last_test.txt 2>&1
 if errorlevel 1 (
   echo TESTS FAILED - APK not built. > tool\last_build.txt
   echo Tests failed. See tool\last_test.txt

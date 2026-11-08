@@ -1,23 +1,24 @@
 import 'dart:async';
-import 'dart:ui' as ui;
+import 'dart:io';
 
 import 'package:fl_chart/fl_chart.dart';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
+import 'package:http/http.dart' as http;
 
 import '../../core/cots_colors.dart';
 import '../../core/supabase_config.dart';
 import '../../models/activity_type.dart';
 import '../../models/intervention_assignment_model.dart';
 import '../../models/scan_record_model.dart';
+import '../../models/submission_group.dart';
 import '../../models/monitoring_analytics.dart';
 import '../../widgets/monitoring_record_map.dart';
 import '../../widgets/cots_loading_skeleton.dart';
 import '../../providers/auth_provider.dart';
 import '../../services/intervention_assignment_repository.dart';
 import '../../services/scan_record_repository.dart';
-import '../auth/auth_navigation.dart';
 import 'cots_map_page.dart';
 import 'notifications_screen.dart';
 import 'profile_page.dart';
@@ -26,10 +27,77 @@ import 'scan_detection_page.dart';
 import 'user_analytics_overview_page.dart';
 import 'user_bottom_nav.dart';
 import 'user_dashboard_analytics.dart';
+import 'widgets/diver_notification_bell.dart';
 
-class DashboardScreen extends StatelessWidget {
+class DashboardScreen extends StatefulWidget {
   const DashboardScreen({super.key, this.recordsStream});
   final Stream<List<ScanRecordModel>>? recordsStream;
+
+  @override
+  State<DashboardScreen> createState() => _DashboardScreenState();
+}
+
+class _DashboardScreenState extends State<DashboardScreen> {
+  late Stream<List<ScanRecordModel>> _recordsStream;
+  List<ScanRecordModel>? _lastRecords;
+  Timer? _retryTimer;
+
+  @override
+  void initState() {
+    super.initState();
+    _recordsStream = widget.recordsStream ?? ScanRecordRepository.watchAll();
+  }
+
+  @override
+  void didUpdateWidget(covariant DashboardScreen oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.recordsStream != widget.recordsStream) {
+      _retryTimer?.cancel();
+      _lastRecords = null;
+      _recordsStream = widget.recordsStream ?? ScanRecordRepository.watchAll();
+    }
+  }
+
+  void _retry() {
+    _retryTimer?.cancel();
+    _retryTimer = null;
+    if (!mounted) return;
+    setState(() {
+      _recordsStream = widget.recordsStream ?? ScanRecordRepository.watchAll();
+    });
+  }
+
+  @override
+  void dispose() {
+    _retryTimer?.cancel();
+    super.dispose();
+  }
+
+  Widget _loadNotice(Object error) {
+    final offline = error is SocketException ||
+        error is http.ClientException ||
+        error is TimeoutException;
+    return Card(
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          Text(offline ? 'Offline mode' : 'Dashboard temporarily unavailable',
+              style: const TextStyle(fontWeight: FontWeight.bold)),
+          const SizedBox(height: 8),
+          Text(_lastRecords == null
+              ? 'Connect to load dashboard data. You can still open Detect and save submissions on this device for synchronization.'
+              : 'Showing the last loaded dashboard data from this session. New submissions may not appear until synchronization finishes.'),
+          const SizedBox(height: 8),
+          const Text(
+              'Pending submissions remain in Records. Reconnecting will retry loading automatically.'),
+          TextButton.icon(
+              onPressed: _retry,
+              icon: const Icon(Icons.refresh),
+              label: const Text('Retry dashboard')),
+        ]),
+      ),
+    );
+  }
 
   static const _bg = Color(0xFFF4F6F9);
   static const _horizontalPad = 16.0;
@@ -56,10 +124,11 @@ class DashboardScreen extends StatelessWidget {
           body: SafeArea(
             bottom: false,
             child: StreamBuilder<List<ScanRecordModel>>(
-              stream: recordsStream ?? ScanRecordRepository.watchAll(),
+              stream: _recordsStream,
               builder: (context, snapshot) {
                 if (snapshot.connectionState == ConnectionState.waiting &&
-                    !snapshot.hasData) {
+                    !snapshot.hasData &&
+                    _lastRecords == null) {
                   return SingleChildScrollView(
                     padding: EdgeInsets.fromLTRB(_horizontalPad, 8,
                         _horizontalPad, showSidebar ? 28 : 100),
@@ -68,19 +137,24 @@ class DashboardScreen extends StatelessWidget {
                   );
                 }
                 if (snapshot.hasError) {
-                  return Center(
-                    child: Padding(
-                      padding: const EdgeInsets.all(24),
-                      child: Text(
-                        'Could not load dashboard data.\n${snapshot.error}',
-                        textAlign: TextAlign.center,
-                        style: const TextStyle(color: kMutedGray),
-                      ),
-                    ),
-                  );
+                  if (widget.recordsStream == null) {
+                    _retryTimer ??= Timer(const Duration(seconds: 15), _retry);
+                  }
+                  if (_lastRecords == null) {
+                    return SingleChildScrollView(
+                      padding: const EdgeInsets.fromLTRB(16, 24, 16, 120),
+                      child: _loadNotice(snapshot.error!),
+                    );
+                  }
+                } else if (snapshot.hasData) {
+                  _lastRecords = snapshot.data;
+                  _retryTimer?.cancel();
+                  _retryTimer = null;
                 }
 
-                final records = snapshot.data ?? [];
+                final records = snapshot.hasError
+                    ? _lastRecords!
+                    : snapshot.data ?? _lastRecords ?? [];
                 final analytics = UserDashboardAnalytics.fromRecords(records);
 
                 return SingleChildScrollView(
@@ -93,9 +167,10 @@ class DashboardScreen extends StatelessWidget {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.stretch,
                     children: [
+                      if (snapshot.hasError) _loadNotice(snapshot.error!),
                       _DashboardHeader(analytics: analytics, records: records),
                       const _AssignedTasksSection(),
-                      const SizedBox(height: 18),
+                      const SizedBox(height: 14),
                       const Text(
                         'Key Metrics',
                         style: TextStyle(
@@ -396,8 +471,8 @@ class _DiverSidebarMenu extends StatelessWidget {
                 ),
                 _sideItem(
                   context,
-                  icon: Icons.replay_circle_filled_outlined,
-                  label: 'Follow-up',
+                  icon: Icons.event_repeat_outlined,
+                  label: 'Monthly visits',
                   onTap: () =>
                       Navigator.of(context).pushNamed(userFollowUpRoute),
                 ),
@@ -477,9 +552,9 @@ class _RecentMonitoringActivities extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final recent = [...records]..sort((a, b) {
-        final ad = a.submittedAt ?? a.dateTaken ?? DateTime(1970);
-        final bd = b.submittedAt ?? b.dateTaken ?? DateTime(1970);
+    final recent = [...SubmissionGroup.fromRecords(records)]..sort((a, b) {
+        final ad = a.latestSubmittedAt ?? DateTime(1970);
+        final bd = b.latestSubmittedAt ?? DateTime(1970);
         return bd.compareTo(ad);
       });
     final items = recent.take(5).toList();
@@ -523,10 +598,12 @@ class _RecentMonitoringActivities extends StatelessWidget {
     );
   }
 
-  Widget _recentActivityRow(ScanRecordModel r) {
-    final when = r.submittedAt ?? r.dateTaken;
-    final whenLabel =
-        when == null ? '—' : DateFormat('MMM d, yyyy · h:mm a').format(when);
+  Widget _recentActivityRow(SubmissionGroup group) {
+    final r = group.records.first;
+    final when = group.latestSubmittedAt;
+    final whenLabel = when == null
+        ? '—'
+        : DateFormat('MMM d, yyyy · h:mm a').format(when.toLocal());
     final isRemoval = CotsActivityType.isRemoval(r.activityType);
     return Row(
       children: [
@@ -552,7 +629,11 @@ class _RecentMonitoringActivities extends StatelessWidget {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Text(
-                isRemoval ? 'Removal Evidence' : 'Monitoring Capture',
+                group.hasBatch
+                    ? '${group.photoCount} photos · ${group.displayId}'
+                    : isRemoval
+                        ? 'Removal Evidence'
+                        : 'Monitoring Capture',
                 style: const TextStyle(
                   fontWeight: FontWeight.w800,
                   color: kTextNavy,
@@ -562,7 +643,7 @@ class _RecentMonitoringActivities extends StatelessWidget {
               const SizedBox(height: 2),
               Text(
                 '${r.zone.isEmpty ? 'Unassigned zone' : r.zone} · '
-                '${r.aiDetectedCount} COTS · ${r.userStatusLabel}',
+                '${group.hasBatch ? group.detectedCount : r.aiDetectedCount} COTS · ${group.statusLabel()}',
                 style: TextStyle(
                   fontSize: 11.5,
                   color: kMutedGray.withValues(alpha: 0.95),
@@ -599,26 +680,92 @@ class _DashboardHeader extends StatelessWidget {
         ? user!.fullName.trim().split(' ').first
         : 'Diver';
 
-    final title = Column(
+    final notifButton = DiverNotificationBell(
+      uid: user?.uid,
+      onPressed: () {
+        Navigator.of(context).push<void>(
+          MaterialPageRoute<void>(
+            builder: (_) => const NotificationsScreen(),
+          ),
+        );
+      },
+    );
+
+    final timeCard = Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(color: kBorderGray),
+        boxShadow: kSoftCardShadow,
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(
+            Icons.schedule_rounded,
+            size: 14,
+            color: kMutedGray.withValues(alpha: 0.9),
+          ),
+          const SizedBox(width: 6),
+          Flexible(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                const Text(
+                  'Current time',
+                  style: TextStyle(
+                    fontSize: 9,
+                    fontWeight: FontWeight.w700,
+                    color: kMutedGray,
+                  ),
+                ),
+                const _LiveDateTimeText(
+                  style: TextStyle(
+                    fontSize: 10,
+                    fontWeight: FontWeight.w700,
+                    color: kTextNavy,
+                  ),
+                ),
+                if (recordUpdated != null) ...[
+                  const SizedBox(height: 1),
+                  Text(
+                    'Latest record ${DateFormat('MMM d, h:mm a').format(recordUpdated.toLocal())}',
+                    style: TextStyle(
+                      fontSize: 8.5,
+                      fontWeight: FontWeight.w600,
+                      color: kMutedGray.withValues(alpha: 0.9),
+                    ),
+                  ),
+                ],
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+
+    final titleColumn = Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Text(
           'Welcome, $name',
           style: const TextStyle(
-            fontSize: 14,
+            fontSize: 13,
             fontWeight: FontWeight.w700,
             color: kSuccessGreen,
           ),
         ),
-        const SizedBox(height: 4),
+        const SizedBox(height: 3),
         const Text(
           'Diver Dashboard',
           style: TextStyle(
-            fontSize: 26,
+            fontSize: 24,
             fontWeight: FontWeight.w900,
             color: kTextNavy,
             letterSpacing: -0.5,
-            height: 1.1,
+            height: 1.15,
           ),
         ),
         const SizedBox(height: 2),
@@ -632,102 +779,45 @@ class _DashboardHeader extends StatelessWidget {
         ),
       ],
     );
-    final controls = Column(
-      crossAxisAlignment: CrossAxisAlignment.end,
-      children: [
-        IconButton(
-          tooltip: 'Notifications',
-          padding: EdgeInsets.zero,
-          constraints: const BoxConstraints(minWidth: 36, minHeight: 36),
-          icon: const Icon(
-            Icons.notifications_outlined,
-            color: kTextNavy,
-            size: 22,
-          ),
-          onPressed: () {
-            Navigator.of(context).push<void>(
-              MaterialPageRoute<void>(
-                builder: (_) => const NotificationsScreen(),
-              ),
-            );
-          },
-        ),
-        IconButton(
-          tooltip: 'Sign out',
-          padding: EdgeInsets.zero,
-          constraints: const BoxConstraints(minWidth: 36, minHeight: 36),
-          icon: const Icon(Icons.logout_rounded, color: kTextNavy, size: 22),
-          onPressed: () => confirmAndSignOut(context),
-        ),
-        const SizedBox(height: 4),
-        Container(
-          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
-          decoration: BoxDecoration(
-            color: Colors.white,
-            borderRadius: BorderRadius.circular(12),
-            border: Border.all(color: kBorderGray),
-            boxShadow: kSoftCardShadow,
-          ),
-          child: Row(
-            mainAxisSize: MainAxisSize.min,
+
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final wide = constraints.maxWidth >= 640 &&
+            MediaQuery.textScalerOf(context).scale(12) <= 18;
+
+        if (wide) {
+          return Row(
+            crossAxisAlignment: CrossAxisAlignment.center,
             children: [
-              Icon(Icons.schedule_rounded,
-                  size: 14, color: kMutedGray.withValues(alpha: 0.9)),
-              const SizedBox(width: 6),
-              Flexible(
-                  child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  const Text(
-                    'Current time',
-                    style: TextStyle(
-                      fontSize: 9,
-                      fontWeight: FontWeight.w700,
-                      color: kMutedGray,
-                    ),
-                  ),
-                  const _LiveDateTimeText(
-                    style: TextStyle(
-                      fontSize: 10,
-                      fontWeight: FontWeight.w700,
-                      color: kTextNavy,
-                    ),
-                  ),
-                  if (recordUpdated != null) ...[
-                    const SizedBox(height: 2),
-                    Text(
-                      'Latest record ${DateFormat('MMM d, h:mm a').format(recordUpdated)}',
-                      style: TextStyle(
-                        fontSize: 8.5,
-                        fontWeight: FontWeight.w600,
-                        color: kMutedGray.withValues(alpha: 0.9),
-                      ),
-                    ),
-                  ],
-                ],
-              )),
+              Expanded(child: titleColumn),
+              const SizedBox(width: 12),
+              timeCard,
+              const SizedBox(width: 10),
+              notifButton,
             ],
-          ),
-        ),
-      ],
-    );
-    return LayoutBuilder(builder: (context, constraints) {
-      if (constraints.maxWidth < 600 ||
-          MediaQuery.textScalerOf(context).scale(12) > 18) {
+          );
+        }
+
         return Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              title,
-              const SizedBox(height: 12),
-              controls,
-            ]);
-      }
-      return Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
-        Expanded(child: title),
-        const SizedBox(width: 12),
-        Flexible(child: controls),
-      ]);
-    });
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Expanded(child: titleColumn),
+                const SizedBox(width: 8),
+                notifButton,
+              ],
+            ),
+            const SizedBox(height: 10),
+            Align(
+              alignment: Alignment.centerLeft,
+              child: timeCard,
+            ),
+          ],
+        );
+      },
+    );
   }
 }
 
@@ -744,84 +834,92 @@ class _MetricsGrid extends StatelessWidget {
     final pending = data.pending;
     final confirmed = data.accepted;
     final removed = data.removalRecords.length;
-    final captures = data.captures.length;
+    final captures = data.submissionCount;
+
+    final card1 = _MetricCard(
+      icon: Icons.photo_library_outlined,
+      iconColor: kAccentPurple,
+      iconBg: kAccentPurple.withValues(alpha: 0.12),
+      title: 'Total submissions',
+      value: nf.format(captures),
+      trendPct: analytics.scansTrendPct,
+      period: analytics.periodLabel,
+    );
+
+    final card2 = _MetricCard(
+      icon: Icons.hourglass_top_rounded,
+      iconColor: const Color(0xFFE6A23C),
+      iconBg: const Color(0xFFE6A23C).withValues(alpha: 0.12),
+      title: 'Pending Validation',
+      value: '$pending',
+      trendPct: null,
+      period: analytics.periodLabel,
+    );
+
+    final card3 = _MetricCard(
+      icon: Icons.verified_rounded,
+      iconColor: kSuccessGreen,
+      iconBg: kSuccessGreen.withValues(alpha: 0.12),
+      title: 'COTS removed (confirmed)',
+      value: '$confirmed',
+      trendPct: analytics.cotsTrendPct,
+      period: analytics.periodLabel,
+    );
+
+    final card4 = _MetricCard(
+      icon: Icons.cleaning_services_outlined,
+      iconColor: kInfoBlue,
+      iconBg: kInfoBlue.withValues(alpha: 0.12),
+      title: 'Removal Activities',
+      value: '$removed',
+      trendPct: null,
+      period: analytics.periodLabel,
+    );
 
     return LayoutBuilder(
       builder: (context, c) {
         const gap = 12.0;
-        final half = (c.maxWidth - gap) / 2;
-        return Column(
-          children: [
-            Row(
+        final isFourColumns = c.maxWidth >= 840;
+
+        if (isFourColumns) {
+          return IntrinsicHeight(
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
-                SizedBox(
-                  width: half,
-                  child: _MetricCard(
-                    icon: Icons.photo_library_outlined,
-                    iconColor: kAccentPurple,
-                    iconBg: kAccentPurple.withValues(alpha: 0.12),
-                    title: 'Total Monitoring Captures',
-                    value: nf.format(captures),
-                    trendPct: analytics.scansTrendPct,
-                    period: analytics.periodLabel,
-                    sparkline: analytics.dailyTrendValues,
-                    sparkColor: kAccentPurple,
-                    sparkType: _SparkType.bar,
-                  ),
-                ),
+                Expanded(child: card1),
                 const SizedBox(width: gap),
-                SizedBox(
-                  width: half,
-                  child: _MetricCard(
-                    icon: Icons.hourglass_top_rounded,
-                    iconColor: const Color(0xFFE6A23C),
-                    iconBg: const Color(0xFFE6A23C).withValues(alpha: 0.12),
-                    title: 'Pending Validation',
-                    value: '$pending',
-                    trendPct: null,
-                    period: analytics.periodLabel,
-                    sparkline: const [],
-                    sparkColor: const Color(0xFFE6A23C),
-                    sparkType: _SparkType.dots,
-                  ),
-                ),
+                Expanded(child: card2),
+                const SizedBox(width: gap),
+                Expanded(child: card3),
+                const SizedBox(width: gap),
+                Expanded(child: card4),
               ],
             ),
+          );
+        }
+
+        return Column(
+          children: [
+            IntrinsicHeight(
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  Expanded(child: card1),
+                  const SizedBox(width: gap),
+                  Expanded(child: card2),
+                ],
+              ),
+            ),
             const SizedBox(height: gap),
-            Row(
-              children: [
-                SizedBox(
-                  width: half,
-                  child: _MetricCard(
-                    icon: Icons.verified_rounded,
-                    iconColor: kSuccessGreen,
-                    iconBg: kSuccessGreen.withValues(alpha: 0.12),
-                    title: 'COTS removed (confirmed)',
-                    value: '$confirmed',
-                    trendPct: null,
-                    period: analytics.periodLabel,
-                    sparkline: const [],
-                    sparkColor: kSuccessGreen,
-                    sparkType: _SparkType.line,
-                  ),
-                ),
-                const SizedBox(width: gap),
-                SizedBox(
-                  width: half,
-                  child: _MetricCard(
-                    icon: Icons.cleaning_services_outlined,
-                    iconColor: kInfoBlue,
-                    iconBg: kInfoBlue.withValues(alpha: 0.12),
-                    title: 'Removal Activities',
-                    value: '$removed',
-                    trendPct: null,
-                    period: analytics.periodLabel,
-                    sparkline: const [],
-                    sparkColor: kInfoBlue,
-                    sparkType: _SparkType.wave,
-                  ),
-                ),
-              ],
+            IntrinsicHeight(
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  Expanded(child: card3),
+                  const SizedBox(width: gap),
+                  Expanded(child: card4),
+                ],
+              ),
             ),
           ],
         );
@@ -829,8 +927,6 @@ class _MetricsGrid extends StatelessWidget {
     );
   }
 }
-
-enum _SparkType { line, bar, dots, wave }
 
 class _MetricCard extends StatelessWidget {
   const _MetricCard({
@@ -840,9 +936,6 @@ class _MetricCard extends StatelessWidget {
     required this.title,
     required this.value,
     required this.period,
-    required this.sparkline,
-    required this.sparkColor,
-    required this.sparkType,
     this.trendPct,
   });
 
@@ -853,14 +946,11 @@ class _MetricCard extends StatelessWidget {
   final String value;
   final double? trendPct;
   final String period;
-  final List<double> sparkline;
-  final Color sparkColor;
-  final _SparkType sparkType;
 
   @override
   Widget build(BuildContext context) {
     return Container(
-      padding: const EdgeInsets.all(14),
+      padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.circular(14),
@@ -869,64 +959,61 @@ class _MetricCard extends StatelessWidget {
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
-          Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Container(
-                width: 34,
-                height: 34,
-                decoration: BoxDecoration(
-                  color: iconBg,
-                  borderRadius: BorderRadius.circular(10),
-                ),
-                child: Icon(icon, size: 18, color: iconColor),
-              ),
-              const Spacer(),
-              SizedBox(
-                width: 72,
-                height: 36,
-                child: _MiniSparkline(
-                  values: sparkline,
-                  color: sparkColor,
-                  type: sparkType,
-                ),
-              ),
-            ],
+          Container(
+            width: 34,
+            height: 34,
+            decoration: BoxDecoration(
+              color: iconBg,
+              borderRadius: BorderRadius.circular(10),
+            ),
+            child: Icon(icon, size: 18, color: iconColor),
           ),
           const SizedBox(height: 10),
+          SizedBox(
+            height: 32,
+            child: Align(
+              alignment: Alignment.centerLeft,
+              child: Text(
+                title,
+                maxLines: 2,
+                overflow: TextOverflow.ellipsis,
+                style: const TextStyle(
+                  fontSize: 11,
+                  fontWeight: FontWeight.w700,
+                  color: kMutedGray,
+                  letterSpacing: 0.2,
+                  height: 1.25,
+                ),
+              ),
+            ),
+          ),
+          const SizedBox(height: 6),
           Text(
-            title,
+            value,
             style: const TextStyle(
-              fontSize: 10,
-              fontWeight: FontWeight.w700,
-              color: kMutedGray,
-              letterSpacing: 0.2,
+              fontSize: 22,
+              fontWeight: FontWeight.w900,
+              color: kTextNavy,
+              height: 1.0,
             ),
           ),
           const SizedBox(height: 4),
-          Row(
-            crossAxisAlignment: CrossAxisAlignment.end,
-            children: [
-              Text(
-                value,
-                style: const TextStyle(
-                  fontSize: 22,
-                  fontWeight: FontWeight.w900,
-                  color: kTextNavy,
-                  height: 1,
-                ),
-              ),
-            ],
+          FittedBox(
+            fit: BoxFit.scaleDown,
+            alignment: Alignment.centerLeft,
+            child: trendPct != null
+                ? _TrendLine(pct: trendPct!, period: period)
+                : Text(
+                    'vs $period',
+                    style: const TextStyle(
+                      fontSize: 10,
+                      fontWeight: FontWeight.w500,
+                      color: kMutedGray,
+                    ),
+                  ),
           ),
-          const SizedBox(height: 6),
-          if (trendPct != null)
-            _TrendLine(pct: trendPct!, period: period)
-          else
-            Text(
-              'vs $period',
-              style: const TextStyle(fontSize: 10, color: kMutedGray),
-            ),
         ],
       ),
     );
@@ -954,134 +1041,15 @@ class _TrendLine extends StatelessWidget {
           ),
           TextSpan(
             text: 'vs $period',
-            style:
-                const TextStyle(color: kMutedGray, fontWeight: FontWeight.w500),
+            style: const TextStyle(
+              color: kMutedGray,
+              fontWeight: FontWeight.w500,
+            ),
           ),
         ],
       ),
     );
   }
-}
-
-class _MiniSparkline extends StatelessWidget {
-  const _MiniSparkline({
-    required this.values,
-    required this.color,
-    required this.type,
-  });
-
-  final List<double> values;
-  final Color color;
-  final _SparkType type;
-
-  @override
-  Widget build(BuildContext context) {
-    if (values.isEmpty) return const SizedBox.shrink();
-
-    if (type == _SparkType.bar) {
-      final max = values.reduce((a, b) => a > b ? a : b).clamp(1, 999);
-      return Row(
-        crossAxisAlignment: CrossAxisAlignment.end,
-        mainAxisAlignment: MainAxisAlignment.end,
-        children: [
-          for (final v in values)
-            Padding(
-              padding: const EdgeInsets.only(left: 2),
-              child: Container(
-                width: 5,
-                height: 8 + (24 * v / max),
-                decoration: BoxDecoration(
-                  color: color.withValues(alpha: 0.75),
-                  borderRadius: BorderRadius.circular(2),
-                ),
-              ),
-            ),
-        ],
-      );
-    }
-
-    if (type == _SparkType.dots) {
-      return Wrap(
-        alignment: WrapAlignment.end,
-        spacing: 3,
-        runSpacing: 3,
-        children: [
-          for (final v in values)
-            Container(
-              width: 5 + v * 2,
-              height: 5 + v * 2,
-              decoration: BoxDecoration(
-                color: color.withValues(alpha: 0.35 + v * 0.08),
-                shape: BoxShape.circle,
-              ),
-            ),
-        ],
-      );
-    }
-
-    return CustomPaint(
-      size: const Size(72, 36),
-      painter: _SparkPainter(
-          values: values, color: color, wave: type == _SparkType.wave),
-    );
-  }
-}
-
-class _SparkPainter extends CustomPainter {
-  _SparkPainter({
-    required this.values,
-    required this.color,
-    required this.wave,
-  });
-
-  final List<double> values;
-  final Color color;
-  final bool wave;
-
-  @override
-  void paint(Canvas canvas, Size size) {
-    if (values.isEmpty) return;
-    final max = values.reduce((a, b) => a > b ? a : b).clamp(1.0, 999.0);
-    final paint = Paint()
-      ..color = color
-      ..strokeWidth = wave ? 2 : 2.2
-      ..style = wave ? PaintingStyle.stroke : PaintingStyle.stroke
-      ..strokeCap = StrokeCap.round;
-
-    final path = ui.Path();
-    for (var i = 0; i < values.length; i++) {
-      final x = size.width * i / (values.length - 1).clamp(1, 99);
-      final y = size.height - (values[i] / max) * (size.height - 4) - 2;
-      if (i == 0) {
-        path.moveTo(x, y);
-      } else {
-        path.lineTo(x, y);
-      }
-    }
-    canvas.drawPath(path, paint);
-
-    if (!wave) {
-      final fill = ui.Path.from(path)
-        ..lineTo(size.width, size.height)
-        ..lineTo(0, size.height)
-        ..close();
-      canvas.drawPath(
-        fill,
-        Paint()
-          ..shader = LinearGradient(
-            colors: [
-              color.withValues(alpha: 0.2),
-              color.withValues(alpha: 0.02)
-            ],
-            begin: Alignment.topCenter,
-            end: Alignment.bottomCenter,
-          ).createShader(Rect.fromLTWH(0, 0, size.width, size.height)),
-      );
-    }
-  }
-
-  @override
-  bool shouldRepaint(covariant _SparkPainter oldDelegate) => true;
 }
 
 class _MonitoredZonesCard extends StatelessWidget {

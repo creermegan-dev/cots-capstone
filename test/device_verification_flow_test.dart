@@ -1,12 +1,15 @@
 import 'dart:async';
 import 'dart:math';
+import 'dart:io';
 
 import 'package:cots_monitor/core/device_identity.dart';
 import 'package:cots_monitor/models/pending_email_verification.dart';
 import 'package:cots_monitor/models/user_model.dart';
 import 'package:cots_monitor/providers/auth_provider.dart';
 import 'package:cots_monitor/services/supabase_auth_service.dart';
+import 'package:cots_monitor/services/offline_profile_store.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 class _FixedDeviceSecret implements DeviceSecretSource {
@@ -26,6 +29,7 @@ class _FakeAuthService extends SupabaseAuthService {
         );
 
   bool emailConfirmed;
+  Object? registerError;
   final List<String> calls = <String>[];
   final List<String> trustResults = <String>[];
   final StreamController<AuthState> _events =
@@ -76,6 +80,7 @@ class _FakeAuthService extends SupabaseAuthService {
   @override
   Future<String> registerDevice(String deviceSecret) async {
     calls.add('registerDevice');
+    if (registerError != null) throw registerError!;
     expect(DeviceIdentity.isValidSecret(deviceSecret), isTrue);
     return trustResults.isEmpty
         ? SupabaseAuthService.deviceTrusted
@@ -147,6 +152,56 @@ AuthProvider _provider(_FakeAuthService service) => AuthProvider(
 Future<void> _settle() => Future<void>.delayed(Duration.zero);
 
 void main() {
+  TestWidgetsFlutterBinding.ensureInitialized();
+  setUp(() => FlutterSecureStorage.setMockInitialValues({}));
+
+  test(
+      'trusted diver reopens offline, but authorization rejection does not use cache',
+      () async {
+    final service = _FakeAuthService().._signedIn();
+    final online = _provider(service);
+    await Future<void>.delayed(const Duration(milliseconds: 30));
+    expect(online.userModel?.fullName, 'Test Diver');
+    const store = OfflineProfileStore();
+    expect(await store.restore('another-user', 'A' * 43), isNull);
+    expect(await store.restore(online.userModel!.uid, 'B' * 43), isNull);
+    online.dispose();
+
+    service.registerError =
+        AuthRetryableFetchException(message: 'Network unavailable');
+    final offline = _provider(service);
+    await Future<void>.delayed(const Duration(milliseconds: 30));
+    expect(offline.userModel?.fullName, 'Test Diver');
+    expect(offline.usingOfflineProfile, isTrue);
+    offline.dispose();
+
+    service.registerError =
+        const PostgrestException(message: 'denied', code: '42501');
+    final denied = _provider(service);
+    await Future<void>.delayed(const Duration(milliseconds: 30));
+    expect(denied.userModel, isNull);
+    expect(denied.usingOfflineProfile, isFalse);
+    denied.dispose();
+
+    service.registerError = const SocketException('offline');
+    final cleared = _provider(service);
+    await Future<void>.delayed(const Duration(milliseconds: 30));
+    expect(cleared.userModel, isNull);
+    expect(cleared.lastError, isNot(contains('SocketException')));
+    cleared.dispose();
+  });
+
+  test('offline restart without a trusted profile remains blocked', () async {
+    final service = _FakeAuthService()
+      .._signedIn()
+      ..registerError = const SocketException('offline');
+    final auth = _provider(service);
+    await Future<void>.delayed(const Duration(milliseconds: 30));
+    expect(auth.userModel, isNull);
+    expect(auth.usingOfflineProfile, isFalse);
+    auth.dispose();
+  });
+
   test('trusted device signs in with password only', () async {
     final service = _FakeAuthService();
     final auth = _provider(service);
@@ -217,14 +272,16 @@ void main() {
     await auth.verifyEmailCode('654321');
     await _settle();
 
-    expect(service.calls, containsAllInOrder(<String>[
-      'verifySignupCode:654321',
-      'registerDevice',
-      'signIn',
-      'registerDevice',
-      'completeProfile',
-      'loadProfile',
-    ]));
+    expect(
+        service.calls,
+        containsAllInOrder(<String>[
+          'verifySignupCode:654321',
+          'registerDevice',
+          'signIn',
+          'registerDevice',
+          'completeProfile',
+          'loadProfile',
+        ]));
     expect(auth.pendingEmailVerification, isNull);
     expect(auth.userModel, isNotNull);
   });
@@ -309,14 +366,11 @@ void main() {
       ).withCodeSentAt(sent);
       expect(pending.secondsUntilResend(sent), 60);
       expect(
-          pending.secondsUntilResend(sent.add(const Duration(seconds: 59))),
-          1);
+          pending.secondsUntilResend(sent.add(const Duration(seconds: 59))), 1);
       expect(
-          pending.secondsUntilResend(sent.add(const Duration(seconds: 60))),
-          0);
+          pending.secondsUntilResend(sent.add(const Duration(seconds: 60))), 0);
       expect(
-          pending.secondsUntilResend(sent.add(const Duration(seconds: 61))),
-          0);
+          pending.secondsUntilResend(sent.add(const Duration(seconds: 61))), 0);
     });
   });
 }

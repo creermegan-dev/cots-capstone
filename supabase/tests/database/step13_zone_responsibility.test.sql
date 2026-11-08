@@ -61,7 +61,9 @@ select public.appoint_initial_role('administrator',pg_temp.uid(1));
 select public.appoint_initial_role('expert',pg_temp.uid(2));
 select pg_temp.act(1);
 set local role authenticated;
+select set_config('request.jwt.claim.sub',pg_temp.uid(2)::text,true);
 select public.verify_personnel(pg_temp.uid(n),true,true) from generate_series(3,5) n;
+select set_config('request.jwt.claim.sub',pg_temp.uid(1)::text,true);
 reset role;
 update public.profiles set full_name = case id
   when pg_temp.uid(3) then 'Diver Alpha' when pg_temp.uid(4) then 'Diver Bravo'
@@ -99,12 +101,12 @@ select is(cots_private.zone_responsible_name(pg_temp.uid(35)),'Diver Charlie','I
 select pg_temp.evidence(31,4);
 select is(pg_temp.body(31,'scan_submitted'),
   'Your report ' || cots_private.capture_label(pg_temp.uid(31)) || ' was submitted with 1 COTS detected in Stage Two Reef. '
-  || 'This area is currently assigned to Diver Alpha. Your record was sent to the Expert for review.',
+  || 'This site is currently assigned to Diver Alpha. Your record was sent to the Expert for review.',
   'Diver B sees the agreed message');
 select ok('zone_review_needed' = any(pg_temp.notices(2)),'The Expert is notified');
 select ok(not ('review_needed' = any(pg_temp.notices(2))),'No separate per-COTS notice for the same record');
 select is(pg_temp.body(31,'zone_review_needed'),
-  'Record ' || cots_private.capture_label(pg_temp.uid(31)) || ' in Stage Two Reef was submitted by another Diver in an assigned area. Please approve or reject it.',
+  'Record ' || cots_private.capture_label(pg_temp.uid(31)) || ' in Stage Two Reef was submitted by a Diver who is not a main Diver of this site. Please approve or reject it.',
   'Expert notice wording');
 select is(pg_temp.zone_notices(3),'{}'::text[],'Diver A is not told anything while it waits');
 
@@ -148,7 +150,7 @@ select is((select originating_capture_id from public.follow_up_assignments where
 select is((select count(*)::integer from public.follow_up_surveys),0,'It is not a monthly visit');
 select is(pg_temp.zone_notices(3),array['zone_record_approved'],'Diver A is notified after approval');
 select is(pg_temp.body(31,'zone_record_approved'),
-  'Another Diver recorded COTS in your area Stage Two Reef on '
+  'Another Diver recorded COTS at your site Stage Two Reef on '
   || to_char((now() - interval '1 hour') at time zone 'Asia/Manila','FMMonth FMDD, YYYY')
   || '. The Expert approved the record.','Agreed wording for Diver A');
 select ok(position('Bravo' in (select string_agg(e.details::text,' ') from public.workflow_events e
@@ -193,7 +195,7 @@ select is(cots_private.zone_review_needed(pg_temp.uid(41)),true,'Now it needs ap
 select is(cots_private.send_zone_review_reminders(now()),1,'First run: first notices for the late record only');
 select ok('zone_review_waiting' = any(pg_temp.notices(4)),'Diver B is told the late record waits for the Expert');
 select is(pg_temp.body(41,'zone_review_waiting'),
-  'Report ' || cots_private.capture_label(pg_temp.uid(41)) || ': This area is currently assigned to Diver Alpha. Your record was sent to the Expert for review.',
+  'Report ' || cots_private.capture_label(pg_temp.uid(41)) || ': This site is currently assigned to Diver Alpha. Your record was sent to the Expert for review.',
   'Late-record message for Diver B');
 -- Pretend the first notice was sent 4 days ago (history is append-only, so
 -- the protection is bypassed for this test update only).

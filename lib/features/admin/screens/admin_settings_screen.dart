@@ -1,7 +1,6 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
-import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
 import 'package:qr_flutter/qr_flutter.dart';
 
@@ -12,6 +11,7 @@ import '../../../services/auth_service.dart';
 import '../../../widgets/cots_loading_skeleton.dart';
 import '../layout/admin_breakpoints.dart';
 import '../theme/admin_theme.dart';
+import '../widgets/admin_dashboard_header.dart';
 import 'admin_shell_screen.dart';
 
 /// Settings workspace: 2×2 card grid, top bar, and footer. Sidebar is provided by [AdminShellScreen].
@@ -364,9 +364,11 @@ class _AdminSettingsScreenState extends State<AdminSettingsScreen> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              _topBar(),
-              const SizedBox(height: 20),
-              _titleBlock(),
+              AdminDashboardHeader(
+                title: 'Settings',
+                subtitle: 'Manage system preferences and configuration.',
+                onRefreshTap: _loadingPreferences ? null : _onSettingsRefresh,
+              ),
               const SizedBox(height: 22),
               if (_loadingPreferences)
                 const CotsLoadingSkeleton(
@@ -389,103 +391,7 @@ class _AdminSettingsScreenState extends State<AdminSettingsScreen> {
     );
   }
 
-  Widget _topBar() {
-    return Row(
-      children: [
-        const Spacer(),
-        OutlinedButton.icon(
-          onPressed: _loadingPreferences ? null : _onSettingsRefresh,
-          icon: AdminDateTimeTokens.refreshIcon,
-          label: const Text('Refresh',
-              style: AdminDateTimeTokens.refreshChipTextStyle),
-          style: AdminDateTimeTokens.refreshOutlinedButtonStyle(),
-        ),
-        const SizedBox(width: 12),
-        Badge(
-          label: const Text('3',
-              style: TextStyle(fontSize: 10, fontWeight: FontWeight.w800)),
-          child: IconButton(
-            style: IconButton.styleFrom(
-              backgroundColor: Colors.white,
-              foregroundColor: AdminColors.headerTitle,
-              side: BorderSide(color: Colors.black.withValues(alpha: 0.08)),
-            ),
-            onPressed: () {
-              Navigator.of(context).pushReplacement(
-                MaterialPageRoute<void>(
-                  builder: (_) => const AdminShellScreen(initialIndex: 5),
-                ),
-              );
-            },
-            icon: const Icon(Icons.notifications_outlined, size: 22),
-            tooltip: 'Notifications',
-          ),
-        ),
-        const SizedBox(width: 14),
-        Container(
-          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-          decoration: BoxDecoration(
-            color: Colors.white,
-            borderRadius: BorderRadius.circular(12),
-            border: Border.all(color: Colors.black.withValues(alpha: 0.07)),
-            boxShadow: [
-              BoxShadow(
-                  color: Colors.black.withValues(alpha: 0.04),
-                  blurRadius: 10,
-                  offset: const Offset(0, 3)),
-            ],
-          ),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.end,
-            children: [
-              Text(
-                DateFormat('MMM d, yyyy').format(DateTime.now()),
-                style: const TextStyle(
-                    fontSize: 13,
-                    fontWeight: FontWeight.w800,
-                    color: AdminColors.headerTitle),
-              ),
-              const SizedBox(height: 2),
-              Text(
-                DateFormat('h:mm a').format(DateTime.now()),
-                style: const TextStyle(
-                    fontSize: 12,
-                    fontWeight: FontWeight.w600,
-                    color: AdminColors.muted),
-              ),
-            ],
-          ),
-        ),
-      ],
-    );
-  }
 
-  Widget _titleBlock() {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        const Text(
-          'Settings',
-          style: TextStyle(
-            fontSize: 28,
-            fontWeight: FontWeight.w800,
-            color: AdminColors.headerTitle,
-            letterSpacing: -0.5,
-          ),
-        ),
-        const SizedBox(height: 8),
-        Text(
-          'Manage system preferences and configuration.',
-          style: TextStyle(
-            fontSize: 14,
-            fontWeight: FontWeight.w600,
-            color: AdminColors.muted.withValues(alpha: 0.95),
-            height: 1.35,
-          ),
-        ),
-      ],
-    );
-  }
 
   Widget _twoByTwoGrid(double maxWidth) {
     final twoCol = maxWidth >= 900;
@@ -711,7 +617,7 @@ class _AdminSettingsScreenState extends State<AdminSettingsScreen> {
           const Divider(height: 22),
           _toggleTile(
             title: 'High Risk Alerts',
-            subtitle: 'Get notified for high risk zones',
+            subtitle: 'Get notified for high risk sites',
             value: _highRiskAlerts,
             onChanged: _savingPreferences
                 ? null

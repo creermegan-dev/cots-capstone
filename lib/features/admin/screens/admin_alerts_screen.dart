@@ -112,7 +112,7 @@ class _AdminAlertsScreenState extends State<AdminAlertsScreen> {
   Future<void> _open(AdminRecordTableRow row) async {
     await Navigator.of(context).push<AdminRecordTableRow?>(
       MaterialPageRoute<AdminRecordTableRow?>(
-        builder: (_) => AdminRecordDetailsScreen(row: row),
+        builder: (_) => AdminRecordDetailsScreen(row: row, viewOnly: true),
       ),
     );
   }

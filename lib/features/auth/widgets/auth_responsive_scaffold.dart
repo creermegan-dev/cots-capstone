@@ -17,6 +17,7 @@ class AuthResponsiveScaffold extends StatelessWidget {
     this.desktopHeader,
     this.footer,
     this.mobileHeader,
+    this.onBackToLanding,
   });
 
   final Widget formChild;
@@ -24,8 +25,10 @@ class AuthResponsiveScaffold extends StatelessWidget {
   final bool showMobileBackButton;
   final Widget? desktopHeader;
   final Widget? footer;
+
   /// Extra content above the card on mobile only (logo + titles).
   final Widget? mobileHeader;
+  final VoidCallback? onBackToLanding;
 
   @override
   Widget build(BuildContext context) {
@@ -37,6 +40,7 @@ class AuthResponsiveScaffold extends StatelessWidget {
         header: mobileHeader,
         formChild: formChild,
         footer: footer,
+        onBackToLanding: onBackToLanding,
       );
     }
     return _DesktopTabletScaffold(
@@ -44,6 +48,7 @@ class AuthResponsiveScaffold extends StatelessWidget {
       desktopHeader: desktopHeader,
       formChild: formChild,
       footer: footer,
+      onBackToLanding: onBackToLanding,
     );
   }
 }
@@ -55,6 +60,7 @@ class _MobileAuthScaffold extends StatelessWidget {
     this.showBack = false,
     this.header,
     this.footer,
+    this.onBackToLanding,
   });
 
   final Widget formChild;
@@ -62,13 +68,14 @@ class _MobileAuthScaffold extends StatelessWidget {
   final bool showBack;
   final Widget? header;
   final Widget? footer;
+  final VoidCallback? onBackToLanding;
 
   @override
   Widget build(BuildContext context) {
     final bottomInset = MediaQuery.paddingOf(context).bottom;
     return Scaffold(
       extendBodyBehindAppBar: true,
-      appBar: appBarTitle == null
+      appBar: (appBarTitle == null && onBackToLanding == null)
           ? null
           : AppBar(
               backgroundColor: Colors.transparent,
@@ -80,15 +87,24 @@ class _MobileAuthScaffold extends StatelessWidget {
                       iconColor: kDarkTeal,
                     )
                   : null,
-              title: Text(
-                appBarTitle!,
-                style: const TextStyle(
-                  color: kDarkTeal,
-                  fontWeight: FontWeight.w700,
-                  fontSize: 18,
-                ),
-              ),
+              title: appBarTitle == null
+                  ? null
+                  : Text(
+                      appBarTitle!,
+                      style: const TextStyle(
+                        color: kDarkTeal,
+                        fontWeight: FontWeight.w700,
+                        fontSize: 18,
+                      ),
+                    ),
               centerTitle: true,
+              actions: [
+                if (onBackToLanding != null)
+                  Padding(
+                    padding: const EdgeInsets.only(right: 14),
+                    child: AuthSmallBackButton(onPressed: onBackToLanding!),
+                  ),
+              ],
             ),
       body: OceanBackground(
         child: SafeArea(
@@ -115,18 +131,21 @@ class _DesktopTabletScaffold extends StatelessWidget {
     required this.formChild,
     this.desktopHeader,
     this.footer,
+    this.onBackToLanding,
   });
 
   final AuthLayoutMode mode;
   final Widget formChild;
   final Widget? desktopHeader;
   final Widget? footer;
+  final VoidCallback? onBackToLanding;
 
   @override
   Widget build(BuildContext context) {
     final card = AuthFormCard(
       header: desktopHeader,
       footer: footer,
+      onBackToLanding: onBackToLanding,
       child: formChild,
     );
 
@@ -181,7 +200,8 @@ class _DesktopTabletScaffold extends StatelessWidget {
                 )
               : Center(
                   child: SingleChildScrollView(
-                    padding: const EdgeInsets.symmetric(horizontal: 32, vertical: 40),
+                    padding: const EdgeInsets.symmetric(
+                        horizontal: 32, vertical: 40),
                     child: card,
                   ),
                 ),
@@ -198,11 +218,13 @@ class AuthFormCard extends StatelessWidget {
     required this.child,
     this.header,
     this.footer,
+    this.onBackToLanding,
   });
 
   final Widget child;
   final Widget? header;
   final Widget? footer;
+  final VoidCallback? onBackToLanding;
 
   @override
   Widget build(BuildContext context) {
@@ -216,20 +238,85 @@ class AuthFormCard extends StatelessWidget {
             color: Colors.white,
             boxShadow: AuthTokens.cardShadow,
           ),
-          child: Padding(
-          padding: EdgeInsets.all(
-            isDesktop ? AuthTokens.cardPaddingDesktop : 36,
-          ),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.stretch,
+          child: Stack(
             children: [
-              if (header != null) ...[header!, const SizedBox(height: 24)],
-              child,
-              if (footer != null) ...[const SizedBox(height: 20), footer!],
+              Padding(
+                padding: EdgeInsets.all(
+                  isDesktop ? AuthTokens.cardPaddingDesktop : 36,
+                ),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    if (header != null) ...[
+                      header!,
+                      const SizedBox(height: 24)
+                    ],
+                    child,
+                    if (footer != null) ...[
+                      const SizedBox(height: 20),
+                      footer!
+                    ],
+                  ],
+                ),
+              ),
+              if (onBackToLanding != null)
+                Positioned(
+                  top: 18,
+                  right: 18,
+                  child: AuthSmallBackButton(onPressed: onBackToLanding!),
+                ),
             ],
           ),
         ),
+      ),
+    );
+  }
+}
+
+/// Small `<` back button matching the requested navigation to landing.
+class AuthSmallBackButton extends StatelessWidget {
+  const AuthSmallBackButton({
+    super.key,
+    required this.onPressed,
+    this.tooltip = 'Back to Landing',
+  });
+
+  final VoidCallback onPressed;
+  final String tooltip;
+
+  @override
+  Widget build(BuildContext context) {
+    return Material(
+      color: Colors.transparent,
+      child: Tooltip(
+        message: tooltip,
+        child: InkWell(
+          onTap: onPressed,
+          borderRadius: BorderRadius.circular(10),
+          hoverColor: AuthTokens.focusTeal.withValues(alpha: 0.12),
+          child: Container(
+            width: 36,
+            height: 36,
+            decoration: BoxDecoration(
+              color: const Color(0xFFF8FAFC),
+              borderRadius: BorderRadius.circular(10),
+              border: Border.all(color: const Color(0xFFE2E8F0)),
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black.withValues(alpha: 0.04),
+                  blurRadius: 4,
+                  offset: const Offset(0, 1),
+                ),
+              ],
+            ),
+            alignment: Alignment.center,
+            child: const Icon(
+              Icons.arrow_back_ios_new_rounded,
+              size: 15,
+              color: Color(0xFF334155),
+            ),
+          ),
         ),
       ),
     );

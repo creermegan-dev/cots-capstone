@@ -9,6 +9,17 @@ import 'package:flutter_test/flutter_test.dart';
 import 'support/map_test_data.dart';
 
 void main() {
+  test('target month moves to next month once this month is monitored', () {
+    final now = DateTime(2026, 11, 5);
+    expect(followUpTargetMonth(now, FollowUpMonthStatus.monitored),
+        DateTime(2026, 12));
+    expect(followUpTargetMonth(now, FollowUpMonthStatus.awaiting),
+        DateTime(2026, 11));
+    expect(followUpTargetMonth(DateTime(2026, 12, 20),
+            FollowUpMonthStatus.monitored),
+        DateTime(2027, 1));
+  });
+
   setUpAll(loadTestMap);
   group('monitoring zone linkage', () {
     test('missing, invalid and unmapped GPS never selects a monitoring site',

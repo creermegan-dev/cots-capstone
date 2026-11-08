@@ -107,6 +107,8 @@ class FollowUpAssignmentModel {
     required this.initialDate,
     required this.initialDetectedCount,
     this.initialCollection = RecordCollection.captures,
+    this.partnerUid = '',
+    this.partnerName = '',
   });
 
   final String areaId;
@@ -119,6 +121,14 @@ class FollowUpAssignmentModel {
   final DateTime initialDate;
   final int initialDetectedCount;
   final String initialCollection;
+
+  /// Stage 10-11: the site partner (Main Diver 2), or '' when there is none.
+  final String partnerUid;
+  final String partnerName;
+
+  /// Main Diver 1 and the site partner: both record the site's visits.
+  Set<String> get mainDiverUids =>
+      {primaryDiverUid, if (partnerUid.isNotEmpty) partnerUid};
 
   factory FollowUpAssignmentModel.fromFirestore(
     DocumentSnapshot<Map<String, dynamic>> doc,
@@ -145,6 +155,8 @@ class FollowUpAssignmentModel {
       initialDetectedCount: _intFromDynamic(map['initial_detected_count']),
       initialCollection:
           map['initial_collection'] as String? ?? RecordCollection.captures,
+      partnerUid: map['partner_uid'] as String? ?? '',
+      partnerName: map['partner_name'] as String? ?? '',
     );
   }
 
@@ -328,6 +340,13 @@ CaptureModel? originalFollowUpDetection(List<CaptureModel> detections) {
 }
 
 enum FollowUpMonthStatus { monitored, awaiting, notRecorded, upcoming }
+
+/// The month the next visit is for: next month once this month is monitored
+/// (for example by the first record), otherwise this month.
+DateTime followUpTargetMonth(DateTime now, FollowUpMonthStatus thisMonth) =>
+    thisMonth == FollowUpMonthStatus.monitored
+        ? DateTime(now.year, now.month + 1)
+        : DateTime(now.year, now.month);
 
 class FollowUpMonthEntry {
   const FollowUpMonthEntry({

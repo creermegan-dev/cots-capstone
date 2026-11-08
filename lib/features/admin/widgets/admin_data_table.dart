@@ -8,27 +8,31 @@ class _AdminTableHorizontalScrollBehavior extends MaterialScrollBehavior {
   const _AdminTableHorizontalScrollBehavior();
 
   @override
-  Widget buildScrollbar(BuildContext context, Widget child, ScrollableDetails details) {
+  Widget buildScrollbar(
+      BuildContext context, Widget child, ScrollableDetails details) {
     return child;
   }
 }
 
-const _kAdminTableHorizontalScrollBehavior = _AdminTableHorizontalScrollBehavior();
+const _kAdminTableHorizontalScrollBehavior =
+    _AdminTableHorizontalScrollBehavior();
 
 /// Design tokens shared by every admin data table (list screens, modals, cards).
 abstract final class AdminDataTableTokens {
   static const double rowHeight = 56;
   static const double rowGap = 6;
   static const double cornerRadius = 10;
-  static const EdgeInsets cellPadding = EdgeInsets.symmetric(horizontal: 10, vertical: 0);
+  static const EdgeInsets cellPadding =
+      EdgeInsets.symmetric(horizontal: 10, vertical: 0);
   static const Color headerFill = Color(0xFFF3F6FB);
   static const Duration hoverDuration = Duration(milliseconds: 160);
   static const Curve hoverCurve = Curves.easeOutCubic;
 
-  static TextStyle get headerTextStyle =>
-      const TextStyle(fontSize: 11.5, fontWeight: FontWeight.w800, color: AdminColors.muted);
+  static TextStyle get headerTextStyle => const TextStyle(
+      fontSize: 11.5, fontWeight: FontWeight.w800, color: AdminColors.muted);
 
-  static TextStyle bodyTextStyle({Color? color, FontWeight? weight, double fontSize = 12.5}) =>
+  static TextStyle bodyTextStyle(
+          {Color? color, FontWeight? weight, double fontSize = 12.5}) =>
       TextStyle(
         fontSize: fontSize,
         fontWeight: weight ?? FontWeight.w600,
@@ -53,13 +57,17 @@ Alignment adminDataTableAlign(TextAlign t) => switch (t) {
 
 /// Column metadata for [AdminDataTableHeader] and [AdminDataTableColumn.widthsMap].
 class AdminDataTableColumn {
-  const AdminDataTableColumn(this.label, this.width, {this.headerAlign = TextAlign.left});
+  const AdminDataTableColumn(this.label, this.width,
+      {this.headerAlign = TextAlign.left});
   final String label;
   final double width;
   final TextAlign headerAlign;
 
-  static Map<int, TableColumnWidth> widthsMap(List<AdminDataTableColumn> columns) => {
-        for (var i = 0; i < columns.length; i++) i: FixedColumnWidth(columns[i].width),
+  static Map<int, TableColumnWidth> widthsMap(
+          List<AdminDataTableColumn> columns) =>
+      {
+        for (var i = 0; i < columns.length; i++)
+          i: FixedColumnWidth(columns[i].width),
       };
 
   static double totalWidth(List<AdminDataTableColumn> columns) =>
@@ -80,7 +88,8 @@ class AdminDataTableHeader extends StatelessWidget {
       child: DecoratedBox(
         decoration: BoxDecoration(
           color: AdminDataTableTokens.headerFill,
-          borderRadius: BorderRadius.circular(AdminDataTableTokens.cornerRadius),
+          borderRadius:
+              BorderRadius.circular(AdminDataTableTokens.cornerRadius),
           border: Border.all(color: Colors.black.withValues(alpha: 0.06)),
         ),
         child: Table(
@@ -147,7 +156,8 @@ class AdminDataTableBadge extends StatelessWidget {
         label,
         maxLines: 1,
         overflow: TextOverflow.ellipsis,
-        style: TextStyle(color: foreground, fontSize: 10.5, fontWeight: FontWeight.w800),
+        style: TextStyle(
+            color: foreground, fontSize: 10.5, fontWeight: FontWeight.w800),
       ),
     );
     if (!centerInCell) return pill;
@@ -214,10 +224,12 @@ class AdminDataTableClickableRow extends StatefulWidget {
   final bool showShadow;
 
   @override
-  State<AdminDataTableClickableRow> createState() => _AdminDataTableClickableRowState();
+  State<AdminDataTableClickableRow> createState() =>
+      _AdminDataTableClickableRowState();
 }
 
-class _AdminDataTableClickableRowState extends State<AdminDataTableClickableRow> {
+class _AdminDataTableClickableRowState
+    extends State<AdminDataTableClickableRow> {
   bool _hover = false;
 
   @override
@@ -228,27 +240,35 @@ class _AdminDataTableClickableRowState extends State<AdminDataTableClickableRow>
       children: [TableRow(children: widget.cells)],
     );
     return MouseRegion(
-      cursor: widget.onTap != null ? SystemMouseCursors.click : MouseCursor.defer,
+      cursor:
+          widget.onTap != null ? SystemMouseCursors.click : MouseCursor.defer,
       onEnter: (_) => setState(() => _hover = true),
       onExit: (_) => setState(() => _hover = false),
       child: Padding(
         padding: const EdgeInsets.only(top: AdminDataTableTokens.rowGap),
         child: ClipRRect(
-          borderRadius: BorderRadius.circular(AdminDataTableTokens.cornerRadius),
+          borderRadius:
+              BorderRadius.circular(AdminDataTableTokens.cornerRadius),
           child: Material(
             color: Colors.transparent,
             child: InkWell(
               onTap: widget.onTap,
-              borderRadius: BorderRadius.circular(AdminDataTableTokens.cornerRadius),
+              borderRadius:
+                  BorderRadius.circular(AdminDataTableTokens.cornerRadius),
               hoverColor: const Color(0xFFF8FBFF).withValues(alpha: 0.75),
               child: AnimatedContainer(
                 duration: AdminDataTableTokens.hoverDuration,
                 curve: AdminDataTableTokens.hoverCurve,
                 decoration: BoxDecoration(
                   color: _hover ? const Color(0xFFF8FBFF) : Colors.white,
-                  borderRadius: BorderRadius.circular(AdminDataTableTokens.cornerRadius),
-                  border: Border.all(color: Colors.black.withValues(alpha: _hover ? 0.1 : 0.06)),
-                  boxShadow: widget.showShadow ? AdminDataTableTokens.rowShadow : const [],
+                  borderRadius:
+                      BorderRadius.circular(AdminDataTableTokens.cornerRadius),
+                  border: Border.all(
+                      color:
+                          Colors.black.withValues(alpha: _hover ? 0.1 : 0.06)),
+                  boxShadow: widget.showShadow
+                      ? AdminDataTableTokens.rowShadow
+                      : const [],
                 ),
                 child: table,
               ),
@@ -274,7 +294,8 @@ class AdminDataTableStaticRow extends StatefulWidget {
   final bool showShadow;
 
   @override
-  State<AdminDataTableStaticRow> createState() => _AdminDataTableStaticRowState();
+  State<AdminDataTableStaticRow> createState() =>
+      _AdminDataTableStaticRowState();
 }
 
 class _AdminDataTableStaticRowState extends State<AdminDataTableStaticRow> {
@@ -288,15 +309,19 @@ class _AdminDataTableStaticRowState extends State<AdminDataTableStaticRow> {
       child: Padding(
         padding: const EdgeInsets.only(top: AdminDataTableTokens.rowGap),
         child: ClipRRect(
-          borderRadius: BorderRadius.circular(AdminDataTableTokens.cornerRadius),
+          borderRadius:
+              BorderRadius.circular(AdminDataTableTokens.cornerRadius),
           child: AnimatedContainer(
             duration: AdminDataTableTokens.hoverDuration,
             curve: AdminDataTableTokens.hoverCurve,
             decoration: BoxDecoration(
               color: _hover ? const Color(0xFFF8FBFF) : Colors.white,
-              borderRadius: BorderRadius.circular(AdminDataTableTokens.cornerRadius),
-              border: Border.all(color: Colors.black.withValues(alpha: _hover ? 0.1 : 0.06)),
-              boxShadow: widget.showShadow ? AdminDataTableTokens.rowShadow : const [],
+              borderRadius:
+                  BorderRadius.circular(AdminDataTableTokens.cornerRadius),
+              border: Border.all(
+                  color: Colors.black.withValues(alpha: _hover ? 0.1 : 0.06)),
+              boxShadow:
+                  widget.showShadow ? AdminDataTableTokens.rowShadow : const [],
             ),
             child: Table(
               columnWidths: widget.columnWidths,
@@ -401,7 +426,10 @@ class AdminDataTablePaginationBar extends StatelessWidget {
             child: Row(
               crossAxisAlignment: CrossAxisAlignment.center,
               children: [
-                Expanded(flex: 2, child: Align(alignment: Alignment.centerLeft, child: summary)),
+                Expanded(
+                    flex: 2,
+                    child:
+                        Align(alignment: Alignment.centerLeft, child: summary)),
                 Expanded(flex: 3, child: Center(child: pages)),
                 Expanded(
                   flex: 2,
@@ -464,7 +492,8 @@ class AdminDataTablePaginationBar extends StatelessWidget {
 }
 
 class _PageArrow extends StatelessWidget {
-  const _PageArrow({required this.icon, required this.enabled, required this.onTap});
+  const _PageArrow(
+      {required this.icon, required this.enabled, required this.onTap});
   final IconData icon;
   final bool enabled;
   final VoidCallback onTap;
@@ -480,7 +509,9 @@ class _PageArrow extends StatelessWidget {
         child: SizedBox(
           width: 32,
           height: 32,
-          child: Icon(icon, size: 20, color: enabled ? AdminColors.headerTitle : AdminColors.muted),
+          child: Icon(icon,
+              size: 20,
+              color: enabled ? AdminColors.headerTitle : AdminColors.muted),
         ),
       ),
     );
@@ -488,7 +519,8 @@ class _PageArrow extends StatelessWidget {
 }
 
 class _PageNum extends StatelessWidget {
-  const _PageNum({required this.label, required this.active, required this.onTap});
+  const _PageNum(
+      {required this.label, required this.active, required this.onTap});
   final String label;
   final bool active;
   final VoidCallback onTap;
@@ -543,7 +575,8 @@ class AdminDataTableRowsPerPage extends StatelessWidget {
       children: [
         Text(
           'Rows per page:',
-          style: TextStyle(fontSize: 12, color: AdminColors.muted.withValues(alpha: 0.9)),
+          style: TextStyle(
+              fontSize: 12, color: AdminColors.muted.withValues(alpha: 0.9)),
         ),
         const SizedBox(width: 8),
         Container(
@@ -555,7 +588,10 @@ class AdminDataTableRowsPerPage extends StatelessWidget {
           child: DropdownButtonHideUnderline(
             child: DropdownButton<int>(
               value: value,
-              items: [for (final o in options) DropdownMenuItem(value: o, child: Text('$o'))],
+              items: [
+                for (final o in options)
+                  DropdownMenuItem(value: o, child: Text('$o'))
+              ],
               onChanged: onChanged,
             ),
           ),

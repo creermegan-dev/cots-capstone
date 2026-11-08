@@ -24,6 +24,7 @@ abstract final class ScanRecordImageLoader {
     required String? imagePath,
     String? storageObjectPath,
     String recordCollection = RecordCollection.legacyScanRecords,
+    void Function(Object error)? onError,
   }) async {
     final local = _loadLocal(imagePath);
     if (local != null) return local;
@@ -47,6 +48,7 @@ abstract final class ScanRecordImageLoader {
       return PrivateEvidenceSessionGuard.download(
         sessionKey: sessionKey,
         downloader: () => client.storage.from(bucket).download(path),
+        onError: onError,
       );
     }
 

@@ -157,7 +157,9 @@ void main() {
       now: _now,
     );
 
-    expect([for (final item in items) item.kind], [
+    expect([
+      for (final item in items) item.kind
+    ], [
       ExpertActionKind.recordReview,
       ExpertActionKind.zoneApproval,
       ExpertActionKind.visitAssessment,
@@ -168,7 +170,9 @@ void main() {
     ]);
     expect([for (final item in items) item.id],
         ['doc-CAP-1', 'doc-CAP-2', 'visit-1', 'r-1', 'r-2', 'h-1', 'A-5']);
-    expect([for (final item in items) item.title], [
+    expect([
+      for (final item in items) item.title
+    ], [
       'Detection needs review',
       'Record needs your approval',
       'Monthly visit waiting for assessment',
@@ -177,7 +181,9 @@ void main() {
       'Handover offer declined: choose another Diver',
       '5 missed months in a row',
     ]);
-    expect([for (final item in items) item.place], [
+    expect([
+      for (final item in items) item.place
+    ], [
       ExpertActionPlace.verification,
       ExpertActionPlace.verification,
       ExpertActionPlace.assessments,
@@ -252,7 +258,8 @@ void main() {
     await pumpEventQueue();
     expect(actions.loaded, isTrue);
     expect(actions.count, 1);
-    expect(actions.errors.single, startsWith('Could not check monthly visits:'));
+    expect(
+        actions.errors.single, startsWith('Could not check monthly visits:'));
     actions.dispose();
   });
 
@@ -263,8 +270,8 @@ void main() {
       visits: () => [_visit()],
     )..start();
     final opened = <ExpertActionPlace>[];
-    await tester.pumpWidget(_app(ExpertNotificationsScreen(
-        actions: actions, onOpen: opened.add)));
+    await tester.pumpWidget(
+        _app(ExpertNotificationsScreen(actions: actions, onOpen: opened.add)));
     await tester.pumpAndSettle();
 
     expect(find.text('Needs your action (2)'), findsOneWidget);
@@ -309,23 +316,25 @@ void main() {
     expect(find.text('3 unread'), findsOneWidget);
     expect(find.text('Mark all read'), findsOneWidget);
     // The administrator page title is not repeated inside the tab.
-    expect(find.text('Real system activities, assignments, and review updates.'),
+    expect(
+        find.text('Real system activities, assignments, and review updates.'),
         findsNothing);
     actions.dispose();
   });
 
-  test('Notifications is the first Expert tab and items open the right tab',
-      () {
+  test('Expert dashboard is first and action items open the right tab', () {
     expect(ExpertShellScreen.tabLabels, [
-      'Notifications',
+      'Dashboard',
       'Verification',
-      'Reassignments',
+      'Personnel Verification',
+      'Assignments & Reassignments',
       'Assessments',
-      'Users',
+      'Map Monitoring',
+      'Notifications',
     ]);
     expect(ExpertShellScreen.tabFor(ExpertActionPlace.verification), 1);
-    expect(ExpertShellScreen.tabFor(ExpertActionPlace.reassignments), 2);
-    expect(ExpertShellScreen.tabFor(ExpertActionPlace.assessments), 3);
+    expect(ExpertShellScreen.tabFor(ExpertActionPlace.reassignments), 3);
+    expect(ExpertShellScreen.tabFor(ExpertActionPlace.assessments), 4);
   });
 
   testWidgets('the tab shows how many items need action', (tester) async {

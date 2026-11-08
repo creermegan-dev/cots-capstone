@@ -6,14 +6,14 @@ import '../models/cots_detection_result.dart';
 import 'yolo_image_preprocess.dart';
 import 'yolo_postprocess.dart';
 
-/// On-device COTS detector using YOLO26s, with a build-time YOLO11 fallback.
+/// On-device COTS detector using YOLO11s, with an optional YOLO26 comparison.
 class CotsYoloDetector {
   CotsYoloDetector._();
 
   static final CotsYoloDetector instance = CotsYoloDetector._();
 
   static const modelName =
-      String.fromEnvironment('COTS_MODEL', defaultValue: 'yolo26');
+      String.fromEnvironment('COTS_MODEL', defaultValue: 'yolo11');
   static const _usesYolo11 = modelName == 'yolo11';
   static const modelAssetPath = _usesYolo11
       ? 'assets/models/yolov8_best.onnx'

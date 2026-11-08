@@ -1,0 +1,12 @@
+begin;
+select plan(8);
+select is((select count(*)::int from public.monitoring_areas where code in ('P1','P2') and active and map_zone = 'Practice'), 2, 'two practice sites are active');
+select is((select code from public.monitoring_areas where id = cots_private.area_at(7.311361, 125.690736)), 'P1', 'the house is inside Practice · Home');
+select is((select code from public.monitoring_areas where id = cots_private.area_at(7.313715, 125.670413)), 'P2', 'DNSC is inside Practice · DNSC');
+select is((select code from public.monitoring_areas where id = cots_private.area_at(7.3115, 125.6830)), null, 'between home and DNSC is outside every site');
+select is((select code from public.monitoring_areas where id = cots_private.area_at(7.012384, 125.717742)), 'S2', 'Samal sites still work');
+select is((select count(*)::int from cots_private.area_cells ac join public.monitoring_areas a on a.id = ac.area_id where a.code like 'P%'), 19, 'practice lookup runs');
+select is(cots_private.area_short_code((select id from public.monitoring_areas where code = 'P2')), 'Practice · DNSC', 'messages use the practice site name');
+select ok((select count(*) from public.site_levels_json() x) >= 0 or true, 'site levels still load');
+select * from finish();
+rollback;

@@ -7,6 +7,7 @@ import '../../core/secure_supabase_local_storage.dart';
 import '../../providers/auth_provider.dart';
 import 'auth_navigation.dart';
 import 'auth_routes.dart';
+import 'password_recovery_screen.dart';
 import 'widgets/auth_layout.dart';
 import 'widgets/auth_responsive_scaffold.dart';
 import 'widgets/cots_auth_password_field.dart';
@@ -220,23 +221,9 @@ class _LoginScreenState extends State<LoginScreen> {
     FocusScope.of(context).unfocus();
     final auth = context.read<AuthProvider>();
     if (auth.usesSupabase) {
-      await showDialog<void>(
-        context: context,
-        builder: (dialogContext) => AlertDialog(
-          title: const Text('Supervised account recovery'),
-          content: const Text(
-            'Contact the COTS Monitor Administrator and complete the identity '
-            'check. The Administrator can then approve a short-lived recovery '
-            'request. Your new password is entered privately and is never sent '
-            'through email or chat.',
-          ),
-          actions: [
-            FilledButton(
-              onPressed: () => Navigator.pop(dialogContext),
-              style: FilledButton.styleFrom(backgroundColor: kPrimaryTeal),
-              child: const Text('Understood'),
-            ),
-          ],
+      await Navigator.of(context).push<void>(
+        MaterialPageRoute(
+          builder: (_) => PasswordRecoveryScreen(initialEmail: _emailCtrl.text),
         ),
       );
       return;
@@ -431,39 +418,26 @@ class _LoginScreenState extends State<LoginScreen> {
   }
 
   Widget _buildFooter(AuthProvider auth) {
-    return Column(
+    return Wrap(
+      alignment: WrapAlignment.center,
+      crossAxisAlignment: WrapCrossAlignment.center,
       children: [
-        Wrap(
-          alignment: WrapAlignment.center,
-          crossAxisAlignment: WrapCrossAlignment.center,
-          children: [
-            Text(
-              'Don’t have an account? ',
-              style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                    color: authUseDesktopFields(context)
-                        ? AuthTokens.subtitleGray
-                        : kMutedGray,
-                  ),
-            ),
-            GestureDetector(
-              onTap: auth.isBusy ? null : _goSignUp,
-              child: Text(
-                'Sign Up',
-                style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                      color: AuthTokens.focusTeal,
-                      fontWeight: FontWeight.w700,
-                    ),
+        Text(
+          'Don’t have an account? ',
+          style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                color: authUseDesktopFields(context)
+                    ? AuthTokens.subtitleGray
+                    : kMutedGray,
               ),
-            ),
-          ],
         ),
-        const SizedBox(height: 10),
-        TextButton.icon(
-          onPressed: auth.isBusy ? null : _goLanding,
-          icon: const Icon(Icons.arrow_back_rounded, size: 18),
-          label: const Text('Back to Landing'),
-          style: TextButton.styleFrom(
-            foregroundColor: AuthTokens.focusTeal,
+        GestureDetector(
+          onTap: auth.isBusy ? null : _goSignUp,
+          child: Text(
+            'Sign Up',
+            style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                  color: AuthTokens.focusTeal,
+                  fontWeight: FontWeight.w700,
+                ),
           ),
         ),
       ],
@@ -484,6 +458,7 @@ class _LoginScreenState extends State<LoginScreen> {
 
     return AuthResponsiveScaffold(
       mobileAppBarTitle: 'Login',
+      onBackToLanding: auth.isBusy ? null : _goLanding,
       mobileHeader: const AuthMobileHeader(),
       desktopHeader: const AuthCardHeader(
         title: 'Welcome back',

@@ -174,8 +174,8 @@ void main() {
       expect(find.byType(CotsLoadingSkeleton), findsNothing);
       expect(
           tester
-              .widget<Text>(
-                  find.byKey(const ValueKey('metric-COTS found and removed (confirmed)')))
+              .widget<Text>(find.byKey(
+                  const ValueKey('metric-COTS found and removed (confirmed)')))
               .data,
           '0');
       controller.add([record('a')]);
@@ -184,8 +184,8 @@ void main() {
       // Stage 3: 1 confirmed (90%); the 40% COTS waits for the Expert.
       expect(
           tester
-              .widget<Text>(
-                  find.byKey(const ValueKey('metric-COTS found and removed (confirmed)')))
+              .widget<Text>(find.byKey(
+                  const ValueKey('metric-COTS found and removed (confirmed)')))
               .data,
           '1');
       controller.add([
@@ -200,14 +200,16 @@ void main() {
       // 90% and 80% are confirmed; 70% waits.
       expect(
           tester
-              .widget<Text>(
-                  find.byKey(const ValueKey('metric-COTS found and removed (confirmed)')))
+              .widget<Text>(find.byKey(
+                  const ValueKey('metric-COTS found and removed (confirmed)')))
               .data,
           '2');
       controller.addError(StateError('connection lost'));
       await tester.pumpAndSettle();
       expect(find.text('Analytics unavailable'), findsOneWidget);
-      expect(find.byKey(const ValueKey('metric-COTS found and removed (confirmed)')),
+      expect(
+          find.byKey(
+              const ValueKey('metric-COTS found and removed (confirmed)')),
           findsNothing);
       expect(tester.takeException(), isNull);
       await tester.pumpWidget(const SizedBox.shrink());
@@ -234,7 +236,7 @@ void main() {
       dashboardRecords.add([record('a')]);
       await tester.pumpAndSettle();
       expect(find.byType(CotsLoadingSkeleton), findsNothing);
-      expect(find.text('Total Monitoring Captures'), findsOneWidget);
+      expect(find.text('Total submissions'), findsOneWidget);
       expect(tester.takeException(), isNull);
       await tester.pumpWidget(const SizedBox.shrink());
     });

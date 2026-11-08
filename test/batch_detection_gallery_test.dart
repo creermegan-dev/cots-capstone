@@ -65,6 +65,8 @@ void main() {
           ])),
         ))),
       ));
+      await tester.runAsync(() => precacheImage(MemoryImage(bytes),
+          tester.element(find.byType(BatchDetectionGallery))));
       await tester.pumpAndSettle();
       expect(find.byKey(const ValueKey('detection-thumbnail-one')),
           findsOneWidget);

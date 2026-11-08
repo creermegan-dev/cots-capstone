@@ -1,8 +1,10 @@
 import 'package:intl/intl.dart';
+import '../../../models/staff_submission_rows.dart';
 
 import '../../../models/area_handover.dart';
 import '../../../models/follow_up_monitoring_model.dart';
 import '../../../models/follow_up_reassignment.dart';
+import '../../../models/site_partner.dart';
 import '../../../models/zone_review.dart';
 import '../../admin/models/admin_record_table_row.dart';
 
@@ -25,6 +27,7 @@ enum ExpertActionKind {
   reassignment,
   handover,
   missedMonths,
+  sitePartner,
 }
 
 /// One thing that is waiting for the Expert. It leaves the list once the
@@ -49,9 +52,13 @@ class ExpertActionItem {
         ExpertActionKind.visitAssessment => ExpertActionPlace.assessments,
         ExpertActionKind.reassignment ||
         ExpertActionKind.handover ||
-        ExpertActionKind.missedMonths =>
+        ExpertActionKind.missedMonths ||
+        ExpertActionKind.sitePartner =>
           ExpertActionPlace.reassignments,
       };
+
+  /// Stage 10: the Expert approves or declines right on the card.
+  bool get decidedHere => kind == ExpertActionKind.sitePartner;
 }
 
 /// Builds the "Needs your action" list from what the Expert can already see
@@ -71,6 +78,8 @@ abstract final class ExpertActions {
   static String missedMonthsTitle(int months) =>
       '$months missed months in a row';
   static const missedMonthsHint = 'You can start an area handover.';
+  static String sitePartnerTitle(String site) =>
+      '$site: approve a site partner?';
 
   /// Reassignment statuses that wait for the Expert to choose a Diver.
   /// 'awaiting_acceptance' waits for the offered Diver, not the Expert.
@@ -78,6 +87,7 @@ abstract final class ExpertActions {
 
   static final _day = DateFormat('MMM d, yyyy');
   static final _month = DateFormat('MMMM yyyy');
+  static final _time = DateFormat('MMM d, h:mm a');
 
   static String _join(List<String?> parts) => parts
       .map((part) => part?.trim() ?? '')
@@ -90,12 +100,13 @@ abstract final class ExpertActions {
     List<FollowUpReassignment> reassignments = const [],
     List<AreaHandover> handovers = const [],
     List<AreaMissedMonths> missedMonths = const [],
+    List<SitePartnerRequest> sitePartners = const [],
     required DateTime now,
   }) {
     final items = <ExpertActionItem>[];
 
     // Verification tab: the same "Needs Review" status the tab shows.
-    for (final row in records) {
+    for (final row in StaffSubmissionRows.group(records)) {
       if (row.displayStatus != 'Needs Review') continue;
       final id = row.documentId.isNotEmpty ? row.documentId : row.recordId;
       final zoneRecord = ZoneReview.isWaiting(
@@ -199,6 +210,24 @@ abstract final class ExpertActions {
           area.areaName,
           'main Diver: ${area.mainDiverName}',
           missedMonthsHint,
+        ]),
+      ));
+    }
+
+    // Stage 10: site partner candidates waiting for the Expert, oldest first
+    // (the order the database returns).
+    for (final request in sitePartners) {
+      if (!request.canDecide) continue;
+      final at = request.queuedAt ?? request.createdAt;
+      items.add(ExpertActionItem(
+        kind: ExpertActionKind.sitePartner,
+        id: request.id,
+        title: sitePartnerTitle(request.areaName),
+        detail: _join([
+          request.candidateName,
+          request.reasonText,
+          if (at != null) _time.format(at.toLocal()),
+          'Main Diver: ${request.mainDiverName}',
         ]),
       ));
     }

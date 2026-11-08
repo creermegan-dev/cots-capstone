@@ -270,7 +270,7 @@ abstract final class FollowUpMonitoringRepository {
       await createAssignmentIfAbsent(
         FollowUpAssignmentModel(
           areaId: first.area.id,
-          areaName: '${first.area.zoneLabel} · ${first.area.siteCode}',
+          areaName: first.area.displayName,
           barangay: first.area.name,
           municipality: municipality.name,
           primaryDiverUid: first.capture.uid,
@@ -493,7 +493,7 @@ abstract final class FollowUpMonitoringRepository {
     final assignmentDoc =
         await FollowUpReassignmentRepository.store.get('$_assignments/$areaId');
     if (assignmentDoc == null) {
-      throw StateError('This reef monitoring zone is not assigned to you.');
+      throw StateError('This dive site is not assigned to you.');
     }
     final assignment = FollowUpAssignmentModel.fromMap(
         FollowUpWorkflowStore.data(assignmentDoc),
@@ -531,8 +531,8 @@ abstract final class FollowUpMonitoringRepository {
         latitude: latitude, longitude: longitude);
     if (referenceArea != null && referenceArea.barangay.id != areaId) {
       throw ArgumentError(
-          'This visit\'s location is in area ${referenceArea.barangay.id}, '
-          'not $areaId. Please record the visit for the area you dived in.');
+          'This visit\'s location is in ${referenceArea.barangay.displayName}, '
+          'not $areaId. Please record the visit for the site you dived in.');
     }
     var imageCount = 0;
     for (final captureId in captureIds) {

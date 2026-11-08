@@ -129,7 +129,7 @@ void main() {
       (tester) async {
     final api = _FakeApi();
     await _pump(tester, AreaHandoverButton(assignment: _assignment(), api: api));
-    await tester.tap(find.text('Hand over this area'));
+    await tester.tap(find.text('Hand over this site'));
     await tester.pumpAndSettle();
     await tester.tap(find.text('Send request'));
     await tester.pumpAndSettle();
@@ -148,7 +148,7 @@ void main() {
       (tester) async {
     final api = _FakeApi(handovers: [_handover(canCancel: true)]);
     await _pump(tester, AreaHandoverButton(assignment: _assignment(), api: api));
-    expect(find.text('Hand over this area'), findsNothing);
+    expect(find.text('Hand over this site'), findsNothing);
     expect(find.text('Waiting for the Expert to choose a new Diver.'),
         findsOneWidget);
     await tester.tap(find.text('Cancel handover'));

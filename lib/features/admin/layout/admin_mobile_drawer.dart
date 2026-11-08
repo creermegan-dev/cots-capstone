@@ -13,12 +13,20 @@ class AdminMobileDrawer extends StatelessWidget {
     required this.onSelect,
     required this.onLogout,
     this.badgeFor,
+    this.entries,
+    this.panelSubtitle = 'Admin Panel',
+    this.userName = 'Admin User',
+    this.userRole = 'Super Administrator',
   });
 
   final int selectedIndex;
   final ValueChanged<int> onSelect;
   final VoidCallback onLogout;
   final int? Function(int navIndex)? badgeFor;
+  final List<AdminNavEntry>? entries;
+  final String panelSubtitle;
+  final String userName;
+  final String userRole;
 
   @override
   Widget build(BuildContext context) {
@@ -46,30 +54,46 @@ class AdminMobileDrawer extends StatelessWidget {
                 child: Row(
                   children: [
                     Expanded(
-                      child: Text(
-                        'COTS Monitor',
-                        style: TextStyle(
-                          color: Colors.white.withValues(alpha: 0.95),
-                          fontWeight: FontWeight.w800,
-                          fontSize: 16,
-                        ),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Text(
+                            'COTS Monitor',
+                            style: TextStyle(
+                              color: Colors.white.withValues(alpha: 0.95),
+                              fontWeight: FontWeight.w800,
+                              fontSize: 16,
+                            ),
+                          ),
+                          Text(
+                            panelSubtitle,
+                            style: TextStyle(
+                              color: Colors.cyanAccent.withValues(alpha: 0.65),
+                              fontWeight: FontWeight.w600,
+                              fontSize: 11,
+                            ),
+                          ),
+                        ],
                       ),
                     ),
                     IconButton(
                       onPressed: () => Navigator.of(context).pop(),
-                      icon: const Icon(Icons.close_rounded, color: Colors.white70),
+                      icon: const Icon(Icons.close_rounded,
+                          color: Colors.white70),
                     ),
                   ],
                 ),
               ),
-              const AdminShellSearchBar(padding: EdgeInsets.fromLTRB(16, 0, 16, 8)),
+              const AdminShellSearchBar(
+                  padding: EdgeInsets.fromLTRB(16, 0, 16, 8)),
               const Divider(height: 1, color: Colors.white12),
               Expanded(
                 child: ListView.builder(
                   padding: const EdgeInsets.only(top: 8, bottom: 12),
-                  itemCount: kAdminNavEntries.length,
+                  itemCount: (entries ?? kAdminNavEntries).length,
                   itemBuilder: (context, i) {
-                    final e = kAdminNavEntries[i];
+                    final e = (entries ?? kAdminNavEntries)[i];
                     if (e is AdminNavSectionHeader) {
                       return Padding(
                         padding: const EdgeInsets.fromLTRB(20, 14, 16, 8),
@@ -88,23 +112,29 @@ class AdminMobileDrawer extends StatelessWidget {
                       final sel = selectedIndex == e.index;
                       final badge = badgeFor?.call(e.index);
                       return Padding(
-                        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 2),
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 10, vertical: 2),
                         child: ListTile(
                           leading: Icon(
                             e.icon,
-                            color: sel ? AdminColors.navTextActive : AdminColors.navText,
+                            color: sel
+                                ? AdminColors.navTextActive
+                                : AdminColors.navText,
                           ),
                           title: Text(
                             e.label,
                             style: TextStyle(
                               fontWeight: FontWeight.w600,
                               fontSize: 14,
-                              color: sel ? AdminColors.navTextActive : AdminColors.navText,
+                              color: sel
+                                  ? AdminColors.navTextActive
+                                  : AdminColors.navText,
                             ),
                           ),
                           trailing: badge != null && badge > 0
                               ? Container(
-                                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                                  padding: const EdgeInsets.symmetric(
+                                      horizontal: 8, vertical: 2),
                                   decoration: BoxDecoration(
                                     color: const Color(0xFFE53935),
                                     borderRadius: BorderRadius.circular(10),
@@ -120,8 +150,10 @@ class AdminMobileDrawer extends StatelessWidget {
                                 )
                               : null,
                           selected: sel,
-                          selectedTileColor: AdminColors.navActive.withValues(alpha: 0.35),
-                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                          selectedTileColor:
+                              AdminColors.navActive.withValues(alpha: 0.35),
+                          shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(12)),
                           onTap: () {
                             Navigator.of(context).pop();
                             onSelect(e.index);
@@ -141,7 +173,8 @@ class AdminMobileDrawer extends StatelessWidget {
                     CircleAvatar(
                       radius: 22,
                       backgroundColor: Colors.white.withValues(alpha: 0.12),
-                      child: const Icon(Icons.person_rounded, color: Colors.white70),
+                      child: const Icon(Icons.person_rounded,
+                          color: Colors.white70),
                     ),
                     const SizedBox(width: 12),
                     Expanded(
@@ -149,7 +182,7 @@ class AdminMobileDrawer extends StatelessWidget {
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
                           Text(
-                            'Admin User',
+                            userName,
                             style: TextStyle(
                               color: Colors.white.withValues(alpha: 0.95),
                               fontWeight: FontWeight.w700,
@@ -157,7 +190,7 @@ class AdminMobileDrawer extends StatelessWidget {
                             ),
                           ),
                           Text(
-                            'Super Administrator',
+                            userRole,
                             style: TextStyle(
                               color: Colors.cyanAccent.withValues(alpha: 0.55),
                               fontSize: 12,
@@ -171,8 +204,11 @@ class AdminMobileDrawer extends StatelessWidget {
                 ),
               ),
               ListTile(
-                leading: const Icon(Icons.logout_rounded, color: Colors.white70),
-                title: const Text('Logout', style: TextStyle(color: Colors.white70, fontWeight: FontWeight.w600)),
+                leading:
+                    const Icon(Icons.logout_rounded, color: Colors.white70),
+                title: const Text('Logout',
+                    style: TextStyle(
+                        color: Colors.white70, fontWeight: FontWeight.w600)),
                 onTap: () {
                   Navigator.of(context).pop();
                   onLogout();

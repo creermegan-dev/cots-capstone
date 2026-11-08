@@ -29,12 +29,15 @@ void main() {
     final csv = utf8.decode(service.buildCsv(records), allowMalformed: false);
 
     expect(csv, contains('"Report ID"'));
+    expect(csv.split('\n').first, contains('"Site"'));
+    expect(csv, contains('"Zone A"')); // Existing record values stay intact.
     expect(csv, contains('"COTS-001"'));
     expect(csv, contains('"Diver, One"'));
     expect(csv, contains('"85%"'));
     expect(csv, contains('"Accepted"'));
     // Stage 3: honest counts instead of the raw AI count.
-    expect(csv, contains('"COTS confirmed","COTS waiting","COTS not accepted"'));
+    expect(
+        csv, contains('"COTS confirmed","COTS waiting","COTS not accepted"'));
     expect(csv, contains('"2","1","0"'));
     expect(csv, isNot(contains('COTS Count')));
   });

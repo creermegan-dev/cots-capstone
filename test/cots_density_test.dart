@@ -15,10 +15,12 @@ void main() {
     expect(CotsDensity.perHectare(5, -10), isNull);
   });
 
-  test('levels follow Dumas et al. (2020)', () {
+  test('levels: Low up to 15, Moderate 16-100, High above 100', () {
     expect(CotsDensity.level(0), 'Low');
     expect(CotsDensity.level(14.99), 'Low');
-    expect(CotsDensity.level(15), 'Moderate');
+    expect(CotsDensity.level(15), 'Low');
+    expect(CotsDensity.level(15.01), 'Moderate');
+    expect(CotsDensity.level(16), 'Moderate');
     expect(CotsDensity.level(100), 'Moderate');
     expect(CotsDensity.level(100.01), 'High');
     expect(CotsDensity.level(null), isNull);

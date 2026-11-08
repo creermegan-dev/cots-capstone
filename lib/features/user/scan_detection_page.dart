@@ -38,6 +38,7 @@ import '../../models/zone_review.dart';
 import '../../services/area_messages.dart';
 import '../../services/zone_assignment_service.dart';
 import 'cots_map_page.dart';
+import 'photo_location_review_page.dart';
 import 'profile_page.dart';
 import 'records_page.dart';
 import 'user_bottom_nav.dart';
@@ -111,6 +112,7 @@ class _ScanDetectionPageState extends State<ScanDetectionPage>
   String? _detectionProgress;
   double? _deviceGpsLat;
   double? _deviceGpsLng;
+  DateTime? _deviceGpsAt;
   ScanLocationAccess _locationAccess = ScanLocationAccess.checking;
   String get _activityType => _isFollowUp
       ? CotsActivityType.detectionOnly
@@ -948,7 +950,7 @@ class _ScanDetectionPageState extends State<ScanDetectionPage>
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               const Text(
-                'Assigned monitoring area',
+                'Assigned site',
                 style: TextStyle(
                   color: kTextNavy,
                   fontSize: 14,
@@ -1697,7 +1699,7 @@ class _ScanDetectionPageState extends State<ScanDetectionPage>
 
   Widget _bottomActions() {
     return Container(
-      padding: const EdgeInsets.fromLTRB(16, 12, 16, 100),
+      padding: const EdgeInsets.fromLTRB(16, 12, 16, 12),
       decoration: BoxDecoration(
         color: Colors.white,
         border:
@@ -2384,6 +2386,12 @@ class _ScanDetectionPageState extends State<ScanDetectionPage>
                                   size: 16),
                               label: const Text('Try again'),
                             ),
+                          if (img.metadata.locationProblem != PhotoLocationProblem.none)
+                            OutlinedButton.icon(
+                              onPressed: _isBusy ? null : () => _reviewPhotoLocation(img),
+                              icon: const Icon(Icons.map_outlined, size: 16),
+                              label: const Text('Review photo location'),
+                            ),
                           if (img.detectionError != null)
                             OutlinedButton.icon(
                               onPressed:
@@ -2408,6 +2416,18 @@ class _ScanDetectionPageState extends State<ScanDetectionPage>
         ],
       ),
     );
+  }
+
+  Future<void> _reviewPhotoLocation(_PendingScanImage image) async {
+    final metadata = image.metadata;
+    final original = metadata.latitude == null || metadata.longitude == null
+        ? null : LatLng(metadata.latitude!, metadata.longitude!);
+    await Navigator.of(context).push<void>(MaterialPageRoute(builder: (_) => PhotoLocationReviewPage(
+      fileName: image.fileName, original: original,
+      originalSource: original == null ? 'unavailable' : metadata.gpsFromExif ? 'exif' : 'device_surface',
+      capturedAt: metadata.dateTaken,
+    )));
+    // This view never replaces metadata or clears the location problem.
   }
 
   Future<void> _retryAnalysis(_PendingScanImage img) async {
@@ -2679,11 +2699,31 @@ class _ScanDetectionPageState extends State<ScanDetectionPage>
     } catch (_) {}
 
     final now = DateTime.now();
-    if ((latitude == null || longitude == null) &&
-        PhotoLocationRule.phoneGpsAllowed(dateTaken: dateTaken, now: now)) {
+    // User 2026-11-06: the phone's location comes FIRST (action cameras such
+    // as DJI Mimo can write a wrong or old GPS into the photo). The photo's
+    // own GPS is used only when the phone has no location, when the photo is
+    // over 2 hours old, or when the phone is outside every site but the photo
+    // GPS is inside one.
+    bool insideSite(double? lat, double? lng) =>
+        lat != null &&
+        lng != null &&
+        DavaoGulfGeography.assignWithinMonitoringArea(
+              latitude: lat,
+              longitude: lng,
+            ) !=
+            null;
+    if (PhotoLocationRule.phoneGpsAllowed(dateTaken: dateTaken, now: now)) {
       await _ensureDeviceGps();
-      latitude ??= _deviceGpsLat;
-      longitude ??= _deviceGpsLng;
+      final phoneLat = _deviceGpsLat;
+      final phoneLng = _deviceGpsLng;
+      if (phoneLat != null &&
+          phoneLng != null &&
+          (insideSite(phoneLat, phoneLng) ||
+              !insideSite(latitude, longitude))) {
+        latitude = phoneLat;
+        longitude = phoneLng;
+        gpsFromExif = false;
+      }
     }
     final hasLocation = latitude != null && longitude != null;
     final locationProblem = PhotoLocationRule.check(
@@ -2716,7 +2756,14 @@ class _ScanDetectionPageState extends State<ScanDetectionPage>
   }
 
   Future<void> _ensureDeviceGps() async {
-    if (_deviceGpsLat != null && _deviceGpsLng != null) return;
+    // Reuse a phone fix for at most 1 minute, so the location is fresh.
+    final at = _deviceGpsAt;
+    if (_deviceGpsLat != null &&
+        _deviceGpsLng != null &&
+        at != null &&
+        DateTime.now().difference(at) < const Duration(minutes: 1)) {
+      return;
+    }
     try {
       var perm = await Geolocator.checkPermission();
       if (perm == LocationPermission.denied) {
@@ -2725,11 +2772,12 @@ class _ScanDetectionPageState extends State<ScanDetectionPage>
       final pos = await Geolocator.getCurrentPosition(
         locationSettings: const LocationSettings(
           accuracy: LocationAccuracy.high,
-          timeLimit: Duration(seconds: 8),
+          timeLimit: Duration(seconds: 15),
         ),
       );
       _deviceGpsLat = pos.latitude;
       _deviceGpsLng = pos.longitude;
+      _deviceGpsAt = DateTime.now();
     } catch (_) {}
   }
 
@@ -2787,7 +2835,7 @@ class _ScanDetectionPageState extends State<ScanDetectionPage>
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
-                      'Reef Zone',
+                      'Dive site',
                       style: TextStyle(
                         color: kMutedGray.withValues(alpha: 0.95),
                         fontSize: 12,
@@ -2868,8 +2916,8 @@ class _ScanDetectionPageState extends State<ScanDetectionPage>
           const SizedBox(height: 10),
           Text(
             assigned
-                ? 'Matched from GPS to its monitoring area.'
-                : 'No monitoring area matched — the location is on land or in deep water, or the photo has no GPS.',
+                ? 'Matched from GPS to its dive site.'
+                : 'No dive site matched — the location is on land, past the drop-off, or the photo has no GPS.',
             style: TextStyle(
               color: kMutedGray.withValues(alpha: 0.95),
               fontSize: 11.5,

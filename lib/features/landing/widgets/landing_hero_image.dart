@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../landing_theme.dart';
 
-/// Hero reef photo with a feathered blend into the page background.
+/// Hero coral card with rounded corners and soft bottom ambient blend.
 class LandingHeroImage extends StatelessWidget {
   const LandingHeroImage({
     super.key,
@@ -13,48 +13,56 @@ class LandingHeroImage extends StatelessWidget {
   final BorderRadius? borderRadius;
   final bool fullBleed;
 
+  static const String assetPath = 'assets/images/landing_coral.jpg';
+
   @override
   Widget build(BuildContext context) {
-    final overlays = <Widget>[
-      const Positioned.fill(child: _HeroFallback()),
-      Positioned.fill(
-        child: DecoratedBox(
-          decoration: BoxDecoration(gradient: LandingColors.heroHorizontalBlend),
-        ),
-      ),
-      if (!fullBleed)
-        Positioned.fill(
-          child: DecoratedBox(
-            decoration: BoxDecoration(gradient: LandingColors.heroCardEdgeBlend),
+    final effectiveRadius = borderRadius ?? BorderRadius.circular(36);
+
+    return Container(
+      decoration: BoxDecoration(
+        borderRadius: effectiveRadius,
+        boxShadow: [
+          BoxShadow(
+            color: const Color(0xFF104E5B).withValues(alpha: 0.16),
+            blurRadius: 32,
+            offset: const Offset(0, 12),
           ),
-        ),
-      if (!fullBleed)
-        Positioned.fill(
-          child: DecoratedBox(
-            decoration: BoxDecoration(
-              gradient: LinearGradient(
-                begin: Alignment.centerLeft,
-                end: Alignment.centerRight,
-                colors: [
-                  LandingColors.backgroundTop.withValues(alpha: 0.55),
-                  Colors.transparent,
-                ],
-                stops: const [0.0, 0.22],
+        ],
+      ),
+      child: ClipRRect(
+        borderRadius: effectiveRadius,
+        child: Stack(
+          fit: StackFit.expand,
+          children: [
+            Image.asset(
+              assetPath,
+              fit: BoxFit.cover,
+              errorBuilder: (context, error, stackTrace) =>
+                  const _HeroFallback(),
+            ),
+            // Soft atmospheric mist at the bottom of the card
+            Positioned.fill(
+              child: DecoratedBox(
+                decoration: BoxDecoration(
+                  gradient: LinearGradient(
+                    begin: Alignment.topCenter,
+                    end: Alignment.bottomCenter,
+                    colors: [
+                      Colors.transparent,
+                      Colors.transparent,
+                      const Color(0xFF5FCBC0).withValues(alpha: 0.20),
+                      const Color(0xFF47C4B8).withValues(alpha: 0.55),
+                    ],
+                    stops: const [0.0, 0.65, 0.88, 1.0],
+                  ),
+                ),
               ),
             ),
-          ),
+          ],
         ),
-    ];
-
-    final stack = Stack(
-      fit: StackFit.expand,
-      children: overlays,
+      ),
     );
-
-    if (borderRadius != null) {
-      return ClipRRect(borderRadius: borderRadius!, child: stack);
-    }
-    return stack;
   }
 }
 

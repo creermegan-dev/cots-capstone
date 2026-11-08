@@ -27,6 +27,7 @@ class CotsDetectionImageOverlay extends StatelessWidget {
     this.placeholderMessage,
     this.showBoxLabels = true,
     this.boxColorOverride,
+    this.loadImage,
   });
 
   final int imageWidth;
@@ -45,6 +46,7 @@ class CotsDetectionImageOverlay extends StatelessWidget {
   final String? placeholderMessage;
   final bool showBoxLabels;
   final Color? boxColorOverride;
+  final Future<Uint8List?> Function()? loadImage;
 
   double get _aspectRatio {
     if (imageWidth > 0 && imageHeight > 0) {
@@ -66,28 +68,30 @@ class CotsDetectionImageOverlay extends StatelessWidget {
             final srcW = imageWidth > 0 ? imageWidth.toDouble() : w;
             final srcH = imageHeight > 0 ? imageHeight.toDouble() : h;
 
-            return Stack(
-              fit: StackFit.expand,
-              children: [
-                _buildImage(),
-                for (var i = 0; i < items.length; i++)
-                  _buildBox(
-                    item: items[i],
-                    index: i,
-                    displayWidth: w,
-                    displayHeight: h,
-                    sourceWidth: srcW,
-                    sourceHeight: srcH,
-                  ),
-              ],
-            );
+            return _buildImage(
+                loadedBuilder: (context, image) => Stack(
+                      fit: StackFit.expand,
+                      children: [
+                        image,
+                        for (var i = 0; i < items.length; i++)
+                          _buildBox(
+                            item: items[i],
+                            index: i,
+                            displayWidth: w,
+                            displayHeight: h,
+                            sourceWidth: srcW,
+                            sourceHeight: srcH,
+                          ),
+                      ],
+                    ));
           },
         ),
       ),
     );
   }
 
-  Widget _buildImage() {
+  Widget _buildImage(
+      {required Widget Function(BuildContext, Widget) loadedBuilder}) {
     return SubmittedScanImage(
       recordId: recordId,
       recordCollection: recordCollection,
@@ -97,6 +101,8 @@ class CotsDetectionImageOverlay extends StatelessWidget {
       storageObjectPath: storageObjectPath,
       placeholderMessage: placeholderMessage,
       fit: BoxFit.contain,
+      loadedBuilder: loadedBuilder,
+      loadImage: loadImage,
     );
   }
 

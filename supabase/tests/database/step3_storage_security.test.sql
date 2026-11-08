@@ -19,9 +19,15 @@ select public.complete_initial_setup();
 
 select set_config('request.jwt.claim.sub', pg_temp.uid(1)::text, true);
 set local role authenticated;
+select set_config('request.jwt.claim.sub',pg_temp.uid(2)::text,true);
 select public.verify_personnel(pg_temp.uid(3), true, true);
+select set_config('request.jwt.claim.sub',pg_temp.uid(1)::text,true);
+select set_config('request.jwt.claim.sub',pg_temp.uid(2)::text,true);
 select public.verify_personnel(pg_temp.uid(4), true, true);
+select set_config('request.jwt.claim.sub',pg_temp.uid(1)::text,true);
+select set_config('request.jwt.claim.sub',pg_temp.uid(2)::text,true);
 select public.verify_personnel(pg_temp.uid(5), true, true);
+select set_config('request.jwt.claim.sub',pg_temp.uid(1)::text,true);
 reset role;
 
 insert into public.monitoring_areas(id, code, name, geography_version)
@@ -213,7 +219,10 @@ values(
 reset role;
 select set_config('request.jwt.claim.sub', pg_temp.uid(1)::text, true);
 set local role authenticated;
-select public.verify_personnel(pg_temp.uid(5), true, false);
+reset role;
+-- Owner-only inactive fixture; verification never changes account activation.
+update public.profiles set active=false where id=pg_temp.uid(5);
+set local role authenticated;
 reset role;
 select set_config('request.jwt.claim.sub', pg_temp.uid(5)::text, true);
 set local role authenticated;

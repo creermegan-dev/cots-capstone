@@ -1,4 +1,3 @@
-import 'package:cots_monitor/widgets/app_back_icon_button.dart';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
@@ -16,12 +15,14 @@ import '../../services/capture_repository.dart';
 import '../../services/follow_up_monitoring_repository.dart';
 import '../../widgets/follow_up_reassignment_controls.dart';
 import '../../widgets/area_handover_controls.dart';
+import '../../widgets/site_partner_controls.dart';
 import '../../services/scan_record_repository.dart';
 import 'cots_map_page.dart';
 import 'profile_page.dart';
 import 'records_page.dart';
 import 'scan_detection_page.dart';
 import 'user_bottom_nav.dart';
+import 'widgets/records_section_tabs.dart';
 import 'user_record_details_page.dart';
 import '../../widgets/cots_loading_skeleton.dart';
 
@@ -101,12 +102,9 @@ class _FollowUpPageState extends State<FollowUpPage> {
         elevation: 0,
         backgroundColor: Colors.white,
         surfaceTintColor: Colors.transparent,
-        leading: AppBackIconButton(
-          onPressed: () => Navigator.of(context).maybePop(),
-          iconColor: kTextNavy,
-        ),
+        automaticallyImplyLeading: false,
         title: const Text(
-          'Follow-up Monitoring',
+          'Records',
           style: TextStyle(
             color: kTextNavy,
             fontSize: 18,
@@ -114,6 +112,12 @@ class _FollowUpPageState extends State<FollowUpPage> {
           ),
         ),
         centerTitle: true,
+        // The monthly follow-up is the "Monthly visits" tab of Records.
+        bottom: RecordsSectionTabs(
+          active: RecordsSection.visits,
+          onOpen: (context, _) => Navigator.of(context).pushReplacement(
+              recordsSectionRoute((_) => const RecordsPage())),
+        ),
       ),
       bottomNavigationBar: UserBottomNavBar(
         active: UserNavDestination.followUp,
@@ -257,6 +261,8 @@ class _FollowUpPageState extends State<FollowUpPage> {
           if (SupabaseConfig.isConfigured) ...[
             const SizedBox(height: 12),
             HandoverOffersCard(onChanged: _retryReconciliation),
+            // Stage 10: site partner invitations sent to this Diver.
+            SitePartnerInvitesCard(onChanged: _retryReconciliation),
           ],
           if (_isReconciling) ...[
             const SizedBox(height: 12),
@@ -421,9 +427,15 @@ class _FollowUpPageState extends State<FollowUpPage> {
             _infoRow('Initially reported eliminated',
                 initialEliminated?.toString() ?? 'Not recorded'),
             _infoRow('Last monitoring date', _dateFormat.format(lastDate)),
-            _infoRow('Current target month', _monthFormat.format(now)),
+            _infoRow('Current target month',
+                _monthFormat.format(followUpTargetMonth(now, status))),
             FollowUpAssessmentLabel(areaId: assignment.areaId),
             _infoRow('Primary assigned diver', assignment.primaryDiverName),
+            // Stage 10: both main Divers, and "Add site partner".
+            if (SupabaseConfig.isConfigured) ...[
+              const SizedBox(height: 6),
+              SiteTeamPanel(areaCode: assignment.areaId),
+            ],
             const SizedBox(height: 10),
             FollowUpReassignmentActions(
               assignment: assignment,
