@@ -16,7 +16,7 @@ import '../../widgets/cots_loading_skeleton.dart';
 import '../../services/profile_photo_service.dart';
 import '../../widgets/profile_avatar.dart';
 
-const String _appVersion = '1.0.2+3';
+const String _appVersion = '1.0.3+4';
 
 const List<String> _kRoleOptions = <String>[
   'Diver',
@@ -373,8 +373,8 @@ class _PersonalInformationPageState extends State<PersonalInformationPage> {
               ListTile(
                 key: const ValueKey('profile-photo-remove'),
                 leading: const Icon(Icons.delete_outline, color: kHigh),
-                title: const Text('Remove photo',
-                    style: TextStyle(color: kHigh)),
+                title:
+                    const Text('Remove photo', style: TextStyle(color: kHigh)),
                 onTap: () => Navigator.of(ctx).pop('remove'),
               ),
             const SizedBox(height: 8),
@@ -391,8 +391,7 @@ class _PersonalInformationPageState extends State<PersonalInformationPage> {
         await service.remove(oldPath);
       } else {
         final picked = await ImagePicker().pickImage(
-          source:
-              choice == 'camera' ? ImageSource.camera : ImageSource.gallery,
+          source: choice == 'camera' ? ImageSource.camera : ImageSource.gallery,
           maxWidth: 1024,
           maxHeight: 1024,
           imageQuality: 90,
