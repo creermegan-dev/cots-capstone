@@ -164,6 +164,34 @@ class UserModel {
     );
   }
 
+  factory UserModel.fromSupabaseProfile(
+    Map<String, dynamic> row, {
+    required String email,
+    String? privilegedRole,
+  }) {
+    final role = switch (privilegedRole?.trim().toLowerCase()) {
+      'administrator' => adminAccountRole,
+      'expert' => expertAccountRole,
+      _ => defaultAccountRole,
+    };
+    return UserModel(
+      uid: row['id'] as String? ?? '',
+      fullName: row['full_name'] as String? ?? '',
+      email: email,
+      phoneNumber: row['phone'] as String? ?? '',
+      role: row['job_title'] as String? ?? '',
+      accountRole: role,
+      organization: row['organization'] as String? ?? '',
+      assignedArea: '',
+      createdAt: _dateTimeFromDynamic(row['created_at']),
+      profileImage: row['avatar_path'] as String? ?? '',
+      isActive: row['active'] as bool? ?? true,
+      fieldPersonnelVerified: row['field_verified'] as bool? ?? false,
+      personnelVerifiedBy: row['verified_by'] as String? ?? '',
+      personnelVerifiedAt: _dateTimeFromDynamic(row['verified_at']),
+    );
+  }
+
   Map<String, dynamic> toMap() {
     return {
       'uid': uid,

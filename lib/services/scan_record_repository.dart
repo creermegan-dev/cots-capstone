@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:cloud_firestore/cloud_firestore.dart';
 
 import '../core/firebase_bootstrap.dart';
+import '../core/supabase_config.dart';
 import '../features/admin/models/admin_record_table_row.dart';
 import '../models/record_collection.dart';
 import '../models/capture_model.dart';
@@ -15,6 +16,46 @@ import 'removal_record_repository.dart';
 import 'windows_capture_rest_service.dart';
 import 'windows_removal_record_rest_service.dart';
 import 'windows_scan_record_rest_service.dart';
+
+enum ScanRecordBackend {
+  supabase,
+  windowsFirebaseRest,
+  firebaseSdk,
+}
+
+/// Selects one record backend without evaluating either inactive backend.
+abstract final class ScanRecordBackendRouter {
+  static ScanRecordBackend select({
+    required bool supabaseConfigured,
+    required bool useWindowsFirebaseRest,
+  }) {
+    if (supabaseConfigured) return ScanRecordBackend.supabase;
+    if (useWindowsFirebaseRest) {
+      return ScanRecordBackend.windowsFirebaseRest;
+    }
+    return ScanRecordBackend.firebaseSdk;
+  }
+
+  static T route<T>({
+    required bool supabaseConfigured,
+    required bool useWindowsFirebaseRest,
+    required T Function() supabase,
+    required T Function() windowsFirebaseRest,
+    required T Function() firebaseSdk,
+  }) {
+    switch (select(
+      supabaseConfigured: supabaseConfigured,
+      useWindowsFirebaseRest: useWindowsFirebaseRest,
+    )) {
+      case ScanRecordBackend.supabase:
+        return supabase();
+      case ScanRecordBackend.windowsFirebaseRest:
+        return windowsFirebaseRest();
+      case ScanRecordBackend.firebaseSdk:
+        return firebaseSdk();
+    }
+  }
+}
 
 /// Reads citizen science submissions from captures, removal_records, and legacy scan_records.
 abstract final class ScanRecordRepository {
@@ -36,58 +77,86 @@ abstract final class ScanRecordRepository {
       FirebaseFirestore.instance.collection(RecordCollection.legacyScanRecords);
 
   static Stream<List<ScanRecordModel>> watchAll() {
-    if (deferFirebaseUntilFirstUse) {
-      final token = _windowsIdToken;
-      if (token == null) {
-        return Stream.error(
-          StateError('Not signed in — cannot load scan records.'),
-        );
-      }
-      return _pollWindows(token, uid: null);
-    }
-
-    return _mergeRecordStreams(
-      legacy: _legacyCollection.snapshots().map(
-            (snap) => snap.docs.map(ScanRecordModel.fromFirestore).toList(),
-          ),
-      captures: CaptureRepository.watchAll().map(
-        (list) => list.map(ScanRecordModel.fromCapture).toList(),
-      ),
-      removals: RemovalRecordRepository.watchAll().map(
-        (list) => list.map(ScanRecordModel.fromRemovalRecord).toList(),
-      ),
-      followUps: Stream.value(const <ScanRecordModel>[]),
+    return ScanRecordBackendRouter.route(
+      supabaseConfigured: SupabaseConfig.isConfigured,
+      useWindowsFirebaseRest: deferFirebaseUntilFirstUse,
+      supabase: () => _watchSupabase(uid: null),
+      windowsFirebaseRest: () => _watchWindows(uid: null),
+      firebaseSdk: () => _watchFirebase(uid: null),
     );
   }
 
   static Stream<List<ScanRecordModel>> watchForUser(String uid) {
-    if (deferFirebaseUntilFirstUse) {
-      final token = _windowsIdToken;
-      if (token == null) {
-        return Stream.error(
-          StateError('Not signed in — cannot load scan records.'),
-        );
-      }
-      return _pollWindows(token, uid: uid);
+    return ScanRecordBackendRouter.route(
+      supabaseConfigured: SupabaseConfig.isConfigured,
+      useWindowsFirebaseRest: deferFirebaseUntilFirstUse,
+      supabase: () => _watchSupabase(uid: uid),
+      windowsFirebaseRest: () => _watchWindows(uid: uid),
+      firebaseSdk: () => _watchFirebase(uid: uid),
+    );
+  }
+
+  static Stream<List<ScanRecordModel>> _watchSupabase({
+    required String? uid,
+  }) {
+    return _mergeRecordStreams(
+      legacy: Stream.value(const <ScanRecordModel>[]),
+      captures: (uid == null
+              ? CaptureRepository.watchAll()
+              : CaptureRepository.watchForUser(uid))
+          .map((list) => list.map(ScanRecordModel.fromCapture).toList()),
+      removals: (uid == null
+              ? RemovalRecordRepository.watchAll()
+              : RemovalRecordRepository.watchForUser(uid))
+          .map((list) => list.map(ScanRecordModel.fromRemovalRecord).toList()),
+      followUps: Stream.value(const <ScanRecordModel>[]),
+      pairByLinkedCapture: true,
+    );
+  }
+
+  static Stream<List<ScanRecordModel>> _watchWindows({
+    required String? uid,
+  }) {
+    final token = _windowsIdToken;
+    if (token == null) {
+      return Stream.error(
+        StateError('Not signed in — cannot load scan records.'),
+      );
     }
+    return _pollWindows(token, uid: uid);
+  }
+
+  static Stream<List<ScanRecordModel>> _watchFirebase({
+    required String? uid,
+  }) {
+    final legacy = uid == null
+        ? _legacyCollection.snapshots().map(
+              (snap) => snap.docs.map(ScanRecordModel.fromFirestore).toList(),
+            )
+        : _legacyCollection.where('uid', isEqualTo: uid).snapshots().map(
+            (snap) {
+              final records =
+                  snap.docs.map(ScanRecordModel.fromFirestore).toList();
+              records.sort(_submittedDesc);
+              return records;
+            },
+          );
 
     return _mergeRecordStreams(
-      legacy: _legacyCollection.where('uid', isEqualTo: uid).snapshots().map(
-        (snap) {
-          final records = snap.docs.map(ScanRecordModel.fromFirestore).toList();
-          records.sort(_submittedDesc);
-          return records;
-        },
-      ),
-      captures: CaptureRepository.watchForUser(uid).map(
-        (list) => list.map(ScanRecordModel.fromCapture).toList(),
-      ),
-      removals: RemovalRecordRepository.watchForUser(uid).map(
-        (list) => list.map(ScanRecordModel.fromRemovalRecord).toList(),
-      ),
-      followUps: FollowUpMonitoringRepository.watchSurveysForDiver(uid).map(
-        (list) => list.map(ScanRecordModel.fromFollowUpSurvey).toList(),
-      ),
+      legacy: legacy,
+      captures: (uid == null
+              ? CaptureRepository.watchAll()
+              : CaptureRepository.watchForUser(uid))
+          .map((list) => list.map(ScanRecordModel.fromCapture).toList()),
+      removals: (uid == null
+              ? RemovalRecordRepository.watchAll()
+              : RemovalRecordRepository.watchForUser(uid))
+          .map((list) => list.map(ScanRecordModel.fromRemovalRecord).toList()),
+      followUps: uid == null
+          ? Stream.value(const <ScanRecordModel>[])
+          : FollowUpMonitoringRepository.watchSurveysForDiver(uid).map(
+              (list) => list.map(ScanRecordModel.fromFollowUpSurvey).toList(),
+            ),
     );
   }
 
@@ -163,6 +232,7 @@ abstract final class ScanRecordRepository {
     required Stream<List<ScanRecordModel>> captures,
     required Stream<List<ScanRecordModel>> removals,
     required Stream<List<ScanRecordModel>> followUps,
+    bool pairByLinkedCapture = false,
   }) {
     final controller = StreamController<List<ScanRecordModel>>();
     List<ScanRecordModel> legacyList = const [];
@@ -179,6 +249,7 @@ abstract final class ScanRecordRepository {
           captures: captureList,
           removals: removalList,
           followUps: followUpList,
+          pairByLinkedCapture: pairByLinkedCapture,
         ),
       );
     }
@@ -219,6 +290,7 @@ abstract final class ScanRecordRepository {
     required List<ScanRecordModel> captures,
     required List<ScanRecordModel> removals,
     List<ScanRecordModel> followUps = const [],
+    bool pairByLinkedCapture = false,
   }) {
     final merged = <ScanRecordModel>[
       ...followUps.map((record) => ScanRecordModel.fromFollowUpSurvey(
@@ -230,12 +302,52 @@ abstract final class ScanRecordRepository {
                     .whereType<CaptureModel>()
                     .toList()),
           )),
-      ...captures,
-      ...removals,
+      ...mergeCaptureRemovalRecords(captures, removals,
+          pairByLinkedCapture: pairByLinkedCapture),
       ...legacy,
     ];
     merged.sort(_submittedDesc);
     return merged;
+  }
+
+  /// A new encounter has one capture and its deterministic removal companion.
+  /// Present them as one submission; keep historical separate removals intact.
+  ///
+  /// Stage 3: with Supabase ([pairByLinkedCapture]) each encounter's removal
+  /// record links to its first photo, so it is shown on that photo's row and
+  /// never adds COTS a second time.
+  static List<ScanRecordModel> mergeCaptureRemovalRecords(
+      List<ScanRecordModel> captures, List<ScanRecordModel> removals,
+      {bool pairByLinkedCapture = false}) {
+    final companions = <String, ScanRecordModel>{};
+    final byId = {for (final removal in removals) removal.id: removal};
+    final byLinkedCapture = <String, ScanRecordModel>{
+      if (pairByLinkedCapture)
+        for (final removal in removals)
+          if (removal.linkedCaptureId?.isNotEmpty ?? false)
+            removal.linkedCaptureId!: removal,
+    };
+    for (final capture in captures) {
+      final removal =
+          byId['${capture.id}_removal'] ?? byLinkedCapture[capture.id];
+      if (removal != null &&
+          removal.linkedCaptureId == capture.id &&
+          removal.uid == capture.uid &&
+          capture.sourceCapture != null) {
+        companions[capture.id] = removal;
+      }
+    }
+    final pairedIds = companions.values.map((r) => r.id).toSet();
+    return [
+      for (final capture in captures)
+        if (companions.containsKey(capture.id))
+          ScanRecordModel.fromCapture(capture.sourceCapture!,
+              hasRemovalRecord: true,
+              removedQuantity: companions[capture.id]!.removedQuantity)
+        else
+          capture,
+      ...removals.where((r) => !pairedIds.contains(r.id)),
+    ];
   }
 
   static int _submittedDesc(ScanRecordModel a, ScanRecordModel b) {

@@ -2,59 +2,106 @@ import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
 import '../core/cots_colors.dart';
+import '../core/supabase_config.dart';
 import '../models/follow_up_monitoring_model.dart';
 import '../models/follow_up_reassignment.dart';
-import '../models/follow_up_infestation_assessment.dart';
 import '../providers/auth_provider.dart';
 import '../services/follow_up_reassignment_repository.dart';
-import '../services/follow_up_workflow_store.dart';
+import '../services/site_levels_service.dart';
+import 'cots_loading_skeleton.dart';
+
+/// Stage 11: whether a Diver may record this month's visit. The month's
+/// responsible Diver may; when that is one of the site's main Divers (no
+/// replacement this month), both main Divers may. Same rule as the database
+/// (cots_private.month_ok).
+bool followUpMayRecord({
+  required String responsibleUid,
+  required Set<String> mainDiverUids,
+  required String userUid,
+}) =>
+    userUid.isNotEmpty &&
+    (userUid == responsibleUid ||
+        (mainDiverUids.contains(responsibleUid) &&
+            mainDiverUids.contains(userUid)));
 
 class FollowUpAssessmentLabel extends StatefulWidget {
-  const FollowUpAssessmentLabel({super.key, required this.areaId});
+  const FollowUpAssessmentLabel(
+      {super.key, required this.areaId, this.monthLevels, this.valueBuilder});
   final String areaId;
+  final Widget Function(String value)? valueBuilder;
+
+  /// Tests replace the monthly level source.
+  final Future<List<SiteLevel>> Function()? monthLevels;
+
   @override
   State<FollowUpAssessmentLabel> createState() =>
       _FollowUpAssessmentLabelState();
 }
 
+/// 2026-11-08: the site's level is automatic: confirmed COTS recorded at the
+/// site in its latest month with records (0-15 Low, 16-100 Moderate, over 100
+/// High). The Firebase rollback keeps the older Expert-validated level.
 class _FollowUpAssessmentLabelState extends State<FollowUpAssessmentLabel> {
-  late Future<FollowUpInfestationAssessment?> _assessment =
-      FollowUpReassignmentRepository.latestAssessment(widget.areaId);
-  @override
-  void didUpdateWidget(covariant FollowUpAssessmentLabel oldWidget) {
-    super.didUpdateWidget(oldWidget);
-    _assessment =
-        FollowUpReassignmentRepository.latestAssessment(widget.areaId);
+  late Future<String> _text = _load();
+  // Shown while a reload runs, so the line does not blink.
+  String? _shown;
+
+  Future<String> _load() async {
+    if (widget.monthLevels != null || SupabaseConfig.isConfigured) {
+      final levels = await (widget.monthLevels ??
+          () => const SiteLevelsApi().monthLevels())();
+      final l = levels.where((x) => x.areaCode == widget.areaId).firstOrNull;
+      if (l == null || l.level == null || l.month == null) {
+        return 'Site level: no records yet';
+      }
+      return 'Site level: ${l.level} · ${l.confirmedCots} confirmed COTS in '
+          '${DateFormat('MMMM yyyy').format(l.month!)}';
+    }
+    final assessment =
+        await FollowUpReassignmentRepository.latestAssessment(widget.areaId);
+    return assessment == null
+        ? 'Latest validated infestation level: Not available'
+        : 'Latest validated infestation level: ${assessment.level}'
+            '${assessment.isHigh ? ' · High-risk area' : ''}';
   }
 
   @override
-  Widget build(BuildContext context) =>
-      FutureBuilder<FollowUpInfestationAssessment?>(
-          future: _assessment,
-          builder: (context, snapshot) {
-            if (snapshot.hasError) {
-              return TextButton(
-                  onPressed: () => setState(() => _assessment =
-                      FollowUpReassignmentRepository.latestAssessment(
-                          widget.areaId)),
-                  child:
-                      const Text('Could not load validated assessment. Retry'));
-            }
-            if (snapshot.connectionState != ConnectionState.done) {
-              return const LinearProgressIndicator();
-            }
-            final assessment = snapshot.data;
-            return Text(
-                assessment == null
-                    ? 'Latest validated infestation level: Not available'
-                    : 'Latest validated infestation level: ${assessment.level}${assessment.isHigh ? ' · High-risk area' : ''}\n'
-                        'Survey: ${DateFormat('MMM d, yyyy').format(MonitoringMonth.local(assessment.surveyDate))}',
-                style: TextStyle(
-                    color: assessment?.isHigh == true ? kDangerRed : kTextNavy,
-                    fontWeight: assessment?.isHigh == true
-                        ? FontWeight.w700
-                        : FontWeight.normal));
-          });
+  void didUpdateWidget(covariant FollowUpAssessmentLabel oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    // Reload only for another site; the page rebuilds often.
+    if (oldWidget.areaId != widget.areaId) {
+      _shown = null;
+      _text = _load();
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) => FutureBuilder<String>(
+      future: _text,
+      builder: (context, snapshot) {
+        if (snapshot.hasError) {
+          return TextButton(
+              onPressed: () => setState(() => _text = _load()),
+              child: const Text('Could not load the site level. Retry'));
+        }
+        if (snapshot.connectionState == ConnectionState.done) {
+          _shown = snapshot.data;
+        }
+        final text = _shown;
+        if (text == null) {
+          return const CotsLoadingSkeleton(layout: CotsSkeletonLayout.section);
+        }
+        final high = text.contains('High');
+        if (widget.valueBuilder != null) {
+          final separator = text.indexOf(': ');
+          return widget.valueBuilder!(
+              separator < 0 ? text : text.substring(separator + 2));
+        }
+        return Text(text,
+            style: TextStyle(
+                color: high ? kDangerRed : kTextNavy,
+                fontWeight: high ? FontWeight.w700 : FontWeight.normal));
+      });
 }
 
 String _eventLabel(String action) => switch (action) {
@@ -117,19 +164,27 @@ class _FollowUpReassignmentActionsState
             TextButton(onPressed: _refresh, child: const Text('Retry')),
           ]);
         }
-        if (!snapshot.hasData) return const LinearProgressIndicator();
+        if (!snapshot.hasData) {
+          return const CotsLoadingSkeleton(layout: CotsSkeletonLayout.section);
+        }
         final matches = snapshot.data!.where((r) =>
             r.areaId == assignment.areaId && r.isCurrent(DateTime.now()));
         final request = matches.isEmpty ? null : matches.first;
         final responsible =
             request?.responsibleUid ?? assignment.primaryDiverUid;
-        final authorized = responsible == user.uid;
+        // Stage 11: either main Diver records the visit, unless a
+        // replacement covers this month.
+        final authorized = followUpMayRecord(
+            responsibleUid: responsible,
+            mainDiverUids: assignment.mainDiverUids,
+            userUid: user.uid);
+        final isMain = assignment.mainDiverUids.contains(user.uid);
         final canStart = authorized &&
-            (user.uid == assignment.primaryDiverUid ||
+            (isMain ||
                 (user.accountRole == 'user' &&
                     user.isActive &&
                     user.fieldPersonnelVerified));
-        final temporary = authorized && user.uid != assignment.primaryDiverUid;
+        final temporary = authorized && !isMain;
         final canRequest = authorized &&
             (request == null ||
                 ['accepted', 'cancelled'].contains(request.status));
@@ -255,9 +310,13 @@ class _RequestDialogState extends State<_RequestDialog> {
 
 class ReassignmentDetails extends StatefulWidget {
   const ReassignmentDetails(
-      {super.key, required this.requestId, this.closeable = false});
+      {super.key,
+      required this.requestId,
+      this.closeable = false,
+      this.compact = false});
   final String requestId;
   final bool closeable;
+  final bool compact;
   @override
   State<ReassignmentDetails> createState() => _ReassignmentDetailsState();
 }
@@ -267,13 +326,12 @@ class _ReassignmentDetailsState extends State<ReassignmentDetails> {
   bool _busy = false;
   String? _error;
   Future<FollowUpReassignment> _load() async {
-    final doc = await FollowUpReassignmentRepository.store
-        .get('follow_up_reassignments/${widget.requestId}');
-    if (doc == null) {
+    final request =
+        await FollowUpReassignmentRepository.getRequest(widget.requestId);
+    if (request == null) {
       throw StateError('This reassignment request no longer exists.');
     }
-    return FollowUpReassignment(
-        widget.requestId, FollowUpWorkflowStore.data(doc));
+    return request;
   }
 
   Future<void> _run(Future<void> Function() operation) async {
@@ -284,7 +342,11 @@ class _ReassignmentDetailsState extends State<ReassignmentDetails> {
     });
     try {
       await operation();
-      if (mounted) setState(() => _request = _load());
+      if (mounted) {
+        setState(() {
+          _request = _load();
+        });
+      }
     } catch (error) {
       if (mounted) setState(() => _error = '$error');
     } finally {
@@ -342,6 +404,36 @@ class _ReassignmentDetailsState extends State<ReassignmentDetails> {
     }
   }
 
+  List<Widget> _layout(List<Widget> children) {
+    if (!widget.compact) return children;
+    return children.map((child) {
+      if (child is ButtonStyleButton) {
+        return Padding(
+            padding: const EdgeInsets.only(top: 8),
+            child: Align(alignment: Alignment.centerLeft, child: child));
+      }
+      if (child is Text && child.data != null) {
+        final value = child.data!;
+        final split = value.indexOf(': ');
+        if (split > 0) {
+          return Padding(
+              padding: const EdgeInsets.symmetric(vertical: 5),
+              child: Wrap(spacing: 12, runSpacing: 4, children: [
+                SizedBox(
+                    width: 165,
+                    child: Text(value.substring(0, split),
+                        style: const TextStyle(
+                            fontSize: 13, color: Colors.blueGrey))),
+                Text(value.substring(split + 2),
+                    style: const TextStyle(
+                        fontSize: 14, fontWeight: FontWeight.w600)),
+              ]));
+        }
+      }
+      return child;
+    }).toList();
+  }
+
   @override
   Widget build(BuildContext context) {
     final user = context.watch<AuthProvider>().userModel!;
@@ -353,9 +445,13 @@ class _ReassignmentDetailsState extends State<ReassignmentDetails> {
               if (snapshot.hasError)
                 Text('Could not load request: ${snapshot.error}')
               else
-                const CircularProgressIndicator(),
+                const CotsLoadingSkeleton(
+                    layout: CotsSkeletonLayout.section,
+                    label: 'Loading request'),
               TextButton(
-                  onPressed: () => setState(() => _request = _load()),
+                  onPressed: () => setState(() {
+                        _request = _load();
+                      }),
                   child: const Text('Retry')),
               if (widget.closeable)
                 TextButton(
@@ -369,7 +465,7 @@ class _ReassignmentDetailsState extends State<ReassignmentDetails> {
           return Column(
               mainAxisSize: MainAxisSize.min,
               crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
+              children: _layout([
                 Text('${d['area_name']} · ${d['barangay']}',
                     style: Theme.of(context).textTheme.titleMedium),
                 Text('Original diver: ${d['primary_name']}'),
@@ -448,7 +544,8 @@ class _ReassignmentDetailsState extends State<ReassignmentDetails> {
                                   'Could not load audit history: ${history.error}');
                             }
                             if (!history.hasData) {
-                              return const LinearProgressIndicator();
+                              return const CotsLoadingSkeleton(
+                                  layout: CotsSkeletonLayout.section);
                             }
                             return Column(children: [
                               for (final event in history.data!)
@@ -462,14 +559,17 @@ class _ReassignmentDetailsState extends State<ReassignmentDetails> {
                           }),
                     ]),
                 TextButton(
-                    onPressed:
-                        _busy ? null : () => setState(() => _request = _load()),
+                    onPressed: _busy
+                        ? null
+                        : () => setState(() {
+                              _request = _load();
+                            }),
                     child: const Text('Refresh')),
                 if (widget.closeable)
                   TextButton(
                       onPressed: _busy ? null : () => Navigator.pop(context),
                       child: const Text('Close')),
-              ]);
+              ]));
         });
   }
 }

@@ -9,11 +9,31 @@ import '../../providers/auth_provider.dart';
 import '../../services/notification_repository.dart';
 import '../../widgets/follow_up_reassignment_controls.dart';
 import 'cots_map_page.dart';
+import 'follow_up_page.dart';
 import 'profile_page.dart';
 import 'records_page.dart';
 import 'user_bottom_nav.dart';
+import '../../widgets/cots_loading_skeleton.dart';
 
-enum NotificationCategory { all, alerts, reminders, updates }
+enum NotificationCategory {
+  all,
+  alerts,
+  reminders,
+  updates;
+
+  static NotificationCategory forType(String type) => switch (type) {
+        AppNotification.reviewRejected ||
+        AppNotification.recordRejected ||
+        'site_level_high' =>
+          alerts,
+        AppNotification.interventionAssigned ||
+        AppNotification.zoneReviewReminder ||
+        'visit_reminder_first' ||
+        'visit_reminder_second' =>
+          reminders,
+        _ => updates,
+      };
+}
 
 /// Row data for [NotificationCard].
 class NotificationListItem {
@@ -44,7 +64,7 @@ class NotificationListItem {
   final bool unread;
 }
 
-/// Notifications list + filters matching COTS Monitor mockup.
+/// Notifications list and filters for real workflow activities.
 class NotificationsScreen extends StatefulWidget {
   const NotificationsScreen({super.key});
 
@@ -54,6 +74,70 @@ class NotificationsScreen extends StatefulWidget {
 
 class _NotificationsScreenState extends State<NotificationsScreen> {
   NotificationCategory _filter = NotificationCategory.all;
+
+  Future<void> _openNotification(AppNotification notification) async {
+    try {
+      if (!notification.isRead) {
+        await NotificationRepository.markRead(notification.id);
+      }
+      if (!mounted) return;
+      if (notification.type == 'follow_up_reassignment') {
+        await showReassignmentDetails(context, notification.relatedRecordId);
+      } else if (notification.type == AppNotification.interventionAssigned ||
+          notification.type == AppNotification.zoneRecordApproved ||
+          notification.isHandover) {
+        await Navigator.of(context).push<void>(
+          MaterialPageRoute<void>(builder: (_) => const FollowUpPage()),
+        );
+      } else {
+        await Navigator.of(context).push<void>(
+          MaterialPageRoute<void>(builder: (_) => const RecordsPage()),
+        );
+      }
+    } catch (error) {
+      _showError('Could not open notification: $error');
+    }
+  }
+
+  Future<void> _markAllRead(List<AppNotification> notifications) async {
+    try {
+      await NotificationRepository.markAllRead(notifications);
+    } catch (error) {
+      _showError('Could not mark notifications as read: $error');
+    }
+  }
+
+  Future<void> _clearAll(List<AppNotification> notifications) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Clear listed notifications?'),
+        content: const Text(
+            'Hide these notifications from your list? Your records will not be deleted.'),
+        actions: [
+          TextButton(
+              onPressed: () => Navigator.pop(context, false),
+              child: const Text('Cancel')),
+          FilledButton(
+              onPressed: () => Navigator.pop(context, true),
+              child: const Text('Clear listed')),
+        ],
+      ),
+    );
+    if (confirmed != true) return;
+    try {
+      await NotificationRepository.clearAll(notifications);
+    } catch (error) {
+      _showError('Could not clear notifications: $error');
+    }
+  }
+
+  void _showError(String message) {
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(behavior: SnackBarBehavior.floating, content: Text(message)),
+    );
+  }
 
   List<NotificationListItem> _visible(List<NotificationListItem> all) {
     if (_filter == NotificationCategory.all) return all;
@@ -70,22 +154,34 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
   NotificationListItem _itemFor(AppNotification notification) {
     final createdAt = notification.createdAt;
     final today = DateUtils.isSameDay(createdAt, DateTime.now());
-    final category = switch (notification.type) {
-      AppNotification.interventionAssigned => NotificationCategory.reminders,
-      AppNotification.reviewRejected => NotificationCategory.alerts,
-      _ => NotificationCategory.updates,
-    };
+    final category = NotificationCategory.forType(notification.type);
     final accent = switch (notification.type) {
       AppNotification.interventionAssigned => kWarningOrange,
-      AppNotification.reviewAccepted => kSuccessGreen,
-      AppNotification.reviewRejected => kDangerRed,
-      _ => kAccentPurple,
+      AppNotification.reviewAccepted ||
+      AppNotification.recordFinalized =>
+        kSuccessGreen,
+      AppNotification.reviewRejected ||
+      AppNotification.recordRejected =>
+        kDangerRed,
+      _ => switch (category) {
+          NotificationCategory.alerts => kDangerRed,
+          NotificationCategory.reminders => kWarningOrange,
+          _ => kAccentPurple,
+        },
     };
     final icon = switch (notification.type) {
       AppNotification.interventionAssigned => Icons.event_note_rounded,
-      AppNotification.reviewAccepted => Icons.check_circle_outline_rounded,
-      AppNotification.reviewRejected => Icons.warning_amber_rounded,
-      _ => Icons.event_available_rounded,
+      AppNotification.reviewAccepted ||
+      AppNotification.recordFinalized =>
+        Icons.check_circle_outline_rounded,
+      AppNotification.reviewRejected ||
+      AppNotification.recordRejected =>
+        Icons.warning_amber_rounded,
+      _ => switch (category) {
+          NotificationCategory.alerts => Icons.warning_amber_rounded,
+          NotificationCategory.reminders => Icons.event_note_rounded,
+          _ => Icons.event_available_rounded,
+        },
     };
     return NotificationListItem(
       id: notification.id,
@@ -132,13 +228,6 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
             color: kTextNavy,
           ),
         ),
-        actions: [
-          IconButton(
-            icon:
-                const Icon(Icons.settings_outlined, color: kTextNavy, size: 24),
-            onPressed: () {},
-          ),
-        ],
       ),
       floatingActionButton: userShellScanFab(
         context,
@@ -183,11 +272,9 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
                           children: [
                             if (snapshot.connectionState ==
                                 ConnectionState.waiting)
-                              const Padding(
-                                padding: EdgeInsets.only(top: 32),
-                                child:
-                                    Center(child: CircularProgressIndicator()),
-                              )
+                              const CotsLoadingSkeleton(
+                                  layout: CotsSkeletonLayout.list,
+                                  label: 'Loading notifications')
                             else if (visible.isEmpty)
                               const Padding(
                                 padding: EdgeInsets.only(top: 32),
@@ -220,27 +307,8 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
                                     padding: const EdgeInsets.only(bottom: 10),
                                     child: NotificationCard(
                                       model: item,
-                                      onTap: () async {
-                                        try {
-                                          if (!notification.isRead) {
-                                            await NotificationRepository
-                                                .markRead(notification.id);
-                                          }
-                                          if (!context.mounted) return;
-                                          if (notification.type ==
-                                              'follow_up_reassignment') {
-                                            await showReassignmentDetails(
-                                                context,
-                                                notification.relatedRecordId);
-                                          }
-                                        } catch (error) {
-                                          if (context.mounted) {
-                                            ScaffoldMessenger.of(context)
-                                                .showSnackBar(SnackBar(
-                                                    content: Text('$error')));
-                                          }
-                                        }
-                                      },
+                                      onTap: () =>
+                                          _openNotification(notification),
                                     ),
                                   );
                                 },
@@ -252,29 +320,29 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
                 ),
                 Padding(
                   padding: const EdgeInsets.fromLTRB(16, 8, 16, 12),
-                  child: Row(
+                  child: Wrap(
+                    alignment: WrapAlignment.spaceBetween,
+                    spacing: 8,
+                    runSpacing: 4,
                     children: [
                       TextButton.icon(
                         onPressed: notifications.isEmpty
                             ? null
-                            : () =>
-                                NotificationRepository.clearAll(notifications),
+                            : () => _clearAll(notifications),
                         icon: const Icon(Icons.delete_outline_rounded,
                             color: kDangerRed, size: 20),
                         label: const Text(
-                          'Clear All',
+                          'Clear listed notifications',
                           style: TextStyle(
                             fontWeight: FontWeight.w600,
                             color: kDangerRed,
                           ),
                         ),
                       ),
-                      const Spacer(),
                       TextButton.icon(
                         onPressed: notifications.every((item) => item.isRead)
                             ? null
-                            : () => NotificationRepository.markAllRead(
-                                notifications),
+                            : () => _markAllRead(notifications),
                         icon: const Icon(Icons.done_all_rounded,
                             color: kSuccessGreen, size: 20),
                         label: const Text(

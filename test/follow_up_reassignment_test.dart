@@ -1,5 +1,6 @@
 import 'dart:convert';
 import 'package:cots_monitor/models/follow_up_monitoring_model.dart';
+import 'package:cots_monitor/core/supabase_config.dart';
 import 'package:cots_monitor/models/follow_up_reassignment.dart';
 import 'package:cots_monitor/models/user_model.dart';
 import 'package:cots_monitor/models/capture_model.dart';
@@ -42,7 +43,8 @@ UserModel user(String uid) => UserModel(
     fieldPersonnelVerified: true);
 
 class _Auth extends AuthProvider {
-  _Auth(this.profile) : super(authService: _NoSessionAuth());
+  _Auth(this.profile)
+      : super(authService: _NoSessionAuth(), useSupabaseForTesting: false);
   final UserModel profile;
   @override
   UserModel get userModel => profile;
@@ -89,8 +91,14 @@ Map<String, dynamic> document(String path, Map<String, dynamic> data) => {
 
 void main() {
   late FollowUpWorkflowStore original;
-  setUp(() => original = FollowUpReassignmentRepository.store);
-  tearDown(() => FollowUpReassignmentRepository.store = original);
+  setUp(() {
+    original = FollowUpReassignmentRepository.store;
+    SupabaseConfig.configuredForTesting = false;
+  });
+  tearDown(() {
+    FollowUpReassignmentRepository.store = original;
+    SupabaseConfig.configuredForTesting = null;
+  });
   void useClient(MockClient client) {
     addTearDown(client.close);
     FollowUpReassignmentRepository.store = FollowUpWorkflowStore(

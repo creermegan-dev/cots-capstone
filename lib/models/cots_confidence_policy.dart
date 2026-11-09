@@ -55,7 +55,7 @@ abstract final class CotsConfidencePolicy {
       CotsVerificationBand.adminReview =>
         'The AI detection confidence is $confidencePercent%, which is below the automatic acceptance threshold. This record has been forwarded to the Expert for manual verification before it becomes an official monitoring record.',
       CotsVerificationBand.retakeRequired =>
-        'Confidence is below $adminReviewMin%. Please retake your GoPro photo — the image quality or detection clarity is too low.',
+        'Confidence is below $adminReviewMin%. Please retake your photo — the image quality or detection clarity is too low.',
     };
   }
 
@@ -190,7 +190,7 @@ abstract final class CotsConfidencePolicy {
           return 'The AI detection confidence is $avg%, which is below the automatic acceptance threshold. This record has been forwarded to the Expert for manual verification before it becomes an official monitoring record.';
         }(),
       CotsVerificationBand.retakeRequired =>
-        'All detections are below $adminReviewMin% confidence. Please retake your GoPro photo.',
+        'All detections are below $adminReviewMin% confidence. Please retake your photo.',
     };
   }
 

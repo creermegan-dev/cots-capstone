@@ -1,5 +1,6 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 
+import '../core/firebase_only_feature.dart';
 import '../core/firebase_bootstrap.dart';
 import '../models/intervention_assignment_model.dart';
 import '../models/record_collection.dart';
@@ -18,6 +19,9 @@ abstract final class InterventionAssignmentRepository {
   static Stream<List<InterventionAssignmentModel>> watchForAssignee(
     String uid,
   ) {
+    if (firebaseFeaturesUnavailable) {
+      return firebaseOnlyFeatureStream('Assigned tasks');
+    }
     if (deferFirebaseUntilFirstUse) {
       final token = ScanRecordRepository.windowsIdToken;
       if (token == null) {
@@ -44,6 +48,9 @@ abstract final class InterventionAssignmentRepository {
   static Stream<InterventionAssignmentModel?> watchForCapture(
     String captureId,
   ) {
+    if (firebaseFeaturesUnavailable) {
+      return firebaseOnlyFeatureStream('Intervention assignments');
+    }
     if (deferFirebaseUntilFirstUse) {
       final token = ScanRecordRepository.windowsIdToken;
       if (token == null) {

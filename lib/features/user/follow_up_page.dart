@@ -1,11 +1,12 @@
-import 'package:cots_monitor/widgets/app_back_icon_button.dart';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
 
 import '../../core/cots_colors.dart';
+import '../../core/supabase_config.dart';
 import '../../models/activity_type.dart';
 import '../../models/capture_model.dart';
+import '../../models/cots_density.dart';
 import '../../models/follow_up_monitoring_model.dart';
 import '../../models/follow_up_reassignment.dart';
 import '../../models/scan_record_model.dart';
@@ -13,13 +14,17 @@ import '../../providers/auth_provider.dart';
 import '../../services/capture_repository.dart';
 import '../../services/follow_up_monitoring_repository.dart';
 import '../../widgets/follow_up_reassignment_controls.dart';
+import '../../widgets/area_handover_controls.dart';
+import '../../widgets/site_partner_controls.dart';
 import '../../services/scan_record_repository.dart';
 import 'cots_map_page.dart';
 import 'profile_page.dart';
 import 'records_page.dart';
 import 'scan_detection_page.dart';
 import 'user_bottom_nav.dart';
+import 'widgets/records_section_tabs.dart';
 import 'user_record_details_page.dart';
+import '../../widgets/cots_loading_skeleton.dart';
 
 class FollowUpPage extends StatefulWidget {
   const FollowUpPage({super.key});
@@ -97,12 +102,9 @@ class _FollowUpPageState extends State<FollowUpPage> {
         elevation: 0,
         backgroundColor: Colors.white,
         surfaceTintColor: Colors.transparent,
-        leading: AppBackIconButton(
-          onPressed: () => Navigator.of(context).maybePop(),
-          iconColor: kTextNavy,
-        ),
+        automaticallyImplyLeading: false,
         title: const Text(
-          'Follow-up Monitoring',
+          'Records',
           style: TextStyle(
             color: kTextNavy,
             fontSize: 18,
@@ -110,6 +112,12 @@ class _FollowUpPageState extends State<FollowUpPage> {
           ),
         ),
         centerTitle: true,
+        // The monthly follow-up is the "Monthly visits" tab of Records.
+        bottom: RecordsSectionTabs(
+          active: RecordsSection.visits,
+          onOpen: (context, _) => Navigator.of(context)
+              .pushReplacement(recordsSectionRoute((_) => const RecordsPage())),
+        ),
       ),
       bottomNavigationBar: UserBottomNavBar(
         active: UserNavDestination.followUp,
@@ -130,9 +138,8 @@ class _FollowUpPageState extends State<FollowUpPage> {
                   );
                 }
                 if (!captureSnapshot.hasData) {
-                  return const Center(
-                    child: CircularProgressIndicator(color: kPrimaryTeal),
-                  );
+                  return const CotsPageLoading(
+                      label: 'Loading follow-up monitoring');
                 }
                 final captures = captureSnapshot.data!;
                 _reconcileHistory(captures, uid);
@@ -147,9 +154,8 @@ class _FollowUpPageState extends State<FollowUpPage> {
                       );
                     }
                     if (!assignmentSnapshot.hasData) {
-                      return const Center(
-                        child: CircularProgressIndicator(color: kPrimaryTeal),
-                      );
+                      return const CotsPageLoading(
+                          label: 'Loading follow-up monitoring');
                     }
                     return StreamBuilder<List<FollowUpSurveyModel>>(
                       stream:
@@ -163,8 +169,8 @@ class _FollowUpPageState extends State<FollowUpPage> {
                           );
                         }
                         if (!surveySnapshot.hasData) {
-                          return const Center(
-                              child: CircularProgressIndicator());
+                          return const CotsPageLoading(
+                              label: 'Loading follow-up monitoring');
                         }
                         return StreamBuilder<List<ScanRecordModel>>(
                           stream: ScanRecordRepository.watchAll(),
@@ -176,8 +182,8 @@ class _FollowUpPageState extends State<FollowUpPage> {
                               );
                             }
                             if (!recordSnapshot.hasData) {
-                              return const Center(
-                                  child: CircularProgressIndicator());
+                              return const CotsPageLoading(
+                                  label: 'Loading follow-up monitoring');
                             }
                             return _buildContent(
                               assignments: assignmentSnapshot.data!,
@@ -251,6 +257,13 @@ class _FollowUpPageState extends State<FollowUpPage> {
         padding: const EdgeInsets.fromLTRB(16, 16, 16, 104),
         children: [
           _pageIntro(),
+          // Stage 4: handover offers made to this Diver.
+          if (SupabaseConfig.isConfigured) ...[
+            const SizedBox(height: 12),
+            HandoverOffersCard(onChanged: _retryReconciliation),
+            // Stage 10: site partner invitations sent to this Diver.
+            SitePartnerInvitesCard(onChanged: _retryReconciliation),
+          ],
           if (_isReconciling) ...[
             const SizedBox(height: 12),
             const LinearProgressIndicator(color: kPrimaryTeal),
@@ -365,95 +378,124 @@ class _FollowUpPageState extends State<FollowUpPage> {
       color: Colors.white,
       elevation: 0,
       shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(16),
-        side: const BorderSide(color: kBorderGray),
-      ),
-      child: Padding(
-        padding: const EdgeInsets.all(16),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
+          borderRadius: BorderRadius.circular(16),
+          side: const BorderSide(color: kBorderGray)),
+      child: ExpansionTile(
+        key: PageStorageKey('monthly-site-${assignment.areaId}'),
+        maintainState: true,
+        tilePadding: const EdgeInsets.all(16),
+        childrenPadding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+        shape: const Border(),
+        collapsedShape: const Border(),
+        title: Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Row(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                const Icon(Icons.coronavirus_outlined,
-                    color: kPrimaryTeal, size: 24),
-                const SizedBox(width: 10),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        assignment.areaName,
-                        style: const TextStyle(
-                          color: kTextNavy,
-                          fontSize: 17,
-                          fontWeight: FontWeight.w800,
-                        ),
-                      ),
-                      const SizedBox(height: 3),
-                      Text(
-                        '${assignment.barangay}, ${assignment.municipality}',
-                        style: const TextStyle(
-                          color: kMutedGray,
-                          fontSize: 13,
-                        ),
-                      ),
-                    ],
+            const Icon(Icons.coronavirus_outlined,
+                color: kPrimaryTeal, size: 24),
+            const SizedBox(width: 10),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    assignment.areaName,
+                    style: const TextStyle(
+                      color: kTextNavy,
+                      fontSize: 16,
+                      fontWeight: FontWeight.w800,
+                    ),
                   ),
-                ),
-              ],
-            ),
-            const SizedBox(height: 8),
-            Align(alignment: Alignment.centerLeft, child: _statusChip(status)),
-            const Divider(height: 24),
-            _infoRow('Initial detection',
-                _dateFormat.format(assignment.initialDate)),
-            _infoRow(
-                'Initial detected COTS', '${assignment.initialDetectedCount}'),
-            _infoRow('Initially reported eliminated',
-                initialEliminated?.toString() ?? 'Not recorded'),
-            _infoRow('Last monitoring date', _dateFormat.format(lastDate)),
-            _infoRow('Current target month', _monthFormat.format(now)),
-            FollowUpAssessmentLabel(areaId: assignment.areaId),
-            _infoRow('Primary assigned diver', assignment.primaryDiverName),
-            const SizedBox(height: 10),
-            FollowUpReassignmentActions(
-              assignment: assignment,
-              onStart: () => _openSurvey(
-                  assignment: assignment, previousSurvey: latestSurvey),
-            ),
-            const SizedBox(height: 8),
-            ExpansionTile(
-              tilePadding: EdgeInsets.zero,
-              childrenPadding: EdgeInsets.zero,
-              title: const Text(
-                'Monitoring history',
-                style: TextStyle(
-                  color: kTextNavy,
-                  fontWeight: FontWeight.w700,
-                ),
-              ),
-              subtitle: Text(
-                '${areaSurveys.length} saved visit(s)',
-                style: const TextStyle(color: kMutedGray, fontSize: 12),
-              ),
-              children: [
-                for (final entry in history)
-                  _monthHistoryRow(
-                    entry,
-                    captures: captures,
-                    baseline:
-                        '${assignment.primaryDiverName} · AI detections ${assignment.initialDetectedCount}, reported eliminated ${initialEliminated ?? 'Not recorded'}',
-                    isInitialMonth: entry.month.year ==
-                            assignment.initialDate.toLocal().year &&
-                        entry.month.month ==
-                            assignment.initialDate.toLocal().month,
+                  const SizedBox(height: 3),
+                  Text(
+                    assignment.municipality,
+                    style: const TextStyle(
+                      color: kMutedGray,
+                      fontSize: 13,
+                    ),
                   ),
-              ],
+                ],
+              ),
             ),
           ],
         ),
+        subtitle: Padding(
+            padding: const EdgeInsets.only(top: 8),
+            child: Align(
+                alignment: Alignment.centerLeft, child: _statusChip(status))),
+        children: [
+          DefaultTextStyle.merge(
+            style: const TextStyle(fontSize: 13, color: kTextNavy, height: 1.4),
+            child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  const Divider(height: 16),
+                  _infoRow('First detection date',
+                      _dateFormat.format(assignment.initialDate)),
+                  _infoRow('Initial COTS detected',
+                      '${assignment.initialDetectedCount}'),
+                  _infoRow('Initially reported removals',
+                      initialEliminated?.toString() ?? 'Not recorded'),
+                  _infoRow(
+                      'Last monitoring date', _dateFormat.format(lastDate)),
+                  _infoRow('Current target month',
+                      _monthFormat.format(followUpTargetMonth(now, status))),
+                  FollowUpAssessmentLabel(
+                      areaId: assignment.areaId,
+                      valueBuilder: (value) => _infoRow('Site level', value)),
+                  if (!SupabaseConfig.isConfigured)
+                    _infoRow('Assigned diver', assignment.primaryDiverName),
+                  // Stage 10: both main Divers, and "Add site partner".
+                  if (SupabaseConfig.isConfigured) ...[
+                    const SizedBox(height: 6),
+                    SiteTeamPanel(
+                        areaCode: assignment.areaId,
+                        fallbackDiverName: assignment.primaryDiverName),
+                  ],
+                  const SizedBox(height: 10),
+                  FollowUpReassignmentActions(
+                    assignment: assignment,
+                    onStart: () => _openSurvey(
+                        assignment: assignment, previousSurvey: latestSurvey),
+                  ),
+                  // Stage 4: only the main Diver can hand over the area.
+                  if (SupabaseConfig.isConfigured &&
+                      assignment.primaryDiverUid ==
+                          context.read<AuthProvider>().userModel?.uid) ...[
+                    const SizedBox(height: 8),
+                    AreaHandoverButton(assignment: assignment),
+                  ],
+                  const SizedBox(height: 8),
+                  ExpansionTile(
+                    tilePadding: EdgeInsets.zero,
+                    childrenPadding: EdgeInsets.zero,
+                    title: const Text(
+                      'Monitoring history',
+                      style: TextStyle(
+                        color: kTextNavy,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                    subtitle: Text(
+                      '${areaSurveys.length} saved visit(s)',
+                      style: const TextStyle(color: kMutedGray, fontSize: 12),
+                    ),
+                    children: [
+                      for (final entry in history)
+                        _monthHistoryRow(
+                          entry,
+                          captures: captures,
+                          baseline:
+                              '${assignment.primaryDiverName} · AI detections ${assignment.initialDetectedCount}, reported eliminated ${initialEliminated ?? 'Not recorded'}',
+                          isInitialMonth: entry.month.year ==
+                                  assignment.initialDate.toLocal().year &&
+                              entry.month.month ==
+                                  assignment.initialDate.toLocal().month,
+                        ),
+                    ],
+                  ),
+                ]),
+          )
+        ],
       ),
     );
   }
@@ -503,9 +545,9 @@ class _FollowUpPageState extends State<FollowUpPage> {
                 child: Text(
                   '${_dateFormat.format(survey.surveyDate)} · '
                   '${survey.submittedBy} · ${followUpSurveyStatusLabel(followUpSurveyStatus(survey, captures))} · '
-                  'Field observed ${survey.fieldObservedCount}, '
-                  'eliminated ${survey.fieldEliminatedCount}, '
-                  'AI detections ${survey.aiDetectedCount}',
+                  '${followUpCountSummary(survey)}'
+                  '${survey.calculatedLevel == null ? '' : ' · ${CotsDensity.describe(survey.densityPerHectare, survey.calculatedLevel)}'}'
+                  '${survey.assessedLevel == null ? '' : ' · Expert: ${survey.assessedLevel}'}',
                   style: const TextStyle(color: kMutedGray, fontSize: 12),
                 ),
               ),
@@ -551,10 +593,10 @@ class _FollowUpPageState extends State<FollowUpPage> {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             SizedBox(
-              width: 168,
+              width: MediaQuery.sizeOf(context).width < 400 ? 132 : 168,
               child: Text(
                 label,
-                style: const TextStyle(color: kMutedGray, fontSize: 12),
+                style: const TextStyle(color: kMutedGray, fontSize: 13),
               ),
             ),
             Expanded(
@@ -562,7 +604,7 @@ class _FollowUpPageState extends State<FollowUpPage> {
                 value,
                 style: const TextStyle(
                   color: kTextNavy,
-                  fontSize: 12,
+                  fontSize: 13,
                   fontWeight: FontWeight.w700,
                 ),
               ),

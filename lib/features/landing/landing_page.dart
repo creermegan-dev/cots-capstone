@@ -1,20 +1,18 @@
+import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 
 import '../auth/auth_routes.dart';
 import '../auth/login_screen.dart';
 import 'landing_theme.dart';
-import 'widgets/landing_bottom_wave.dart';
-import 'widgets/landing_coral_decor.dart';
 import 'widgets/landing_hero_image.dart';
-import '../auth/widgets/cots_auth_logo_badge.dart';
 
-/// Public marketing landing — split-screen hero matching marine SaaS reference.
+/// Responsive marine-themed landing page matching the COTS Monitor reference mockup.
 class LandingPage extends StatelessWidget {
   const LandingPage({super.key});
 
-  static const _tabletBreakpoint = 900.0;
-  static const _desktopBreakpoint = 1100.0;
+  /// Breakpoint between single-column mobile/tablet and split-screen desktop.
+  static const _tabletBreakpoint = 860.0;
 
   @override
   Widget build(BuildContext context) {
@@ -23,245 +21,351 @@ class LandingPage extends StatelessWidget {
       body: LayoutBuilder(
         builder: (context, constraints) {
           final width = constraints.maxWidth;
-          final isDesktop = width >= _desktopBreakpoint;
-          final isMobile = width < _tabletBreakpoint;
+          final height = constraints.maxHeight;
+          final isDesktop = width >= _tabletBreakpoint;
 
           if (isDesktop) {
-            return _DesktopLanding(height: constraints.maxHeight);
+            return _DesktopLanding(width: width, height: height);
           }
-          return _MobileLanding(isMobile: isMobile);
+          return _MobileLanding(width: width, height: height);
         },
       ),
     );
   }
 }
 
-// ─── Desktop ─────────────────────────────────────────────────────────────────
+// ─── Desktop Layout ──────────────────────────────────────────────────────────
 
 class _DesktopLanding extends StatelessWidget {
-  const _DesktopLanding({required this.height});
+  const _DesktopLanding({required this.width, required this.height});
 
+  final double width;
   final double height;
 
   @override
   Widget build(BuildContext context) {
+    final isCompactDesktop = width < 1100;
+    final horizontalPadding =
+        width > 1200 ? 56.0 : (isCompactDesktop ? 32.0 : 44.0);
+    final mistHeight = math.max(260.0, height * 0.44);
+
     return Stack(
       fit: StackFit.expand,
       children: [
+        // 1. Soft marine seafoam base gradient from Login/Auth
         const DecoratedBox(
-          decoration: BoxDecoration(gradient: LandingColors.backgroundGradient),
+          decoration: BoxDecoration(
+            gradient: LandingColors.backgroundGradient,
+          ),
         ),
-        const Positioned.fill(
-          child: LandingHeroImage(fullBleed: true),
+
+        // 2. Decorative ocean orbs, arc contour, and coral line art (from Login photo)
+        const CustomPaint(
+          painter: _LandingOceanDecorPainter(isDesktop: true),
+          size: Size.infinite,
         ),
-        const Positioned(
+
+        // 2. Underwater ambient cyan/mint mist rising from bottom
+        Positioned(
           left: 0,
-          bottom: 72,
-          width: 420,
-          height: 280,
-          child: LandingCoralDecor(),
-        ),
-        SafeArea(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              Padding(
-                padding: const EdgeInsets.fromLTRB(48, 16, 48, 0),
-                child: _LandingHeader(),
+          right: 0,
+          bottom: 0,
+          height: mistHeight,
+          child: const IgnorePointer(
+            child: DecoratedBox(
+              decoration: BoxDecoration(
+                gradient: LandingColors.bottomMistGradient,
               ),
-              Expanded(
-                child: Row(
+            ),
+          ),
+        ),
+
+        // 3. Foreground content — vertically centered with graceful scrolling
+        SafeArea(
+          child: SingleChildScrollView(
+            physics: const ClampingScrollPhysics(),
+            child: ConstrainedBox(
+              constraints: BoxConstraints(minHeight: height),
+              child: Padding(
+                padding: EdgeInsets.symmetric(
+                  horizontal: horizontalPadding,
+                  vertical: 24,
+                ),
+                child: Column(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
-                    Expanded(
-                      flex: 46,
-                      child: Padding(
-                        padding: const EdgeInsets.fromLTRB(48, 24, 24, 0),
-                        child: Align(
-                          alignment: Alignment.centerLeft,
-                          child: ConstrainedBox(
-                            constraints: const BoxConstraints(maxWidth: 520),
-                            child: const _HeroCopy(showFeatures: false),
+                    // Header
+                    const _LandingHeader(),
+
+                    // Centered hero split content
+                    Padding(
+                      padding: const EdgeInsets.symmetric(vertical: 20),
+                      child: Center(
+                        child: ConstrainedBox(
+                          constraints: const BoxConstraints(maxWidth: 1140),
+                          child: Row(
+                            crossAxisAlignment: CrossAxisAlignment.center,
+                            children: [
+                              // Left column: Headline, Subtitle, CTA
+                              Expanded(
+                                flex: isCompactDesktop ? 52 : 55,
+                                child: Align(
+                                  alignment: Alignment.centerLeft,
+                                  child: ConstrainedBox(
+                                    constraints: BoxConstraints(
+                                      maxWidth: isCompactDesktop ? 440 : 500,
+                                    ),
+                                    child: _HeroCopy(
+                                      isMobile: false,
+                                      fontSize: isCompactDesktop ? 40.0 : 48.0,
+                                    ),
+                                  ),
+                                ),
+                              ),
+
+                              SizedBox(width: isCompactDesktop ? 24 : 40),
+
+                              // Right column: Coral image card
+                              Expanded(
+                                flex: isCompactDesktop ? 48 : 45,
+                                child: Align(
+                                  alignment: Alignment.centerRight,
+                                  child: ConstrainedBox(
+                                    constraints: BoxConstraints(
+                                      maxWidth: isCompactDesktop ? 320 : 380,
+                                      maxHeight: math.min(
+                                        480.0,
+                                        math.max(280.0, height * 0.65),
+                                      ),
+                                    ),
+                                    child: const AspectRatio(
+                                      aspectRatio: 0.72,
+                                      child: LandingHeroImage(),
+                                    ),
+                                  ),
+                                ),
+                              ),
+                            ],
                           ),
                         ),
                       ),
                     ),
-                    const Expanded(flex: 54, child: SizedBox()),
+
+                    const SizedBox(height: 8),
                   ],
                 ),
               ),
-            ],
-          ),
-        ),
-        const Align(
-          alignment: Alignment.bottomCenter,
-          child: LandingBottomWave(),
-        ),
-      ],
-    );
-  }
-}
-
-// ─── Mobile / Tablet ───────────────────────────────────────────────────────
-
-class _MobileLanding extends StatelessWidget {
-  const _MobileLanding({required this.isMobile});
-
-  final bool isMobile;
-
-  @override
-  Widget build(BuildContext context) {
-    return Stack(
-      fit: StackFit.expand,
-      children: [
-        const DecoratedBox(
-          decoration: BoxDecoration(gradient: LandingColors.backgroundGradient),
-        ),
-        SafeArea(
-          child: SingleChildScrollView(
-            physics: const ClampingScrollPhysics(),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                Padding(
-                  padding: EdgeInsets.fromLTRB(isMobile ? 20 : 32, 12, isMobile ? 20 : 32, 0),
-                  child: _LandingHeader(),
-                ),
-                Padding(
-                  padding: EdgeInsets.fromLTRB(isMobile ? 20 : 32, 28, isMobile ? 20 : 32, 0),
-                  child: _HeroCopy(showFeatures: true),
-                ),
-                SizedBox(height: isMobile ? 24 : 32),
-                SizedBox(
-                  height: isMobile ? 260 : 340,
-                  child: LandingHeroImage(
-                    borderRadius: BorderRadius.circular(isMobile ? 20 : 24),
-                  ),
-                ),
-                const SizedBox(height: 48),
-              ],
             ),
           ),
         ),
-        const Align(
-          alignment: Alignment.bottomCenter,
-          child: LandingBottomWave(),
+      ],
+    );
+  }
+}
+
+// ─── Mobile / Tablet Layout ──────────────────────────────────────────────────
+
+class _MobileLanding extends StatelessWidget {
+  const _MobileLanding({required this.width, required this.height});
+
+  final double width;
+  final double height;
+
+  @override
+  Widget build(BuildContext context) {
+    final isTabletPortrait = width >= 600;
+    final isVerySmall = width < 360;
+    final horizontalPadding =
+        isVerySmall ? 16.0 : (isTabletPortrait ? 36.0 : 24.0);
+    final mistHeight = math.max(280.0, height * 0.40);
+    final headlineSize = isTabletPortrait ? 40.0 : (isVerySmall ? 28.0 : 34.0);
+
+    final availableWidth = width - (horizontalPadding * 2);
+    final cardWidth =
+        math.min(availableWidth, isTabletPortrait ? 340.0 : 270.0);
+    final cardHeight = cardWidth / 0.74;
+
+    return Stack(
+      fit: StackFit.expand,
+      children: [
+        // 1. Soft marine seafoam base gradient from Login/Auth
+        const DecoratedBox(
+          decoration: BoxDecoration(
+            gradient: LandingColors.backgroundGradient,
+          ),
+        ),
+
+        // 2. Decorative ocean orbs, arc contour, and coral line art (from Login photo)
+        const CustomPaint(
+          painter: _LandingOceanDecorPainter(isDesktop: false),
+          size: Size.infinite,
+        ),
+
+        // Underwater ambient cyan/mint mist rising from bottom
+        Positioned(
+          left: 0,
+          right: 0,
+          bottom: 0,
+          height: mistHeight,
+          child: const IgnorePointer(
+            child: DecoratedBox(
+              decoration: BoxDecoration(
+                gradient: LandingColors.bottomMistGradient,
+              ),
+            ),
+          ),
+        ),
+
+        SafeArea(
+          child: SingleChildScrollView(
+            physics: const ClampingScrollPhysics(),
+            padding: EdgeInsets.symmetric(
+              horizontal: horizontalPadding,
+              vertical: 18,
+            ),
+            child: Center(
+              child: ConstrainedBox(
+                constraints: const BoxConstraints(maxWidth: 580),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const _LandingHeader(),
+                    SizedBox(height: isTabletPortrait ? 32 : 24),
+                    _HeroCopy(
+                      isMobile: true,
+                      fontSize: headlineSize,
+                    ),
+                    SizedBox(height: isTabletPortrait ? 32 : 24),
+                    Center(
+                      child: SizedBox(
+                        width: cardWidth,
+                        height: cardHeight,
+                        child: const LandingHeroImage(),
+                      ),
+                    ),
+                    const SizedBox(height: 36),
+                  ],
+                ),
+              ),
+            ),
+          ),
         ),
       ],
     );
   }
 }
 
-// ─── Header ────────────────────────────────────────────────────────────────
+// ─── Header ──────────────────────────────────────────────────────────────────
 
 class _LandingHeader extends StatelessWidget {
+  const _LandingHeader();
+
   @override
   Widget build(BuildContext context) {
-    final compact = MediaQuery.sizeOf(context).width < LandingPage._tabletBreakpoint;
+    final width = MediaQuery.sizeOf(context).width;
+    final compact = width < 360;
 
     return Row(
+      mainAxisAlignment: MainAxisAlignment.spaceBetween,
       children: [
-        const _BrandLogo(),
-        const Spacer(),
-        _LoginButton(compact: compact),
+        Flexible(child: _BrandLogo(compact: compact)),
+        const SizedBox(width: 8),
+        _ProfileAvatarButton(compact: compact),
       ],
     );
   }
 }
 
 class _BrandLogo extends StatelessWidget {
-  const _BrandLogo();
-
-  @override
-  Widget build(BuildContext context) {
-    final compact = MediaQuery.sizeOf(context).width < LandingPage._tabletBreakpoint;
-
-    return Row(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        Container(
-          width: compact ? 38 : 44,
-          height: compact ? 38 : 44,
-          decoration: BoxDecoration(
-            shape: BoxShape.circle,
-            color: LandingColors.teal.withValues(alpha: 0.1),
-            border: Border.all(
-              color: LandingColors.teal.withValues(alpha: 0.35),
-              width: 1.5,
-            ),
-          ),
-          child: Padding(
-            padding: const EdgeInsets.all(5),
-            child: ClipOval(
-              child: Image.asset(
-                kCotsLogoAsset,
-                fit: BoxFit.cover,
-              ),
-            ),
-          ),
-        ),
-        SizedBox(width: compact ? 10 : 12),
-        Text(
-          'COTS Monitor',
-          style: GoogleFonts.inter(
-            fontSize: compact ? 17 : 20,
-            fontWeight: FontWeight.w800,
-            color: LandingColors.textPrimary,
-            letterSpacing: -0.3,
-          ),
-        ),
-      ],
-    );
-  }
-}
-
-class _LoginButton extends StatelessWidget {
-  const _LoginButton({required this.compact});
+  const _BrandLogo({this.compact = false});
 
   final bool compact;
 
   @override
   Widget build(BuildContext context) {
-    return Material(
-      color: Colors.transparent,
-      child: InkWell(
-        onTap: () {
-          Navigator.of(context).push<void>(
-            MaterialPageRoute<void>(builder: (_) => const LoginScreen()),
-          );
-        },
-        borderRadius: BorderRadius.circular(999),
-        child: Ink(
-          decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(999),
-            gradient: LandingColors.buttonGradient,
-            boxShadow: [
-              BoxShadow(
-                color: LandingColors.teal.withValues(alpha: 0.28),
-                blurRadius: 12,
-                offset: const Offset(0, 4),
-              ),
-            ],
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Container(
+          width: compact ? 32 : 36,
+          height: compact ? 32 : 36,
+          decoration: const BoxDecoration(
+            shape: BoxShape.circle,
+            color: LandingColors.logoCircleBg,
           ),
-          child: Padding(
-            padding: EdgeInsets.symmetric(
-              horizontal: compact ? 16 : 22,
-              vertical: compact ? 10 : 12,
+          alignment: Alignment.center,
+          child: Text(
+            '✱',
+            style: TextStyle(
+              color: LandingColors.buttonTeal,
+              fontSize: compact ? 14 : 16,
+              fontWeight: FontWeight.w700,
+              height: 1.0,
             ),
-            child: Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Icon(Icons.person_outline_rounded, color: Colors.white, size: compact ? 18 : 20),
-                SizedBox(width: compact ? 6 : 8),
-                Text(
-                  'Log In',
-                  style: GoogleFonts.inter(
-                    color: Colors.white,
-                    fontWeight: FontWeight.w700,
-                    fontSize: compact ? 13 : 14,
-                  ),
+          ),
+        ),
+        SizedBox(width: compact ? 8 : 12),
+        Flexible(
+          child: Text(
+            'COTS Monitor',
+            overflow: TextOverflow.ellipsis,
+            style: GoogleFonts.inter(
+              fontSize: compact ? 16 : 19,
+              fontWeight: FontWeight.w800,
+              color: LandingColors.textPrimary,
+              letterSpacing: -0.3,
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class _ProfileAvatarButton extends StatelessWidget {
+  const _ProfileAvatarButton({this.compact = false});
+
+  final bool compact;
+
+  void _onTap(BuildContext context) {
+    Navigator.of(context).push<void>(
+      MaterialPageRoute<void>(builder: (_) => const LoginScreen()),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final size = compact ? 36.0 : 40.0;
+
+    return Tooltip(
+      message: 'Log In',
+      child: Material(
+        color: Colors.transparent,
+        shape: const CircleBorder(),
+        child: InkWell(
+          onTap: () => _onTap(context),
+          customBorder: const CircleBorder(),
+          child: Ink(
+            width: size,
+            height: size,
+            decoration: BoxDecoration(
+              shape: BoxShape.circle,
+              color: LandingColors.avatarBg,
+              boxShadow: [
+                BoxShadow(
+                  color: LandingColors.avatarBg.withValues(alpha: 0.28),
+                  blurRadius: 10,
+                  offset: const Offset(0, 3),
                 ),
               ],
+            ),
+            child: Center(
+              child: Icon(
+                Icons.person_outline_rounded,
+                color: Colors.white,
+                size: compact ? 19 : 22,
+              ),
             ),
           ),
         ),
@@ -270,163 +374,100 @@ class _LoginButton extends StatelessWidget {
   }
 }
 
-// ─── Hero copy ─────────────────────────────────────────────────────────────
+// ─── Hero Copy & Action ──────────────────────────────────────────────────────
 
 class _HeroCopy extends StatelessWidget {
-  const _HeroCopy({required this.showFeatures});
+  const _HeroCopy({
+    required this.isMobile,
+    required this.fontSize,
+  });
 
-  final bool showFeatures;
+  final bool isMobile;
+  final double fontSize;
 
-  void _goSignup(BuildContext context) {
+  void _onStartMonitoring(BuildContext context) {
     Navigator.of(context).pushNamed(AuthRoutes.signup);
   }
 
   @override
   Widget build(BuildContext context) {
-    final width = MediaQuery.sizeOf(context).width;
-    final isMobile = width < LandingPage._tabletBreakpoint;
-    final isDesktop = width >= LandingPage._desktopBreakpoint;
-    final headlineSize = isMobile
-        ? (width < 400 ? 34.0 : 40.0)
-        : isDesktop
-            ? 52.0
-            : 44.0;
-
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       mainAxisSize: MainAxisSize.min,
       children: [
-        const _HeroBadge(),
-        SizedBox(height: isMobile ? 20 : 28),
-        _HeroHeadline(fontSize: headlineSize),
-        SizedBox(height: isMobile ? 16 : 20),
-        ConstrainedBox(
-          constraints: BoxConstraints(maxWidth: isMobile ? double.infinity : 480),
-          child: Text(
-            'COTS Monitoring is a Machine Learning-Based Crown of Thorn Starfish Detection and GIS Mapping System',
-            style: GoogleFonts.inter(
-              color: LandingColors.textMuted,
-              fontSize: isMobile ? 14 : 15.5,
-              height: 1.55,
-              fontWeight: FontWeight.w400,
-            ),
-          ),
-        ),
-        SizedBox(height: isMobile ? 28 : 36),
-        _GetStartedButton(onPressed: () => _goSignup(context)),
-        if (showFeatures) ...[
-          const SizedBox(height: 36),
-          const _FeatureList(),
-        ],
-      ],
-    );
-  }
-}
-
-class _HeroBadge extends StatelessWidget {
-  const _HeroBadge();
-
-  @override
-  Widget build(BuildContext context) {
-    final compact = MediaQuery.sizeOf(context).width < LandingPage._tabletBreakpoint;
-
-    return Container(
-      padding: EdgeInsets.symmetric(
-        horizontal: compact ? 12 : 16,
-        vertical: compact ? 7 : 9,
-      ),
-      decoration: BoxDecoration(
-        color: LandingColors.badgeFill,
-        borderRadius: BorderRadius.circular(999),
-        border: Border.all(color: LandingColors.badgeBorder),
-      ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Icon(
-            Icons.trending_up_rounded,
-            size: compact ? 14 : 16,
-            color: LandingColors.teal,
-          ),
-          SizedBox(width: compact ? 8 : 10),
-          Flexible(
-            child: Text(
-              'MACHINE LEARNING • EXPERT VALIDATED • REEF FOCUSED',
-              style: GoogleFonts.inter(
-                color: LandingColors.teal,
-                fontSize: compact ? 9.5 : 10.5,
-                fontWeight: FontWeight.w700,
-                letterSpacing: 0.6,
-              ),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _HeroHeadline extends StatelessWidget {
-  const _HeroHeadline({required this.fontSize});
-
-  final double fontSize;
-
-  @override
-  Widget build(BuildContext context) {
-    final base = GoogleFonts.inter(
-      fontSize: fontSize,
-      fontWeight: FontWeight.w800,
-      height: 1.12,
-      letterSpacing: -0.8,
-    );
-
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text('Monitor. Protect.', style: base.copyWith(color: LandingColors.textPrimary)),
+        // Headline
         Text.rich(
           TextSpan(
-            style: base,
+            style: GoogleFonts.inter(
+              fontSize: fontSize,
+              fontWeight: FontWeight.w800,
+              height: 1.10,
+              letterSpacing: fontSize >= 40 ? -1.0 : -0.5,
+            ),
             children: const [
               TextSpan(
-                text: 'Restore Our Reefs.',
+                text: 'Monitor.\nProtect.\n',
+                style: TextStyle(color: LandingColors.textPrimary),
+              ),
+              TextSpan(
+                text: 'Restore our\nreefs.',
                 style: TextStyle(color: LandingColors.teal),
               ),
             ],
           ),
         ),
+
+        SizedBox(height: isMobile ? 14 : 18),
+
+        // Subtitle
+        ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: 440),
+          child: Text(
+            'Detect crown-of-thorns starfish, map reef activity, and verify removals with expert support.',
+            style: GoogleFonts.inter(
+              color: LandingColors.textMuted,
+              fontSize: isMobile ? 13.5 : 15.0,
+              height: 1.5,
+              fontWeight: FontWeight.w400,
+            ),
+          ),
+        ),
+
+        SizedBox(height: isMobile ? 22 : 28),
+
+        // "Start monitoring" Button
+        _StartMonitoringButton(onPressed: () => _onStartMonitoring(context)),
       ],
     );
   }
 }
 
-class _GetStartedButton extends StatefulWidget {
-  const _GetStartedButton({required this.onPressed});
+class _StartMonitoringButton extends StatefulWidget {
+  const _StartMonitoringButton({required this.onPressed});
 
   final VoidCallback onPressed;
 
   @override
-  State<_GetStartedButton> createState() => _GetStartedButtonState();
+  State<_StartMonitoringButton> createState() => _StartMonitoringButtonState();
 }
 
-class _GetStartedButtonState extends State<_GetStartedButton> {
+class _StartMonitoringButtonState extends State<_StartMonitoringButton> {
   bool _hover = false;
 
   @override
   Widget build(BuildContext context) {
-    final compact = MediaQuery.sizeOf(context).width < LandingPage._tabletBreakpoint;
-
     return MouseRegion(
       onEnter: (_) => setState(() => _hover = true),
       onExit: (_) => setState(() => _hover = false),
       child: AnimatedContainer(
-        duration: const Duration(milliseconds: 180),
+        duration: const Duration(milliseconds: 160),
         decoration: BoxDecoration(
-          borderRadius: BorderRadius.circular(14),
-          gradient: LandingColors.buttonGradient,
+          color: LandingColors.buttonTeal,
+          borderRadius: BorderRadius.circular(12),
           boxShadow: [
             BoxShadow(
-              color: LandingColors.teal.withValues(alpha: _hover ? 0.38 : 0.25),
+              color: LandingColors.buttonTeal
+                  .withValues(alpha: _hover ? 0.44 : 0.30),
               blurRadius: _hover ? 20 : 14,
               offset: Offset(0, _hover ? 8 : 5),
             ),
@@ -436,23 +477,31 @@ class _GetStartedButtonState extends State<_GetStartedButton> {
           color: Colors.transparent,
           child: InkWell(
             onTap: widget.onPressed,
-            borderRadius: BorderRadius.circular(14),
+            borderRadius: BorderRadius.circular(12),
             child: Padding(
               padding: EdgeInsets.symmetric(
-                horizontal: compact ? 24 : 28,
-                vertical: compact ? 14 : 16,
+                horizontal: MediaQuery.sizeOf(context).width < 360 ? 14 : 22,
+                vertical: 14,
               ),
               child: Row(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  const Icon(Icons.rocket_launch_outlined, color: Colors.white, size: 20),
-                  const SizedBox(width: 10),
-                  Text(
-                    'Get Started',
-                    style: GoogleFonts.inter(
-                      color: Colors.white,
-                      fontWeight: FontWeight.w700,
-                      fontSize: compact ? 15 : 16,
+                  const Icon(
+                    Icons.filter_center_focus_rounded,
+                    color: Colors.white,
+                    size: 20,
+                  ),
+                  const SizedBox(width: 8),
+                  Flexible(
+                    child: Text(
+                      'Start monitoring',
+                      overflow: TextOverflow.ellipsis,
+                      style: GoogleFonts.inter(
+                        color: Colors.white,
+                        fontWeight: FontWeight.w700,
+                        fontSize: 15.0,
+                        letterSpacing: -0.2,
+                      ),
                     ),
                   ),
                 ],
@@ -465,97 +514,98 @@ class _GetStartedButtonState extends State<_GetStartedButton> {
   }
 }
 
-// ─── Features (mobile / tablet only) ───────────────────────────────────────
+// ─── Background Ocean Decor ──────────────────────────────────────────────────
 
-class _FeatureList extends StatelessWidget {
-  const _FeatureList();
+class _LandingOceanDecorPainter extends CustomPainter {
+  const _LandingOceanDecorPainter({required this.isDesktop});
 
-  static const _items = [
-    _FeatureItem(Icons.photo_library_outlined, 'GoPro Image Analysis',
-        'Upload underwater images and detect COTS instantly.'),
-    _FeatureItem(Icons.map_outlined, 'GIS Mapping',
-        'Visualize detections on interactive reef maps.'),
-    _FeatureItem(Icons.verified_outlined, 'Expert Validation',
-        'Verify detections and confirm COTS removals as an expert.'),
-    _FeatureItem(Icons.bar_chart_rounded, 'Reports & Analytics',
-        'Generate monitoring reports for research teams.'),
-  ];
+  final bool isDesktop;
 
   @override
-  Widget build(BuildContext context) {
-    return Container(
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: LandingColors.divider),
-      ),
-      child: Column(
-        children: [
-          for (var i = 0; i < _items.length; i++) ...[
-            _FeatureRow(item: _items[i]),
-            if (i < _items.length - 1)
-              const Divider(height: 1, thickness: 1, color: LandingColors.divider, indent: 56),
-          ],
-        ],
-      ),
+  void paint(Canvas canvas, Size size) {
+    final w = size.width;
+    final h = size.height;
+    final alpha = isDesktop ? 0.08 : 0.10;
+
+    // 1. Soft decorative cyan / teal orbs (matching Login/Auth background)
+    final blobPaint = Paint()
+      ..color = const Color(0xFF00B8B0).withValues(alpha: alpha);
+
+    // Top-left orb (behind title branding)
+    canvas.drawCircle(
+      Offset(w * 0.08, h * 0.20),
+      math.min(w * 0.085, 95.0),
+      blobPaint,
     );
+    // Lower-left large orb
+    canvas.drawCircle(
+      Offset(w * 0.16, h * 0.74),
+      math.min(w * 0.095, 115.0),
+      blobPaint,
+    );
+    // Lower-left companion orb
+    canvas.drawCircle(
+      Offset(w * 0.28, h * 0.82),
+      math.min(w * 0.045, 55.0),
+      blobPaint,
+    );
+    // Top-right orb
+    canvas.drawCircle(
+      Offset(w * 0.92, h * 0.24),
+      math.min(w * 0.065, 80.0),
+      blobPaint,
+    );
+    // Lower-right orb
+    canvas.drawCircle(
+      Offset(w * 0.86, h * 0.68),
+      math.min(w * 0.075, 95.0),
+      blobPaint,
+    );
+
+    // 2. Upper contour arc
+    final arcPaint = Paint()
+      ..color =
+          const Color(0xFF00B8B0).withValues(alpha: isDesktop ? 0.07 : 0.08)
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 1.5;
+    canvas.drawArc(
+      Rect.fromLTWH(-w * 0.05, -h * 0.02, w * 0.7, h * 0.28),
+      0.3,
+      1.0,
+      false,
+      arcPaint,
+    );
+
+    // 3. Abstract coral branches and wave lines on lower-left (from photo 1)
+    final linePaint = Paint()
+      ..color =
+          const Color(0xFF00B8B0).withValues(alpha: isDesktop ? 0.16 : 0.12)
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 2.0
+      ..strokeCap = StrokeCap.round;
+
+    final base = Offset(w * 0.14, h * 0.86);
+    canvas.drawLine(base, Offset(w * 0.17, h * 0.70), linePaint);
+    canvas.drawLine(
+      Offset(w * 0.17, h * 0.78),
+      Offset(w * 0.24, h * 0.73),
+      linePaint,
+    );
+    canvas.drawLine(
+      Offset(w * 0.17, h * 0.74),
+      Offset(w * 0.22, h * 0.67),
+      linePaint,
+    );
+
+    // Soft wave contour path
+    final wave = Path()
+      ..moveTo(0, h * 0.88)
+      ..quadraticBezierTo(w * 0.28, h * 0.78, w * 0.58, h * 0.87)
+      ..quadraticBezierTo(w * 0.82, h * 0.94, w, h * 0.85);
+    canvas.drawPath(wave, linePaint..strokeWidth = 1.4);
   }
-}
-
-class _FeatureItem {
-  const _FeatureItem(this.icon, this.title, this.description);
-  final IconData icon;
-  final String title;
-  final String description;
-}
-
-class _FeatureRow extends StatelessWidget {
-  const _FeatureRow({required this.item});
-  final _FeatureItem item;
 
   @override
-  Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Container(
-            width: 40,
-            height: 40,
-            decoration: BoxDecoration(
-              shape: BoxShape.circle,
-              color: LandingColors.teal.withValues(alpha: 0.1),
-            ),
-            child: Icon(item.icon, color: LandingColors.teal, size: 20),
-          ),
-          const SizedBox(width: 14),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  item.title,
-                  style: GoogleFonts.inter(
-                    color: LandingColors.textPrimary,
-                    fontWeight: FontWeight.w700,
-                    fontSize: 14,
-                  ),
-                ),
-                const SizedBox(height: 4),
-                Text(
-                  item.description,
-                  style: GoogleFonts.inter(
-                    color: LandingColors.textMuted,
-                    fontSize: 12.5,
-                    height: 1.45,
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ],
-      ),
-    );
-  }
+  bool shouldRepaint(covariant _LandingOceanDecorPainter oldDelegate) =>
+      oldDelegate.isDesktop != isDesktop;
 }

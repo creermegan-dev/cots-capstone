@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../models/admin_nav_models.dart';
 import '../theme/admin_theme.dart';
 import '../widgets/admin_sidebar.dart';
 import 'admin_breakpoints.dart';
@@ -20,6 +21,10 @@ class AdminResponsiveChrome extends StatefulWidget {
     this.showDeskTopBar = true,
     this.showBackButton = false,
     this.onBack,
+    this.navEntries,
+    this.panelSubtitle = 'Admin Panel',
+    this.userName = 'Admin User',
+    this.userRole = 'Super Administrator',
   });
 
   final int selectedNavIndex;
@@ -27,11 +32,16 @@ class AdminResponsiveChrome extends StatefulWidget {
   final VoidCallback onLogout;
   final String pageTitle;
   final Widget body;
+
   /// Dynamic nav badge counts keyed by [AdminNavItemData.index].
   final int? Function(int navIndex)? navBadgeFor;
   final bool showDeskTopBar;
   final bool showBackButton;
   final VoidCallback? onBack;
+  final List<AdminNavEntry>? navEntries;
+  final String panelSubtitle;
+  final String userName;
+  final String userRole;
 
   @override
   State<AdminResponsiveChrome> createState() => _AdminResponsiveChromeState();
@@ -58,6 +68,10 @@ class _AdminResponsiveChromeState extends State<AdminResponsiveChrome> {
               onSelect: widget.onNavSelect,
               onLogout: widget.onLogout,
               badgeFor: widget.navBadgeFor,
+              entries: widget.navEntries,
+              panelSubtitle: widget.panelSubtitle,
+              userName: widget.userName,
+              userRole: widget.userRole,
             ),
             appBar: AdminShellAppBar(
               title: widget.pageTitle,
@@ -75,39 +89,47 @@ class _AdminResponsiveChromeState extends State<AdminResponsiveChrome> {
 
         final rail = tablet && _sidebarCollapsed;
         final sidebarWidth = rail ? 76.0 : 268.0;
-        final showDeskTitleStrip = widget.showDeskTopBar &&
-            !AdminBreakpoints.isDesktopWidth(w);
+        final showDeskTitleStrip =
+            widget.showDeskTopBar && !AdminBreakpoints.isDesktopWidth(w);
 
-        return Row(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            AdminSidebar(
-              selectedIndex: widget.selectedNavIndex,
-              onSelect: widget.onNavSelect,
-              onLogout: widget.onLogout,
-              badgeFor: widget.navBadgeFor,
-              width: sidebarWidth,
-              compact: rail,
-              showRailToggle: tablet,
-              railCollapsed: _sidebarCollapsed,
-              onToggleRail: tablet
-                  ? () => setState(() => _sidebarCollapsed = !_sidebarCollapsed)
-                  : null,
-            ),
-            Expanded(
-              child: ColoredBox(
-                color: AdminColors.contentBg,
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.stretch,
-                  children: [
-                    if (showDeskTitleStrip)
-                      AdminDeskTopBar(title: widget.pageTitle),
-                    Expanded(child: bodyScrollSafe(widget.body)),
-                  ],
+        return Scaffold(
+          backgroundColor: AdminColors.contentBg,
+          body: Row(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              AdminSidebar(
+                selectedIndex: widget.selectedNavIndex,
+                onSelect: widget.onNavSelect,
+                onLogout: widget.onLogout,
+                badgeFor: widget.navBadgeFor,
+                width: sidebarWidth,
+                compact: rail,
+                showRailToggle: tablet,
+                railCollapsed: _sidebarCollapsed,
+                onToggleRail: tablet
+                    ? () =>
+                        setState(() => _sidebarCollapsed = !_sidebarCollapsed)
+                    : null,
+                entries: widget.navEntries,
+                panelSubtitle: widget.panelSubtitle,
+                userName: widget.userName,
+                userRole: widget.userRole,
+              ),
+              Expanded(
+                child: ColoredBox(
+                  color: AdminColors.contentBg,
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      if (showDeskTitleStrip)
+                        AdminDeskTopBar(title: widget.pageTitle),
+                      Expanded(child: bodyScrollSafe(widget.body)),
+                    ],
+                  ),
                 ),
               ),
-            ),
-          ],
+            ],
+          ),
         );
       },
     );

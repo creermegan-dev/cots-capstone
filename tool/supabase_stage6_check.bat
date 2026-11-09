@@ -1,0 +1,11 @@
+@echo off
+rem Read-only Stage 6 check: confirms the new map, the location checks and their privileges. Changes nothing.
+cd /d "%~dp0.."
+echo Stage 6 check > tool\last_supabase.txt
+echo ---- map >> tool\last_supabase.txt
+call npx supabase db query --linked "select (select count(*) from public.monitoring_areas where geography_version='cots-davao-gulf-v2' and active) as parts_active, (select count(*) from public.monitoring_areas where geography_version='cots-davao-gulf-v1' and active) as old_active, (select count(*) from public.monitoring_areas where geography_version='cots-davao-gulf-v1') as old_kept, (select count(distinct map_zone) from public.monitoring_areas where geography_version='cots-davao-gulf-v2') as zones, (select count(distinct map_area) from public.monitoring_areas where geography_version='cots-davao-gulf-v2') as areas, (select count(*) from cots_private.area_cells) as lookup_rows" < nul >> tool\last_supabase.txt 2>&1
+echo ---- lookup >> tool\last_supabase.txt
+call npx supabase db query --linked "select (select code from public.monitoring_areas where id=cots_private.area_at(6.8924738,125.7075962)) as inside_expect_V28_67, (select code from public.monitoring_areas where id=cots_private.area_at(6.8924738,125.7078222)) as edge10_expect_V28_67, cots_private.area_at(6.8924738,125.7080935) is null as out40_is_null, cots_private.area_at(7.08,125.72) is null as land_is_null, (select name from public.monitoring_areas where code='V3-12') as name_V3_12" < nul >> tool\last_supabase.txt 2>&1
+echo ---- checks and privileges >> tool\last_supabase.txt
+call npx supabase db query --linked "select (select count(*) from pg_trigger where tgname in ('check_capture_area','check_survey_area','check_survey_capture_area') and not tgisinternal) as triggers, has_table_privilege('authenticated','cots_private.area_cells','SELECT') as app_reads_lookup, has_function_privilege('authenticated','cots_private.area_at(double precision,double precision,double precision)','EXECUTE') as app_calls_lookup, position('This area is currently assigned to' in pg_get_functiondef('cots_private.zone_waiting_text(uuid)'::regprocedure))>0 as area_wording" < nul >> tool\last_supabase.txt 2>&1
+echo DONE> tool\last_supabase_status.txt

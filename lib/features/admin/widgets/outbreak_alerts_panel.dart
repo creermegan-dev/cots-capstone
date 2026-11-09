@@ -80,7 +80,8 @@ class OutbreakAlertsPanel extends StatelessWidget {
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Icon(Icons.warning_amber_rounded, color: AdminColors.statRed.withValues(alpha: 0.9)),
+          Icon(Icons.warning_amber_rounded,
+              color: AdminColors.statRed.withValues(alpha: 0.9)),
           const SizedBox(width: 12),
           Expanded(
             child: Column(

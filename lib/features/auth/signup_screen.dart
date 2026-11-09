@@ -135,14 +135,23 @@ class _SignupScreenState extends State<SignupScreen> {
         organization: _organization,
         password: _passwordCtrl.text,
       );
-      await auth.signOut();
+      final needsConfirmation = auth.signupRequiresEmailConfirmation;
+      if (auth.isAuthenticated) await auth.signOut();
       if (!mounted) return;
+      if (needsConfirmation) {
+        await _showEmailConfirmationDialog(auth);
+        if (!mounted) return;
+      }
       resetToAuthRoot(context);
       kRootScaffoldMessengerKey.currentState?.showSnackBar(
-        const SnackBar(
+        SnackBar(
           behavior: SnackBarBehavior.floating,
           backgroundColor: kDarkTeal,
-          content: Text('Account created. Sign in with your email and password.'),
+          content: Text(
+            needsConfirmation
+                ? 'Account created. Sign in and enter the code from your email.'
+                : 'Account created. Sign in with your email and password.',
+          ),
         ),
       );
     } catch (e) {
@@ -157,6 +166,64 @@ class _SignupScreenState extends State<SignupScreen> {
         ),
       );
     }
+  }
+
+  Future<void> _showEmailConfirmationDialog(AuthProvider auth) async {
+    var resending = false;
+    String? status;
+    await showDialog<void>(
+      context: context,
+      barrierDismissible: false,
+      builder: (dialogContext) => StatefulBuilder(
+        builder: (context, setDialogState) => AlertDialog(
+          title: const Text('Account created'),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                'Your account was created. We emailed a 6-digit code to '
+                '${_emailCtrl.text.trim()}. Sign in with your email and '
+                'password, then enter that code. You only need it once.',
+              ),
+              if (status != null) ...[
+                const SizedBox(height: 12),
+                Text(status!),
+              ],
+            ],
+          ),
+          actions: [
+            TextButton(
+              onPressed: resending
+                  ? null
+                  : () async {
+                      setDialogState(() {
+                        resending = true;
+                        status = null;
+                      });
+                      try {
+                        await auth.resendSignupConfirmation(
+                          _emailCtrl.text,
+                        );
+                        status = 'A new code was sent. Use the newest email.';
+                      } catch (_) {
+                        status = auth.lastError ??
+                            'The email could not be resent. Try again later.';
+                      }
+                      if (dialogContext.mounted) {
+                        setDialogState(() => resending = false);
+                      }
+                    },
+              child: Text(resending ? 'Sending...' : 'Resend code'),
+            ),
+            FilledButton(
+              onPressed: () => Navigator.pop(dialogContext),
+              child: const Text('Go to login'),
+            ),
+          ],
+        ),
+      ),
+    );
   }
 
   void _goLogin() {
@@ -270,26 +337,25 @@ class _SignupScreenState extends State<SignupScreen> {
   }
 
   Widget _buildFooter(AuthProvider auth) {
-    return Column(
+    return Wrap(
+      alignment: WrapAlignment.center,
+      crossAxisAlignment: WrapCrossAlignment.center,
       children: [
-        TextButton.icon(
-          onPressed: auth.isBusy ? null : _goLogin,
-          icon: const Icon(Icons.arrow_back_rounded, size: 18),
-          label: const Text('Back to Login'),
-          style: TextButton.styleFrom(
-            foregroundColor: AuthTokens.focusTeal,
-          ),
+        Text(
+          'Already have an account? ',
+          style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                color: authUseDesktopFields(context)
+                    ? AuthTokens.subtitleGray
+                    : kMutedGray,
+              ),
         ),
-        const SizedBox(height: 4),
-        TextButton(
-          onPressed: auth.isBusy ? null : _goLanding,
+        GestureDetector(
+          onTap: auth.isBusy ? null : _goLogin,
           child: Text(
-            'Back to Landing',
+            'Log In',
             style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                  color: authUseDesktopFields(context)
-                      ? AuthTokens.subtitleGray
-                      : kMutedGray,
-                  fontWeight: FontWeight.w600,
+                  color: AuthTokens.focusTeal,
+                  fontWeight: FontWeight.w700,
                 ),
           ),
         ),
@@ -311,7 +377,8 @@ class _SignupScreenState extends State<SignupScreen> {
 
     return AuthResponsiveScaffold(
       mobileAppBarTitle: 'Create Account',
-      showMobileBackButton: true,
+      showMobileBackButton: false,
+      onBackToLanding: auth.isBusy ? null : _goLanding,
       mobileHeader: const AuthMobileHeader(),
       desktopHeader: const AuthCardHeader(
         title: 'Create Account',

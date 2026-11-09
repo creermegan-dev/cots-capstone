@@ -1,8 +1,10 @@
 import 'package:cots_monitor/widgets/app_back_icon_button.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import 'package:image_picker/image_picker.dart';
 import 'package:provider/provider.dart';
 
-import '../../core/user_shell_theme.dart';
+import '../../core/supabase_config.dart';
 import '../../models/user_model.dart';
 import '../../providers/auth_provider.dart';
 import '../../services/auth_service.dart';
@@ -10,8 +12,11 @@ import '../auth/auth_navigation.dart';
 import 'cots_map_page.dart';
 import 'records_page.dart';
 import 'user_bottom_nav.dart';
+import '../../widgets/cots_loading_skeleton.dart';
+import '../../services/profile_photo_service.dart';
+import '../../widgets/profile_avatar.dart';
 
-const String _appVersion = '1.0.2+3';
+const String _appVersion = '1.0.3+4';
 
 const List<String> _kRoleOptions = <String>[
   'Diver',
@@ -51,6 +56,7 @@ class ProfilePage extends StatelessWidget {
       backgroundColor: kGray,
       extendBody: true,
       appBar: AppBar(
+        automaticallyImplyLeading: false,
         backgroundColor: Colors.white,
         elevation: 0,
         scrolledUnderElevation: 0,
@@ -64,12 +70,6 @@ class ProfilePage extends StatelessWidget {
             color: kNavy,
           ),
         ),
-        actions: [
-          IconButton(
-            icon: const Icon(Icons.settings_outlined, color: kNavy),
-            onPressed: () {},
-          ),
-        ],
       ),
       floatingActionButton: userShellScanFab(context),
       floatingActionButtonLocation: FloatingActionButtonLocation.centerDocked,
@@ -83,7 +83,8 @@ class ProfilePage extends StatelessWidget {
         child: Consumer<AuthProvider>(
           builder: (context, auth, _) {
             if (auth.isLoadingProfile && auth.userModel == null) {
-              return const Center(child: CircularProgressIndicator(color: kGreen));
+              return const CotsPageLoading(
+                  layout: CotsSkeletonLayout.profile, label: 'Loading profile');
             }
             return ListView(
               padding: const EdgeInsets.fromLTRB(16, 8, 16, 100),
@@ -92,51 +93,43 @@ class ProfilePage extends StatelessWidget {
                 const SizedBox(height: 16),
                 _OptionsCard(
                   children: [
-                _ProfileOptionTile(
-                  icon: Icons.person_outline,
-                  label: 'Personal Information',
-                  onTap: () => Navigator.of(context).push<void>(
-                    MaterialPageRoute<void>(
-                      builder: (_) => const PersonalInformationPage(),
+                    _ProfileOptionTile(
+                      icon: Icons.person_outline,
+                      label: 'Personal Information',
+                      onTap: () => Navigator.of(context).push<void>(
+                        MaterialPageRoute<void>(
+                          builder: (_) => const PersonalInformationPage(),
+                        ),
+                      ),
                     ),
-                  ),
-                ),
-                _ProfileOptionTile(
-                  icon: Icons.lock_outline_rounded,
-                  label: 'Change Password',
-                  onTap: () => Navigator.of(context).push<void>(
-                    MaterialPageRoute<void>(
-                      builder: (_) => const ChangePasswordPage(),
+                    _ProfileOptionTile(
+                      icon: Icons.lock_outline_rounded,
+                      label: 'Change Password',
+                      onTap: () => Navigator.of(context).push<void>(
+                        MaterialPageRoute<void>(
+                          builder: (_) => const ChangePasswordPage(),
+                        ),
+                      ),
                     ),
-                  ),
-                ),
-                _ProfileOptionTile(
-                  icon: Icons.info_outline,
-                  label: 'About',
-                  onTap: () => Navigator.of(context).push<void>(
-                    MaterialPageRoute<void>(
-                      builder: (_) => const AboutPage(),
+                    _ProfileOptionTile(
+                      icon: Icons.info_outline,
+                      label: 'About',
+                      onTap: () => Navigator.of(context).push<void>(
+                        MaterialPageRoute<void>(
+                          builder: (_) => const AboutPage(),
+                        ),
+                      ),
                     ),
-                  ),
-                ),
-                _ProfileOptionTile(
-                  icon: Icons.chat_bubble_outline,
-                  label: 'Feedback',
-                  onTap: () => Navigator.of(context).push<void>(
-                    MaterialPageRoute<void>(
-                      builder: (_) => const FeedbackPage(),
+                    _ProfileOptionTile(
+                      icon: Icons.logout_rounded,
+                      label: 'Log Out',
+                      isDestructive: true,
+                      onTap: () =>
+                          confirmAndSignOut(context, showSuccessSnackBar: true),
                     ),
-                  ),
-                ),
-                _ProfileOptionTile(
-                  icon: Icons.logout_rounded,
-                  label: 'Log Out',
-                  isDestructive: true,
-                  onTap: () => confirmAndSignOut(context, showSuccessSnackBar: true),
+                  ],
                 ),
               ],
-            ),
-          ],
             );
           },
         ),
@@ -171,16 +164,7 @@ class _ProfileHeaderCard extends StatelessWidget {
       ),
       child: Row(
         children: [
-          Container(
-            width: 64,
-            height: 64,
-            decoration: const BoxDecoration(
-              color: kGreen,
-              shape: BoxShape.circle,
-            ),
-            alignment: Alignment.center,
-            child: const Icon(Icons.person, color: Colors.white, size: 36),
-          ),
+          ProfileAvatar(path: user?.profileImage),
           const SizedBox(width: 14),
           Expanded(
             child: Column(
@@ -294,7 +278,7 @@ class _ProfileOptionTile extends StatelessWidget {
   }
 }
 
-// ─── Sub pages ─────────────────────────────────────────────────────────────
+// â”€â”€â”€ Sub pages â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 class _SubScaffold extends StatelessWidget {
   const _SubScaffold({required this.title, required this.child});
@@ -354,6 +338,85 @@ class _PersonalInformationPageState extends State<PersonalInformationPage> {
   String? _organization;
   bool _saving = false;
   bool _initialized = false;
+  bool _photoBusy = false;
+
+  Future<void> _changePhoto() async {
+    final auth = context.read<AuthProvider>();
+    final oldPath = auth.userModel?.profileImage.trim() ?? '';
+    final canUseCamera = !kIsWeb &&
+        (defaultTargetPlatform == TargetPlatform.android ||
+            defaultTargetPlatform == TargetPlatform.iOS);
+    final choice = await showModalBottomSheet<String>(
+      context: context,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
+      ),
+      builder: (ctx) => SafeArea(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const SizedBox(height: 8),
+            if (canUseCamera)
+              ListTile(
+                key: const ValueKey('profile-photo-camera'),
+                leading: const Icon(Icons.photo_camera_outlined),
+                title: const Text('Take a photo'),
+                onTap: () => Navigator.of(ctx).pop('camera'),
+              ),
+            ListTile(
+              key: const ValueKey('profile-photo-gallery'),
+              leading: const Icon(Icons.photo_library_outlined),
+              title: const Text('Choose from gallery'),
+              onTap: () => Navigator.of(ctx).pop('gallery'),
+            ),
+            if (oldPath.isNotEmpty)
+              ListTile(
+                key: const ValueKey('profile-photo-remove'),
+                leading: const Icon(Icons.delete_outline, color: kHigh),
+                title:
+                    const Text('Remove photo', style: TextStyle(color: kHigh)),
+                onTap: () => Navigator.of(ctx).pop('remove'),
+              ),
+            const SizedBox(height: 8),
+          ],
+        ),
+      ),
+    );
+    if (choice == null || !mounted) return;
+    final messenger = ScaffoldMessenger.of(context);
+    setState(() => _photoBusy = true);
+    try {
+      final service = ProfilePhotoService();
+      if (choice == 'remove') {
+        await service.remove(oldPath);
+      } else {
+        final picked = await ImagePicker().pickImage(
+          source: choice == 'camera' ? ImageSource.camera : ImageSource.gallery,
+          maxWidth: 1024,
+          maxHeight: 1024,
+          imageQuality: 90,
+        );
+        if (picked == null) return;
+        final bytes = await picked.readAsBytes();
+        await service.upload(bytes, oldPath: oldPath);
+      }
+      await auth.refreshProfile();
+      messenger.showSnackBar(SnackBar(
+        content: Text(choice == 'remove'
+            ? 'Profile photo removed.'
+            : 'Profile photo updated.'),
+      ));
+    } on FormatException catch (e) {
+      messenger.showSnackBar(SnackBar(content: Text(e.message)));
+    } catch (_) {
+      messenger.showSnackBar(const SnackBar(
+        content: Text(
+            'Could not update the photo. Check your internet and try again.'),
+      ));
+    } finally {
+      if (mounted) setState(() => _photoBusy = false);
+    }
+  }
 
   @override
   void didChangeDependencies() {
@@ -366,7 +429,8 @@ class _PersonalInformationPageState extends State<PersonalInformationPage> {
       _phone.text = user.phoneNumber;
       _assignedArea.text = user.assignedArea;
       _role = user.role.trim().isNotEmpty ? user.role : _kRoleOptions.first;
-      _organization = user.organization.trim().isEmpty ? null : user.organization;
+      _organization =
+          user.organization.trim().isEmpty ? null : user.organization;
     }
     _initialized = true;
   }
@@ -418,9 +482,11 @@ class _PersonalInformationPageState extends State<PersonalInformationPage> {
         email: _email.text.trim(),
         phone: _phone.text.trim(),
         organization: _organization ?? '—',
-        assignedArea: _assignedArea.text.trim().isEmpty
-            ? '—'
-            : _assignedArea.text.trim(),
+        assignedArea: SupabaseConfig.isConfigured
+            ? null
+            : _assignedArea.text.trim().isEmpty
+                ? '—'
+                : _assignedArea.text.trim(),
       ),
     );
 
@@ -466,7 +532,13 @@ class _PersonalInformationPageState extends State<PersonalInformationPage> {
           child: ListView(
             padding: const EdgeInsets.fromLTRB(16, 12, 16, 110),
             children: [
-              _PersonalHeaderCard(user: context.watch<AuthProvider>().userModel),
+              _PersonalHeaderCard(
+                user: context.watch<AuthProvider>().userModel,
+                busy: _photoBusy,
+                onPhotoTap: SupabaseConfig.isConfigured && !_photoBusy
+                    ? _changePhoto
+                    : null,
+              ),
               const SizedBox(height: 14),
               _PersonalFormCard(
                 children: [
@@ -478,9 +550,8 @@ class _PersonalInformationPageState extends State<PersonalInformationPage> {
                       controller: _fullName,
                       icon: Icons.person_outline,
                       hintText: 'Enter full name',
-                      validator: (v) => (v == null || v.trim().isEmpty)
-                          ? 'Required'
-                          : null,
+                      validator: (v) =>
+                          (v == null || v.trim().isEmpty) ? 'Required' : null,
                     ),
                   ),
                   _LabeledField(
@@ -489,8 +560,7 @@ class _PersonalInformationPageState extends State<PersonalInformationPage> {
                       value: _role,
                       icon: Icons.badge_outlined,
                       items: _optionsIncludingCurrent(_role, _kRoleOptions),
-                      onChanged: (v) =>
-                          setState(() => _role = v ?? _role),
+                      onChanged: (v) => setState(() => _role = v ?? _role),
                     ),
                   ),
                   _LabeledField(
@@ -525,18 +595,18 @@ class _PersonalInformationPageState extends State<PersonalInformationPage> {
                         _kOrgOptions,
                       ),
                       hint: 'Select organization',
-                      onChanged: (v) =>
-                          setState(() => _organization = v),
+                      onChanged: (v) => setState(() => _organization = v),
                     ),
                   ),
-                  _LabeledField(
-                    label: 'Assigned Area',
-                    child: _TextInput(
-                      controller: _assignedArea,
-                      icon: Icons.location_on_outlined,
-                      hintText: 'e.g. Panabo Reef',
+                  if (!SupabaseConfig.isConfigured)
+                    _LabeledField(
+                      label: 'Assigned Area',
+                      child: _TextInput(
+                        controller: _assignedArea,
+                        icon: Icons.location_on_outlined,
+                        hintText: 'e.g. Panabo Reef',
+                      ),
                     ),
-                  ),
                   const SizedBox(height: 6),
                   Row(
                     children: [
@@ -547,10 +617,8 @@ class _PersonalInformationPageState extends State<PersonalInformationPage> {
                               : () => Navigator.of(context).pop(),
                           style: OutlinedButton.styleFrom(
                             foregroundColor: kNavy,
-                            side: const BorderSide(
-                                color: Color(0xFFD1D5DB)),
-                            padding:
-                                const EdgeInsets.symmetric(vertical: 14),
+                            side: const BorderSide(color: Color(0xFFD1D5DB)),
+                            padding: const EdgeInsets.symmetric(vertical: 14),
                             shape: RoundedRectangleBorder(
                               borderRadius: BorderRadius.circular(10),
                             ),
@@ -572,8 +640,7 @@ class _PersonalInformationPageState extends State<PersonalInformationPage> {
                             backgroundColor: kGreen,
                             foregroundColor: Colors.white,
                             elevation: 0,
-                            padding:
-                                const EdgeInsets.symmetric(vertical: 14),
+                            padding: const EdgeInsets.symmetric(vertical: 14),
                             shape: RoundedRectangleBorder(
                               borderRadius: BorderRadius.circular(10),
                             ),
@@ -609,8 +676,14 @@ class _PersonalInformationPageState extends State<PersonalInformationPage> {
 }
 
 class _PersonalHeaderCard extends StatelessWidget {
-  const _PersonalHeaderCard({required this.user});
+  const _PersonalHeaderCard({
+    required this.user,
+    this.onPhotoTap,
+    this.busy = false,
+  });
   final UserModel? user;
+  final VoidCallback? onPhotoTap;
+  final bool busy;
 
   @override
   Widget build(BuildContext context) {
@@ -638,15 +711,10 @@ class _PersonalHeaderCard extends StatelessWidget {
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.center,
         children: [
-          Container(
-            width: 64,
-            height: 64,
-            decoration: const BoxDecoration(
-              color: kGreen,
-              shape: BoxShape.circle,
-            ),
-            alignment: Alignment.center,
-            child: const Icon(Icons.person, color: Colors.white, size: 36),
+          _EditablePhoto(
+            path: user?.profileImage,
+            busy: busy,
+            onTap: onPhotoTap,
           ),
           const SizedBox(width: 12),
           Expanded(
@@ -799,11 +867,9 @@ InputDecoration _fieldDecoration({
       padding: const EdgeInsets.only(left: 12, right: 8),
       child: Icon(icon, size: 18, color: const Color(0xFF6B7280)),
     ),
-    prefixIconConstraints:
-        const BoxConstraints(minWidth: 0, minHeight: 0),
+    prefixIconConstraints: const BoxConstraints(minWidth: 0, minHeight: 0),
     isDense: true,
-    contentPadding:
-        const EdgeInsets.symmetric(horizontal: 0, vertical: 12),
+    contentPadding: const EdgeInsets.symmetric(horizontal: 0, vertical: 12),
     filled: true,
     fillColor: Colors.white,
     enabledBorder: border,
@@ -881,8 +947,8 @@ class _DropdownInput<T> extends StatelessWidget {
       iconSize: 22,
       icon: const Padding(
         padding: EdgeInsets.only(right: 10),
-        child: Icon(Icons.keyboard_arrow_down_rounded,
-            color: Color(0xFF6B7280)),
+        child:
+            Icon(Icons.keyboard_arrow_down_rounded, color: Color(0xFF6B7280)),
       ),
       style: const TextStyle(
         color: kNavy,
@@ -928,7 +994,7 @@ class _ChangesSavedDialog extends StatelessWidget {
   final String email;
   final String phone;
   final String organization;
-  final String assignedArea;
+  final String? assignedArea;
 
   @override
   Widget build(BuildContext context) {
@@ -983,8 +1049,8 @@ class _ChangesSavedDialog extends StatelessWidget {
                   borderRadius: BorderRadius.circular(12),
                   border: Border.all(color: const Color(0xFFE5E7EB)),
                 ),
-                padding: const EdgeInsets.symmetric(
-                    horizontal: 12, vertical: 6),
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
                 child: Column(
                   children: [
                     _SummaryDialogRow(
@@ -1011,13 +1077,15 @@ class _ChangesSavedDialog extends StatelessWidget {
                       icon: Icons.apartment_outlined,
                       label: 'Organization:',
                       value: organization,
+                      isLast: assignedArea == null,
                     ),
-                    _SummaryDialogRow(
-                      icon: Icons.location_on_outlined,
-                      label: 'Assigned Area:',
-                      value: assignedArea,
-                      isLast: true,
-                    ),
+                    if (assignedArea != null)
+                      _SummaryDialogRow(
+                        icon: Icons.location_on_outlined,
+                        label: 'Assigned Area:',
+                        value: assignedArea!,
+                        isLast: true,
+                      ),
                   ],
                 ),
               ),
@@ -1180,8 +1248,7 @@ class _ChangePasswordPageState extends State<ChangePasswordPage> {
               controller: _current,
               show: _showCurrent,
               onToggle: () => setState(() => _showCurrent = !_showCurrent),
-              validator: (v) =>
-                  (v == null || v.isEmpty) ? 'Required' : null,
+              validator: (v) => (v == null || v.isEmpty) ? 'Required' : null,
             ),
             const SizedBox(height: 12),
             _passwordField(
@@ -1342,7 +1409,7 @@ class AboutPage extends StatelessWidget {
                   emojiIcon: Icons.visibility_rounded,
                   title: 'Hard to spot underwater',
                   body:
-                      'COTS blend into reef textures. Divers and GoPro footage help '
+                      'COTS blend into reef textures. Divers and underwater photos help '
                       'catch infestations earlier than patrols alone.',
                 ),
                 _FactTile(
@@ -1372,19 +1439,23 @@ class AboutPage extends StatelessWidget {
                 SizedBox(height: 12),
                 _SystemBullet(
                   title: 'Machine Learning Detection',
-                  body: 'Upload GoPro images to detect COTS with confidence scores.',
+                  body:
+                      'Upload underwater photos to detect COTS with confidence scores.',
                 ),
                 _SystemBullet(
                   title: 'GIS Mapping',
-                  body: 'Visualize reef zones and infestation levels on interactive maps.',
+                  body:
+                      'Visualize reef zones and infestation levels on interactive maps.',
                 ),
                 _SystemBullet(
                   title: 'Expert Validation',
-                  body: 'Experts approve or reject uncertain detections before action.',
+                  body:
+                      'Experts approve or reject uncertain detections before action.',
                 ),
                 _SystemBullet(
                   title: 'Removal Evidence',
-                  body: 'Submit removal photos to close the monitoring–intervention loop.',
+                  body:
+                      'Submit removal photos to close the monitoring–intervention loop.',
                 ),
               ],
             ),
@@ -1444,7 +1515,8 @@ class AboutPage extends StatelessWidget {
                   value: 'Meariell Deace Bantillo',
                 ),
                 const _AboutDivider(),
-                const _AboutRow(label: 'Platform', value: 'Flutter (Windows / Mobile)'),
+                const _AboutRow(
+                    label: 'Platform', value: 'Flutter (Windows / Mobile)'),
                 const _AboutDivider(),
                 const _AboutRow(label: 'License', value: 'Internal / Academic'),
               ],
@@ -1699,162 +1771,59 @@ class _AboutDivider extends StatelessWidget {
       );
 }
 
-class FeedbackPage extends StatefulWidget {
-  const FeedbackPage({super.key});
+class _EditablePhoto extends StatelessWidget {
+  const _EditablePhoto({
+    required this.path,
+    required this.busy,
+    required this.onTap,
+  });
 
-  @override
-  State<FeedbackPage> createState() => _FeedbackPageState();
-}
-
-class _FeedbackPageState extends State<FeedbackPage> {
-  final TextEditingController _message = TextEditingController();
-  String _category = 'Bug';
-  int _rating = 5;
-  bool _sending = false;
-
-  @override
-  void dispose() {
-    _message.dispose();
-    super.dispose();
-  }
-
-  Future<void> _send() async {
-    if (_message.text.trim().isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Please write a short message.')),
-      );
-      return;
-    }
-    setState(() => _sending = true);
-    await Future<void>.delayed(const Duration(milliseconds: 900));
-    if (!mounted) return;
-    setState(() => _sending = false);
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('Thanks for the feedback! (demo)')),
-    );
-    Navigator.of(context).pop();
-  }
+  final String? path;
+  final bool busy;
+  final VoidCallback? onTap;
 
   @override
   Widget build(BuildContext context) {
-    return _SubScaffold(
-      title: 'Feedback',
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          const Text(
-            'How would you rate the app?',
-            style: TextStyle(
-              fontSize: 13,
-              fontWeight: FontWeight.w700,
-              color: kNavy,
+    final avatar = Stack(
+      clipBehavior: Clip.none,
+      children: [
+        ProfileAvatar(path: path),
+        if (busy)
+          const Positioned.fill(
+            child: Padding(
+              padding: EdgeInsets.all(18),
+              child: CircularProgressIndicator(
+                  strokeWidth: 2.5, color: Colors.white),
             ),
           ),
-          const SizedBox(height: 6),
-          Row(
-            children: List.generate(5, (i) {
-              final filled = i < _rating;
-              return IconButton(
-                icon: Icon(
-                  filled ? Icons.star_rounded : Icons.star_border_rounded,
-                  color: filled ? kModerate : Colors.grey.shade400,
-                ),
-                onPressed: () => setState(() => _rating = i + 1),
-              );
-            }),
-          ),
-          const SizedBox(height: 12),
-          const Text(
-            'Category',
-            style: TextStyle(
-              fontSize: 13,
-              fontWeight: FontWeight.w700,
-              color: kNavy,
-            ),
-          ),
-          const SizedBox(height: 8),
-          Wrap(
-            spacing: 8,
-            runSpacing: 8,
-            children: ['Bug', 'Suggestion', 'Praise', 'Other'].map((c) {
-              final selected = _category == c;
-              return ChoiceChip(
-                label: Text(c),
-                selected: selected,
-                onSelected: (_) => setState(() => _category = c),
-                selectedColor: kGreen.withValues(alpha: 0.15),
-                labelStyle: TextStyle(
-                  color: selected ? kGreen : kNavy,
-                  fontWeight:
-                      selected ? FontWeight.w700 : FontWeight.w500,
-                ),
-              );
-            }).toList(),
-          ),
-          const SizedBox(height: 16),
-          const Text(
-            'Message',
-            style: TextStyle(
-              fontSize: 13,
-              fontWeight: FontWeight.w700,
-              color: kNavy,
-            ),
-          ),
-          const SizedBox(height: 8),
-          TextField(
-            controller: _message,
-            maxLines: 5,
-            maxLength: 500,
-            decoration: InputDecoration(
-              hintText: 'Tell us what happened or what could be better...',
-              filled: true,
-              fillColor: Colors.white,
-              contentPadding: const EdgeInsets.all(12),
-              border: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(10),
-                borderSide: const BorderSide(color: Color(0xFFE2E8F0)),
+        if (onTap != null || busy)
+          Positioned(
+            right: -2,
+            bottom: -2,
+            child: Container(
+              width: 24,
+              height: 24,
+              decoration: BoxDecoration(
+                color: Colors.white,
+                shape: BoxShape.circle,
+                border: Border.all(color: Colors.grey.shade300),
               ),
-              enabledBorder: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(10),
-                borderSide: const BorderSide(color: Color(0xFFE2E8F0)),
-              ),
-              focusedBorder: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(10),
-                borderSide: const BorderSide(color: kGreen, width: 1.5),
-              ),
+              alignment: Alignment.center,
+              child: const Icon(Icons.photo_camera_outlined,
+                  size: 14, color: kNavy),
             ),
           ),
-          const SizedBox(height: 8),
-          ElevatedButton.icon(
-            onPressed: _sending ? null : _send,
-            icon: _sending
-                ? const SizedBox(
-                    width: 18,
-                    height: 18,
-                    child: CircularProgressIndicator(
-                      strokeWidth: 2,
-                      color: Colors.white,
-                    ),
-                  )
-                : const Icon(Icons.send_rounded, size: 18),
-            label: const Text(
-              'SEND',
-              style: TextStyle(
-                fontWeight: FontWeight.w700,
-                letterSpacing: 0.5,
-              ),
-            ),
-            style: ElevatedButton.styleFrom(
-              backgroundColor: kGreen,
-              foregroundColor: Colors.white,
-              elevation: 0,
-              padding: const EdgeInsets.symmetric(vertical: 14, horizontal: 16),
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(10),
-              ),
-            ),
-          ),
-        ],
+      ],
+    );
+    if (onTap == null) return avatar;
+    return Semantics(
+      button: true,
+      label: 'Change profile photo',
+      child: InkWell(
+        key: const ValueKey('profile-photo-change'),
+        customBorder: const CircleBorder(),
+        onTap: onTap,
+        child: avatar,
       ),
     );
   }

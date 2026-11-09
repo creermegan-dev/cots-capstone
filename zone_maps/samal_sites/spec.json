@@ -1,0 +1,47 @@
+{
+ "version": "cots-samal-sites-v1",
+ "zone": "Samal (one zone)",
+ "sites": [
+  {
+   "code": "S1",
+   "name": "Site 1 · Tambo",
+   "barangay": "Tambo",
+   "psgc": "1102317045",
+   "hectares": 347.8
+  },
+  {
+   "code": "S2",
+   "name": "Site 2 · Adecor",
+   "barangay": "Adecor",
+   "psgc": "1102317001",
+   "hectares": 339.5
+  },
+  {
+   "code": "S3",
+   "name": "Site 3 · Linosutan",
+   "barangay": "Linosutan",
+   "psgc": "1102317022",
+   "hectares": 105.0
+  }
+ ],
+ "grid": {
+  "formula": "x = (lon - 125.7) * kx; y = (lat - 6.6) * ky; ix = round(x / 30); iy = round(y / 30)",
+  "lat0": 6.6,
+  "lon0": 125.7,
+  "kx": 110582.25626663613,
+  "ky": 110574.0,
+  "cell_m": 30.0
+ },
+ "allowance_m": 15,
+ "drop_off_depth_m": 7,
+ "site3_widened_m": 300,
+ "counts": {
+  "cells": 8690,
+  "runs": 284
+ },
+ "sources": [
+  "Allen Coral Atlas (2020), Bathymetry - composite depth (10 m), CC BY 4.0, doi.org/10.5281/zenodo.3833242",
+  "Barangay boundaries: NAMRIA/PSA via OCHA COD-AB (faeldon/philippines-json-maps, PSGC 3Q 2026)"
+ ],
+ "confirmed": "Site lines confirmed by the project expert on 2026-11-04 (Adecor patch connected afterwards)."
+}

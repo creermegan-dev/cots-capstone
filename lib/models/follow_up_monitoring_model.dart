@@ -14,6 +14,11 @@ FollowUpSurveyStatus followUpSurveyStatus(
   FollowUpSurveyModel survey,
   List<CaptureModel> captures,
 ) {
+  // Supabase decides completion on the server; use its status when present.
+  final serverStatus = survey.serverStatus;
+  if (serverStatus != null) {
+    return followUpSurveyStatusFromServer(serverStatus, survey, captures);
+  }
   if (survey.captureIds.isEmpty) return FollowUpSurveyStatus.submitted;
   final byId = {for (final capture in captures) capture.id: capture};
   var pending = false;
@@ -57,6 +62,31 @@ FollowUpSurveyStatus followUpSurveyStatus(
       : FollowUpSurveyStatus.completed;
 }
 
+/// Supabase visit status → the labels the app already shows. A pending visit
+/// with a rejected detection record needs correction, as in Firebase.
+FollowUpSurveyStatus followUpSurveyStatusFromServer(
+  String serverStatus,
+  FollowUpSurveyModel survey,
+  List<CaptureModel> captures,
+) {
+  switch (serverStatus) {
+    case 'completed':
+      return FollowUpSurveyStatus.completed;
+    case 'historical_only':
+      return FollowUpSurveyStatus.needsCorrection;
+    case 'pending_late_review':
+    case 'pending_authorization_review':
+      return FollowUpSurveyStatus.pendingValidation;
+  }
+  final ids = survey.captureIds.toSet();
+  if (captures.any((c) => ids.contains(c.id) && c.adminRejected)) {
+    return FollowUpSurveyStatus.needsCorrection;
+  }
+  return survey.captureIds.isEmpty
+      ? FollowUpSurveyStatus.submitted
+      : FollowUpSurveyStatus.pendingValidation;
+}
+
 String followUpSurveyStatusLabel(FollowUpSurveyStatus status) =>
     switch (status) {
       FollowUpSurveyStatus.submitted => 'Submitted',
@@ -77,6 +107,8 @@ class FollowUpAssignmentModel {
     required this.initialDate,
     required this.initialDetectedCount,
     this.initialCollection = RecordCollection.captures,
+    this.partnerUid = '',
+    this.partnerName = '',
   });
 
   final String areaId;
@@ -89,6 +121,14 @@ class FollowUpAssignmentModel {
   final DateTime initialDate;
   final int initialDetectedCount;
   final String initialCollection;
+
+  /// Stage 10-11: the site partner (Main Diver 2), or '' when there is none.
+  final String partnerUid;
+  final String partnerName;
+
+  /// Main Diver 1 and the site partner: both record the site's visits.
+  Set<String> get mainDiverUids =>
+      {primaryDiverUid, if (partnerUid.isNotEmpty) partnerUid};
 
   factory FollowUpAssignmentModel.fromFirestore(
     DocumentSnapshot<Map<String, dynamic>> doc,
@@ -115,6 +155,8 @@ class FollowUpAssignmentModel {
       initialDetectedCount: _intFromDynamic(map['initial_detected_count']),
       initialCollection:
           map['initial_collection'] as String? ?? RecordCollection.captures,
+      partnerUid: map['partner_uid'] as String? ?? '',
+      partnerName: map['partner_name'] as String? ?? '',
     );
   }
 
@@ -153,6 +195,13 @@ class FollowUpSurveyModel {
     this.eliminationMethod = '',
     this.notes = '',
     this.aiDetectedCount = 0,
+    this.serverStatus,
+    this.densityPerHectare,
+    this.calculatedLevel,
+    this.assessedLevel,
+    this.confirmedCount,
+    this.waitingCount,
+    this.earlyVisitNote,
   });
 
   final String id;
@@ -173,6 +222,26 @@ class FollowUpSurveyModel {
   final String eliminationMethod;
   final String notes;
   final int aiDetectedCount;
+
+  /// Visit status decided by Supabase (null for Firebase visits).
+  final String? serverStatus;
+
+  /// COTS per hectare and its level, calculated by Supabase.
+  final double? densityPerHectare;
+  final String? calculatedLevel;
+
+  /// Level confirmed by the Expert for this visit, if any.
+  final String? assessedLevel;
+
+  /// COTS in the visit photos confirmed so far (Expert-rejected COTS are not
+  /// counted), and COTS still waiting for the Expert. Supabase only.
+  final int? confirmedCount;
+  final int? waitingCount;
+
+  /// Stage 5: set by Supabase when the visit was made within 2 days after an
+  /// injection in the zone ("Visit within 2 days of an injection on ...").
+  /// Null otherwise and for Firebase visits.
+  final String? earlyVisitNote;
 
   factory FollowUpSurveyModel.fromFirestore(
     DocumentSnapshot<Map<String, dynamic>> doc,
@@ -211,6 +280,15 @@ class FollowUpSurveyModel {
       eliminationMethod: map['elimination_method'] as String? ?? '',
       notes: map['notes'] as String? ?? '',
       aiDetectedCount: _intFromDynamic(map['ai_detected_count']),
+      serverStatus: map['status'] as String?,
+      densityPerHectare: _doubleFromDynamic(map['density_per_ha']),
+      calculatedLevel: map['calculated_level'] as String?,
+      assessedLevel: map['assessed_level'] as String?,
+      confirmedCount: _nullableIntFromDynamic(map['confirmed_count']),
+      waitingCount: _nullableIntFromDynamic(map['waiting_count']),
+      earlyVisitNote: (map['early_visit_note'] as String?)?.trim().isEmpty ?? true
+          ? null
+          : (map['early_visit_note'] as String).trim(),
     );
   }
 
@@ -262,6 +340,13 @@ CaptureModel? originalFollowUpDetection(List<CaptureModel> detections) {
 }
 
 enum FollowUpMonthStatus { monitored, awaiting, notRecorded, upcoming }
+
+/// The month the next visit is for: next month once this month is monitored
+/// (for example by the first record), otherwise this month.
+DateTime followUpTargetMonth(DateTime now, FollowUpMonthStatus thisMonth) =>
+    thisMonth == FollowUpMonthStatus.monitored
+        ? DateTime(now.year, now.month + 1)
+        : DateTime(now.year, now.month);
 
 class FollowUpMonthEntry {
   const FollowUpMonthEntry({
@@ -339,6 +424,42 @@ DateTime? _dateFromDynamic(Object? value) {
   if (value is String) return DateTime.tryParse(value);
   return null;
 }
+
+/// The visit's one "COTS found and removed" value (taken from the photos),
+/// with the Expert-confirmed part when Supabase reports it.
+String followUpCountSummary(FollowUpSurveyModel survey) =>
+    _hasSeparateOlderCounts(survey)
+        ? 'COTS found: ${survey.fieldObservedCount}, '
+            'removed: ${survey.fieldEliminatedCount}'
+        : 'COTS found and removed: ${followUpCountValue(survey)}';
+
+/// The value alone ("4 (3 confirmed)"), for screens that show their own label.
+String followUpCountValue(FollowUpSurveyModel survey) {
+  if (_hasSeparateOlderCounts(survey)) {
+    return '${survey.fieldObservedCount} found, '
+        '${survey.fieldEliminatedCount} removed';
+  }
+  final detail = followUpCountDetail(survey);
+  return '${survey.fieldEliminatedCount}${detail == null ? '' : ' ($detail)'}';
+}
+
+/// Firebase and older visits stored two different typed values.
+bool _hasSeparateOlderCounts(FollowUpSurveyModel survey) =>
+    survey.confirmedCount == null &&
+    survey.fieldObservedCount != survey.fieldEliminatedCount;
+
+/// The Expert-confirmed part of a visit's count ("3 confirmed, 1 waiting for
+/// Expert"), or null when Supabase did not report it or no COTS were found.
+String? followUpCountDetail(FollowUpSurveyModel survey) {
+  final confirmed = survey.confirmedCount;
+  if (confirmed == null || survey.fieldEliminatedCount == 0) return null;
+  final waiting = survey.waitingCount ?? 0;
+  return '$confirmed confirmed'
+      '${waiting > 0 ? ', $waiting waiting for Expert' : ''}';
+}
+
+int? _nullableIntFromDynamic(Object? value) =>
+    value == null ? null : _intFromDynamic(value);
 
 int _intFromDynamic(Object? value) {
   if (value is int) return value;

@@ -1,530 +1,402 @@
 import 'package:flutter/material.dart';
+import 'package:intl/intl.dart';
 
+import '../../../models/davao_gulf_geography.dart';
+import '../../../models/monitoring_analytics.dart';
+import '../../../models/scan_record_model.dart';
+import '../../../models/zone_directory_summary.dart';
+import '../../../services/scan_record_repository.dart';
 import '../layout/admin_breakpoints.dart';
+import 'admin_site_details_screen.dart';
 import '../theme/admin_theme.dart';
 import '../widgets/admin_dashboard_header.dart';
 import '../widgets/admin_data_table.dart';
 import '../widgets/admin_stat_card.dart';
-import 'admin_zone_details_screen.dart';
 
-class AdminZonesManagementScreen extends StatefulWidget {
-  const AdminZonesManagementScreen({super.key});
+enum _ZoneSort {
+  site('Site order'),
+  name('Site name A–Z'),
+  reports('Most reports'),
+  confirmed('Most confirmed COTS'),
+  pending('Most pending reviews'),
+  latest('Latest report');
 
-  @override
-  State<AdminZonesManagementScreen> createState() => _AdminZonesManagementScreenState();
+  const _ZoneSort(this.label);
+  final String label;
 }
 
-class _AdminZonesManagementScreenState extends State<AdminZonesManagementScreen> {
-  final _searchCtrl = TextEditingController();
-  String _status = 'All Status';
-  String _risk = 'All Risk Levels';
-  String _density = 'All Density Levels';
+class AdminZonesScreen extends StatefulWidget {
+  const AdminZonesScreen({super.key, this.recordsStream});
+  final Stream<List<ScanRecordModel>>? recordsStream;
+  @override
+  State<AdminZonesScreen> createState() => _AdminZonesScreenState();
+}
+
+class _AdminZonesScreenState extends State<AdminZonesScreen> {
+  final _search = TextEditingController();
+  late Stream<List<ScanRecordModel>> _recordsStream;
+  String _site = '';
+  String _reportStatus = 'All report statuses';
+  _ZoneSort _sort = _ZoneSort.site;
   int _page = 0;
-  static const _perPage = 12;
-
-  static const List<AdminDataTableColumn> _tableColumns = [
-    AdminDataTableColumn('#', 40, headerAlign: TextAlign.center),
-    AdminDataTableColumn('Zone Name', 172),
+  static const _pageSize = 6;
+  static const _columns = [
+    AdminDataTableColumn('Site', 235),
     AdminDataTableColumn('Location', 200),
-    AdminDataTableColumn('Status', 132, headerAlign: TextAlign.center),
-    AdminDataTableColumn('Risk Level', 108, headerAlign: TextAlign.center),
-    AdminDataTableColumn('Average Density', 132, headerAlign: TextAlign.right),
-    AdminDataTableColumn('Last Monitoring', 152),
-    AdminDataTableColumn('Last Updated', 152),
-    AdminDataTableColumn('Actions', 96, headerAlign: TextAlign.right),
+    AdminDataTableColumn('Site group', 90),
+    AdminDataTableColumn('Reports', 75),
+    AdminDataTableColumn('Confirmed COTS', 130),
+    AdminDataTableColumn('Pending review', 120),
+    AdminDataTableColumn('Latest report', 185),
+    AdminDataTableColumn('Action', 120),
   ];
 
-  static const _rows = [
-    _ZoneRow('A', 'Zone A', 'Brgy. San Isidro, Cityville', 'Active (Outbreak)', 'High', 78.40, 'May 18, 2026 09:15 AM', 'May 18, 2026 09:30 AM'),
-    _ZoneRow('B', 'Zone B', 'Brgy. Riverside, Cityville', 'Active (Outbreak)', 'High', 55.40, 'May 18, 2026 08:45 AM', 'May 18, 2026 09:00 AM'),
-    _ZoneRow('C', 'Zone C', 'Brgy. Greenfield, Cityville', 'Scheduled', 'Moderate', 41.75, 'May 17, 2026 04:30 PM', 'May 17, 2026 04:45 PM'),
-    _ZoneRow('D', 'Zone D', 'Brgy. Hilltop, Cityville', 'Active (Outbreak)', 'High', 72.10, 'May 17, 2026 11:20 AM', 'May 17, 2026 11:35 AM'),
-    _ZoneRow('E', 'Zone E', 'Brgy. Central, Cityville', 'Cleared', 'Low', 8.30, 'May 16, 2026 10:10 AM', 'May 16, 2026 10:30 AM'),
-    _ZoneRow('F', 'Zone F', 'Brgy. Lakeside, Cityville', 'Scheduled', 'Moderate', 22.60, 'May 16, 2026 03:10 PM', 'May 16, 2026 03:30 PM'),
-    _ZoneRow('G', 'Zone G', 'Brgy. Eastview, Cityville', 'Cleared', 'Low', 6.20, 'May 15, 2026 09:25 AM', 'May 15, 2026 09:40 AM'),
-    _ZoneRow('H', 'Zone H', 'Brgy. Westwood, Cityville', 'Cleared', 'Low', 4.80, 'May 15, 2026 02:15 PM', 'May 15, 2026 02:30 PM'),
-    _ZoneRow('I', 'Zone I', 'Brgy. Northpoint, Cityville', 'Active (Outbreak)', 'High', 60.90, 'May 14, 2026 08:50 AM', 'May 14, 2026 09:05 AM'),
-    _ZoneRow('J', 'Zone J', 'Brgy. Southridge, Cityville', 'Scheduled', 'Moderate', 19.30, 'May 14, 2026 01:40 PM', 'May 14, 2026 02:00 PM'),
-    _ZoneRow('K', 'Zone K', 'Brgy. Pinecrest, Cityville', 'Cleared', 'Low', 3.10, 'May 13, 2026 10:05 AM', 'May 13, 2026 10:20 AM'),
-    _ZoneRow('L', 'Zone L', 'Brgy. Meadowbrook, Cityville', 'Cleared', 'Low', 5.00, 'May 13, 2026 03:35 PM', 'May 13, 2026 03:50 PM'),
-  ];
-
-  List<_ZoneRow> get _filtered {
-    final q = _searchCtrl.text.trim().toLowerCase();
-    return _rows.where((r) {
-      final byQuery = q.isEmpty ||
-          r.name.toLowerCase().contains(q) ||
-          r.location.toLowerCase().contains(q);
-      final byStatus = _status == 'All Status' || _status == r.status;
-      final byRisk = _risk == 'All Risk Levels' || _risk == r.risk;
-      final byDensity = switch (_density) {
-        '>= 70 COTS/ha' => r.density >= 70,
-        '50 - 69 COTS/ha' => r.density >= 50 && r.density < 70,
-        '< 50 COTS/ha' => r.density < 50,
-        _ => true,
-      };
-      return byQuery && byStatus && byRisk && byDensity;
-    }).toList();
+  @override
+  void initState() {
+    super.initState();
+    _recordsStream = widget.recordsStream ?? ScanRecordRepository.watchAll();
   }
 
   @override
   void dispose() {
-    _searchCtrl.dispose();
+    _search.dispose();
     super.dispose();
   }
 
-  void _open(_ZoneRow row) {
-    Navigator.of(context).push(
-      MaterialPageRoute<void>(
-        builder: (_) => AdminZoneDetailsScreen(
-          zone: AdminZoneDetailsData(
-            zoneName: row.name,
-            location: row.location,
-            riskLevel: row.risk,
-            density: row.density,
-            totalDetected: (row.density * 0.85).round(),
-            lastMonitoring: row.lastMonitoring,
-            zoneInitials: row.id,
-            alertStatus: row.status,
-          ),
-        ),
-      ),
-    );
+  void _refresh() => setState(() {
+        _recordsStream =
+            widget.recordsStream ?? ScanRecordRepository.watchAll();
+      });
+  void _filterChanged() => setState(() => _page = 0);
+
+  int _compareSites(SiteDirectorySummary a, SiteDirectorySummary b) {
+    final int comparison;
+    switch (_sort) {
+      case _ZoneSort.site:
+        comparison = a.site.index.compareTo(b.site.index);
+      case _ZoneSort.name:
+        comparison = a.site.displayName
+            .toLowerCase()
+            .compareTo(b.site.displayName.toLowerCase());
+      case _ZoneSort.reports:
+        comparison = b.reports.compareTo(a.reports);
+      case _ZoneSort.confirmed:
+        comparison = (a.reports == 0) != (b.reports == 0)
+            ? (a.reports == 0 ? 1 : -1)
+            : b.analytics.accepted.compareTo(a.analytics.accepted);
+      case _ZoneSort.pending:
+        comparison = b.analytics.pendingSubmissionCount
+            .compareTo(a.analytics.pendingSubmissionCount);
+      case _ZoneSort.latest:
+        final aDate = a.latestReport;
+        final bDate = b.latestReport;
+        comparison = aDate == null
+            ? (bDate == null ? 0 : 1)
+            : bDate == null
+                ? -1
+                : bDate.compareTo(aDate);
+    }
+    return comparison != 0 ? comparison : a.site.index.compareTo(b.site.index);
   }
 
   @override
   Widget build(BuildContext context) {
-    final rows = _filtered;
-    final pageCount = (rows.length / _perPage).ceil().clamp(1, 999);
-    _page = _page.clamp(0, pageCount - 1);
-    final start = _page * _perPage;
-    final pageRows = rows.skip(start).take(_perPage).toList();
-    final end = pageRows.isEmpty ? 0 : start + pageRows.length;
-    final colMap = AdminDataTableColumn.widthsMap(_tableColumns);
-    final tableW = AdminDataTableColumn.totalWidth(_tableColumns);
-    final pagePad = AdminBreakpoints.pagePadding(MediaQuery.sizeOf(context).width);
-    final filtersActive = _status != 'All Status' ||
-        _risk != 'All Risk Levels' ||
-        _density != 'All Density Levels' ||
-        _searchCtrl.text.trim().isNotEmpty;
-
-    return SingleChildScrollView(
-      padding: EdgeInsets.fromLTRB(pagePad.left, 22, pagePad.right, 28),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          _header(),
-          const SizedBox(height: 22),
-          _stats(),
-          const SizedBox(height: 20),
-          _card(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Wrap(
-                  spacing: 10,
-                  runSpacing: 10,
-                  crossAxisAlignment: WrapCrossAlignment.center,
+    final padding =
+        AdminBreakpoints.pagePadding(MediaQuery.sizeOf(context).width);
+    return StreamBuilder<List<ScanRecordModel>>(
+        stream: _recordsStream,
+        builder: (context, snapshot) {
+          final available = snapshot.hasData && !snapshot.hasError;
+          final records = available ? snapshot.data! : <ScanRecordModel>[];
+          final rows = SiteDirectorySummary.fromRecords(records);
+          final analytics = MonitoringAnalytics.fromRecords(records);
+          final unmatched = analytics.submissionCount -
+              rows.fold<int>(0, (n, row) => n + row.reports);
+          final query = _search.text.trim().toLowerCase();
+          final visible = rows
+              .where((row) =>
+                  (_site.isEmpty || row.site.id == _site) &&
+                  ('${row.site.displayName} ${row.site.municipalityName} ${row.site.zoneLabel}'
+                      .toLowerCase()
+                      .contains(query)) &&
+                  (!available ||
+                      _reportStatus == 'All report statuses' ||
+                      (_reportStatus == 'With reports'
+                          ? row.reports > 0
+                          : row.reports == 0)))
+              .toList()
+            ..sort(_compareSites);
+          final pages = (visible.length / _pageSize).ceil().clamp(1, 1000);
+          final page = _page.clamp(0, pages - 1);
+          final pageRows =
+              visible.skip(page * _pageSize).take(_pageSize).toList();
+          return SingleChildScrollView(
+              padding: EdgeInsets.fromLTRB(padding.left, 22, padding.right, 28),
+              child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
-                    SizedBox(
-                      height: 48,
-                      width: 220,
-                      child: TextField(
-                        controller: _searchCtrl,
-                        onChanged: (_) => setState(() {}),
-                        decoration: const InputDecoration(
-                          prefixIcon: Icon(Icons.search_rounded),
-                          hintText: 'Search zones...',
-                          isDense: true,
-                          filled: true,
-                          fillColor: Color(0xFFF7F9FC),
-                        ),
-                      ),
-                    ),
-                    _drop(
-                      const ['All Status', 'Active (Outbreak)', 'Scheduled', 'Cleared'],
-                      _status,
-                      (v) => setState(() => _status = v!),
-                      width: 200,
-                    ),
-                    _drop(
-                      const ['All Risk Levels', 'High', 'Moderate', 'Low'],
-                      _risk,
-                      (v) => setState(() => _risk = v!),
-                    ),
-                    _drop(
-                      const ['All Density Levels', '>= 70 COTS/ha', '50 - 69 COTS/ha', '< 50 COTS/ha'],
-                      _density,
-                      (v) => setState(() => _density = v!),
-                    ),
-                    OutlinedButton.icon(
-                      onPressed: _resetZoneFilters,
-                      icon: const Icon(Icons.refresh_rounded),
-                      label: const Text('Reset'),
-                    ),
-                  ],
-                ),
-                if (filtersActive)
-                  Padding(
-                    padding: const EdgeInsets.only(top: 12),
-                    child: Text(
-                      'Showing ${rows.length} of ${_rows.length} zones. The list is filtered — use Reset or set Status / Risk / Density to “All” to show every zone.',
-                      style: TextStyle(
-                        fontSize: 12,
-                        height: 1.35,
-                        fontWeight: FontWeight.w500,
-                        color: AdminColors.muted.withValues(alpha: 0.95),
-                      ),
-                    ),
-                  ),
-              ],
-            ),
-          ),
-          const SizedBox(height: 14),
-          _card(
-            padding: const EdgeInsets.fromLTRB(0, 0, 0, 0),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                AdminDataTableScrollArea(
-                  tableWidth: tableW,
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.stretch,
-                    children: [
-                      AdminDataTableHeader(columns: _tableColumns),
-                      for (var i = 0; i < pageRows.length; i++)
-                        AdminDataTableClickableRow(
-                          columnWidths: colMap,
-                          onTap: () => _open(pageRows[i]),
-                          cells: _zoneRowCells(start + i + 1, pageRows[i]),
-                        ),
+                    AdminDashboardHeader(
+                        title: 'Monitoring Sites',
+                        subtitle:
+                            'The 3 dive sites in Samal and their reports.',
+                        onRefreshTap: _refresh),
+                    const SizedBox(height: 18),
+                    LayoutBuilder(builder: (context, c) {
+                      final columns = c.maxWidth >= 1000
+                          ? 4
+                          : c.maxWidth >= 520
+                              ? 2
+                              : 1;
+                      final width = (c.maxWidth - 12 * (columns - 1)) / columns;
+                      return Wrap(spacing: 12, runSpacing: 12, children: [
+                        _stat(
+                            width,
+                            'Total sites',
+                            '${rows.length}',
+                            'Defined on the monitoring map',
+                            Icons.map_outlined,
+                            AdminColors.statBlue),
+                        _stat(
+                            width,
+                            'Practice sites',
+                            '${rows.where((row) => row.site.zoneCode == 'PRACTICE').length}',
+                            'Temporary testing locations',
+                            Icons.location_on_outlined,
+                            AdminColors.statGreen),
+                        _stat(
+                            width,
+                            'Sites with reports',
+                            available
+                                ? '${rows.where((row) => row.reports > 0).length}'
+                                : '—',
+                            'Sites with saved captures',
+                            Icons.description_outlined,
+                            AdminColors.statPurple),
+                        _stat(
+                            width,
+                            'Pending review',
+                            available
+                                ? '${analytics.pendingSubmissionCount}'
+                                : '—',
+                            'Reports awaiting expert review',
+                            Icons.schedule_outlined,
+                            AdminColors.statYellow),
+                      ]);
+                    }),
+                    const SizedBox(height: 18),
+                    if (!available) ...[
+                      Text(snapshot.hasError
+                          ? 'Could not load reports. Site definitions remain available; report totals are unavailable.'
+                          : 'Loading report totals…'),
+                      if (snapshot.hasError)
+                        TextButton(
+                            onPressed: _refresh, child: const Text('Retry')),
+                      const SizedBox(height: 12),
                     ],
-                  ),
-                ),
-                AdminDataTablePaginationBar(
-                  summaryText: pageRows.isEmpty
-                      ? 'No zones match your filters.'
-                      : 'Showing ${start + 1} to $end of ${rows.length} zones',
-                  pageIndex: _page,
-                  pageCount: pageCount,
-                  onPageSelected: (p) => setState(() => _page = p),
-                  padding: const EdgeInsets.fromLTRB(16, 12, 16, 10),
-                ),
-              ],
-            ),
-          ),
-        ],
-      ),
-    );
+                    LayoutBuilder(
+                        builder: (context, c) =>
+                            Wrap(spacing: 12, runSpacing: 12, children: [
+                              SizedBox(
+                                  width: c.maxWidth < 350 ? c.maxWidth : 350,
+                                  child: TextField(
+                                    controller: _search,
+                                    onChanged: (_) => _filterChanged(),
+                                    textInputAction: TextInputAction.search,
+                                    onSubmitted: (_) {
+                                      _filterChanged();
+                                      FocusScope.of(context).unfocus();
+                                    },
+                                    decoration: const InputDecoration(
+                                        hintText: 'Search site or location…',
+                                        prefixIcon: Icon(Icons.search_rounded),
+                                        filled: true,
+                                        fillColor: Colors.white),
+                                  )),
+                              SizedBox(
+                                  width: c.maxWidth < 250 ? c.maxWidth : 250,
+                                  child: DropdownButtonFormField<String>(
+                                    key:
+                                        const ValueKey('directory-site-filter'),
+                                    initialValue: _site,
+                                    isExpanded: true,
+                                    decoration: const InputDecoration(
+                                        labelText: 'Dive site',
+                                        filled: true,
+                                        fillColor: Colors.white),
+                                    items: [
+                                      const DropdownMenuItem(
+                                          value: '', child: Text('All sites')),
+                                      for (final row in rows)
+                                        DropdownMenuItem(
+                                            value: row.site.id,
+                                            child: Text(row.site.displayName,
+                                                overflow:
+                                                    TextOverflow.ellipsis))
+                                    ],
+                                    onChanged: (value) {
+                                      _site = value!;
+                                      _filterChanged();
+                                    },
+                                  )),
+                              SizedBox(
+                                  width: c.maxWidth < 220 ? c.maxWidth : 220,
+                                  child: DropdownButtonFormField<String>(
+                                    initialValue: _reportStatus,
+                                    isExpanded: true,
+                                    decoration: const InputDecoration(
+                                        labelText: 'Report status',
+                                        filled: true,
+                                        fillColor: Colors.white),
+                                    items: [
+                                      for (final status in [
+                                        'All report statuses',
+                                        'With reports',
+                                        'No reports'
+                                      ])
+                                        DropdownMenuItem(
+                                            value: status, child: Text(status))
+                                    ],
+                                    onChanged: available
+                                        ? (value) {
+                                            _reportStatus = value!;
+                                            _filterChanged();
+                                          }
+                                        : null,
+                                  )),
+                              SizedBox(
+                                width: c.maxWidth < 240 ? c.maxWidth : 240,
+                                child: DropdownButtonFormField<_ZoneSort>(
+                                  key: const ValueKey('zone-sort'),
+                                  initialValue: _sort,
+                                  isExpanded: true,
+                                  decoration: const InputDecoration(
+                                    labelText: 'Sort by',
+                                    filled: true,
+                                    fillColor: Colors.white,
+                                  ),
+                                  items: [
+                                    for (final sort in _ZoneSort.values)
+                                      DropdownMenuItem(
+                                          value: sort, child: Text(sort.label)),
+                                  ],
+                                  onChanged: (value) {
+                                    if (value == null) return;
+                                    _sort = value;
+                                    _filterChanged();
+                                  },
+                                ),
+                              ),
+                            ])),
+                    const SizedBox(height: 16),
+                    Container(
+                        padding: const EdgeInsets.all(16),
+                        decoration: BoxDecoration(
+                            color: Colors.white,
+                            borderRadius: BorderRadius.circular(14)),
+                        child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.stretch,
+                            children: [
+                              const Text('Site directory',
+                                  style: TextStyle(
+                                      fontSize: 19,
+                                      fontWeight: FontWeight.w800,
+                                      color: AdminColors.headerTitle)),
+                              const SizedBox(height: 6),
+                              const Text(
+                                  'Sites remain listed even without reports. Temporary practice sites are included. Totals count submissions; each photo keeps its own evidence.',
+                                  style: TextStyle(color: AdminColors.muted)),
+                              const SizedBox(height: 14),
+                              AdminDataTableScrollArea(
+                                  horizontalPadding: 0,
+                                  tableWidth:
+                                      AdminDataTableColumn.totalWidth(_columns),
+                                  child: Column(children: [
+                                    const AdminDataTableHeader(
+                                        columns: _columns),
+                                    for (final row in pageRows)
+                                      AdminDataTableStaticRow(
+                                          showShadow: false,
+                                          columnWidths:
+                                              AdminDataTableColumn.widthsMap(
+                                                  _columns),
+                                          cells: [
+                                            _cell(row.site.displayName),
+                                            _cell(row.site.municipalityName),
+                                            _cell(row.site.zoneLabel),
+                                            _cell(available
+                                                ? '${row.reports}'
+                                                : '—'),
+                                            _cell(available && row.reports > 0
+                                                ? '${row.analytics.accepted}'
+                                                : '—'),
+                                            _cell(available
+                                                ? '${row.analytics.pendingSubmissionCount}'
+                                                : '—'),
+                                            _cell(!available
+                                                ? 'Unavailable'
+                                                : row.reports == 0
+                                                    ? 'No reports yet'
+                                                    : row.latestReport == null
+                                                        ? 'Date unavailable'
+                                                        : DateFormat(
+                                                                'MMM d, yyyy · h:mm a')
+                                                            .format(row
+                                                                .latestReport!
+                                                                .toLocal())),
+                                            TableCell(
+                                                child: TextButton(
+                                                    onPressed: () => _showSite(
+                                                        row.site, records),
+                                                    child: const Text(
+                                                        'View site'))),
+                                          ]),
+                                  ])),
+                              if (visible.isEmpty)
+                                const Padding(
+                                    padding: EdgeInsets.all(24),
+                                    child:
+                                        Text('No sites match your filters.')),
+                              AdminDataTablePaginationBar(
+                                  summaryText:
+                                      'Showing ${visible.isEmpty ? 0 : page * _pageSize + 1}–${page * _pageSize + pageRows.length} of ${visible.length} sites',
+                                  pageIndex: page,
+                                  pageCount: pages,
+                                  onPageSelected: (value) =>
+                                      setState(() => _page = value)),
+                              const Text(
+                                  'No reports means not assessed. “—” does not mean zero COTS.',
+                                  style: TextStyle(color: AdminColors.muted)),
+                              if (available && unmatched > 0)
+                                Padding(
+                                    padding: const EdgeInsets.only(top: 8),
+                                    child: Text(
+                                        '$unmatched capture report(s) have no recognized site. They remain available in Records / Submissions.')),
+                            ])),
+                  ]));
+        });
   }
 
-  void _resetZoneFilters() {
-    setState(() {
-      _searchCtrl.clear();
-      _status = 'All Status';
-      _risk = 'All Risk Levels';
-      _density = 'All Density Levels';
-      _page = 0;
-    });
+  Widget _stat(double width, String title, String value, String subtitle,
+          IconData icon, Color color) =>
+      SizedBox(
+          width: width,
+          child: AdminStatCard(
+              title: title,
+              value: value,
+              subtitle: subtitle,
+              icon: icon,
+              accentColor: color));
+  TableCell _cell(String value) => TableCell(
+      child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 16),
+          child: Text(value, style: AdminDataTableTokens.bodyTextStyle())));
+
+  void _showSite(GulfCoastalBarangay site, List<ScanRecordModel> records) {
+    Navigator.of(context).push<void>(MaterialPageRoute(
+      builder: (_) => AdminSiteDetailsScreen(
+          site: site,
+          recordsStream:
+              widget.recordsStream == null ? null : Stream.value(records)),
+    ));
   }
-
-  void _onZonesHeaderRefresh() {
-    _resetZoneFilters();
-    if (!mounted) return;
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(
-        behavior: SnackBarBehavior.floating,
-        content: Text('Zones data refreshed (demo).'),
-      ),
-    );
-  }
-
-  Widget _header() {
-    return AdminDashboardHeader(
-      title: 'Zones',
-      subtitle:
-          'Manage and monitor all zones. View zone status, risk level, density, and last monitoring information.',
-      onRefreshTap: _onZonesHeaderRefresh,
-    );
-  }
-
-  Widget _stats() {
-    return LayoutBuilder(
-      builder: (context, c) {
-        final maxWidth = c.maxWidth;
-        final cards = <Widget>[
-          AdminStatCard(
-            title: 'Total Zones',
-            value: '12',
-            subtitle: 'All monitoring zones',
-            icon: Icons.map_outlined,
-            accentColor: AdminColors.statBlue,
-            selected: _status == 'All Status',
-            onTap: () => setState(() => _status = 'All Status'),
-          ),
-          AdminStatCard(
-            title: 'Active Zones (Outbreak)',
-            value: '4',
-            subtitle: 'Require immediate action',
-            icon: Icons.emergency_outlined,
-            accentColor: AdminColors.statRed,
-            selected: _status == 'Active (Outbreak)',
-            onTap: () => setState(() {
-              _status = _status == 'Active (Outbreak)' ? 'All Status' : 'Active (Outbreak)';
-            }),
-          ),
-          AdminStatCard(
-            title: 'Scheduled Zones',
-            value: '3',
-            subtitle: 'Planned for removal',
-            icon: Icons.schedule_rounded,
-            accentColor: AdminColors.statYellow,
-            selected: _status == 'Scheduled',
-            onTap: () => setState(() {
-              _status = _status == 'Scheduled' ? 'All Status' : 'Scheduled';
-            }),
-          ),
-          AdminStatCard(
-            title: 'Cleared Zones',
-            value: '5',
-            subtitle: 'No COTS detected',
-            icon: Icons.check_circle_outline_rounded,
-            accentColor: AdminColors.statGreen,
-            selected: _status == 'Cleared',
-            onTap: () => setState(() {
-              _status = _status == 'Cleared' ? 'All Status' : 'Cleared';
-            }),
-          ),
-          AdminStatCard(
-            title: 'Total COTS Detected',
-            value: '248',
-            subtitle: 'Across all zones',
-            icon: Icons.pest_control_outlined,
-            accentColor: AdminColors.statPurple,
-            onTap: () => setState(() => _status = 'All Status'),
-          ),
-        ];
-
-        if (maxWidth < 640) {
-          return Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              for (final w in cards) Padding(padding: const EdgeInsets.only(bottom: 12), child: w),
-            ],
-          );
-        }
-        if (maxWidth < 1100) {
-          return Wrap(
-            spacing: 12,
-            runSpacing: 12,
-            children: cards
-                .map((w) => SizedBox(width: (maxWidth - 28 - 12) / 2, child: w))
-                .toList(),
-          );
-        }
-        return Row(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            for (var i = 0; i < cards.length; i++)
-              Expanded(
-                child: Padding(
-                  padding: EdgeInsets.only(right: i == cards.length - 1 ? 0 : 12),
-                  child: cards[i],
-                ),
-              ),
-          ],
-        );
-      },
-    );
-  }
-
-  Widget _drop(
-    List<String> options,
-    String value,
-    ValueChanged<String?> onChanged, {
-    double width = 170,
-  }) {
-    const labelStyle = TextStyle(
-      fontSize: 13,
-      fontWeight: FontWeight.w600,
-      color: AdminColors.headerTitle,
-    );
-    return SizedBox(
-      width: width,
-      height: 48,
-      child: Material(
-        color: Colors.transparent,
-        child: DecoratedBox(
-          decoration: BoxDecoration(
-            color: const Color(0xFFF7F9FC),
-            borderRadius: BorderRadius.circular(10),
-          ),
-          child: Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 6),
-            child: DropdownButtonHideUnderline(
-              child: DropdownButton<String>(
-                value: value,
-                isExpanded: true,
-                dropdownColor: Colors.white,
-                icon: Icon(Icons.keyboard_arrow_down_rounded, color: AdminColors.muted.withValues(alpha: 0.9)),
-                style: labelStyle,
-                selectedItemBuilder: (context) {
-                  return options
-                      .map(
-                        (e) => Align(
-                          alignment: Alignment.centerLeft,
-                          child: Text(
-                            e,
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                            style: labelStyle,
-                          ),
-                        ),
-                      )
-                      .toList();
-                },
-                items: options
-                    .map(
-                      (e) => DropdownMenuItem<String>(
-                        value: e,
-                        child: Text(
-                          e,
-                          overflow: TextOverflow.ellipsis,
-                          style: const TextStyle(
-                            fontSize: 13,
-                            fontWeight: FontWeight.w500,
-                            color: AdminColors.headerTitle,
-                          ),
-                        ),
-                      ),
-                    )
-                    .toList(),
-                onChanged: onChanged,
-              ),
-            ),
-          ),
-        ),
-      ),
-    );
-  }
-
-  static Widget _card({required Widget child, EdgeInsetsGeometry? padding}) {
-    return Container(
-      padding: padding ?? const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(14),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withValues(alpha: 0.05),
-            blurRadius: 14,
-            offset: const Offset(0, 4),
-          ),
-        ],
-      ),
-      child: child,
-    );
-  }
-
-  List<TableCell> _zoneRowCells(int index, _ZoneRow row) {
-    final cStatus = _zoneStatusColor(row.status);
-    final cRisk = _zoneRiskColor(row.risk);
-    return [
-      AdminDataTableCells.text('$index', align: TextAlign.center, style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 12)),
-      AdminDataTableCells.cell(
-        align: TextAlign.left,
-        child: Text(
-          row.name,
-          maxLines: 1,
-          overflow: TextOverflow.ellipsis,
-          style: const TextStyle(
-            fontWeight: FontWeight.w800,
-            fontSize: 12.5,
-            color: AdminColors.statBlue,
-            decoration: TextDecoration.underline,
-            decorationColor: AdminColors.statBlue,
-          ),
-        ),
-      ),
-      AdminDataTableCells.text(row.location),
-      AdminDataTableCells.cell(
-        align: TextAlign.center,
-        child: AdminDataTableBadge(label: row.status, foreground: cStatus, background: cStatus.withValues(alpha: 0.14)),
-      ),
-      AdminDataTableCells.cell(
-        align: TextAlign.center,
-        child: AdminDataTableBadge(label: row.risk, foreground: cRisk, background: cRisk.withValues(alpha: 0.14)),
-      ),
-      AdminDataTableCells.text(
-        '${row.density.toStringAsFixed(2)} COTS/ha',
-        align: TextAlign.right,
-        style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 12.5),
-      ),
-      AdminDataTableCells.text(row.lastMonitoring, style: TextStyle(fontSize: 12, color: AdminColors.muted.withValues(alpha: 0.95))),
-      AdminDataTableCells.text(row.lastUpdated, style: TextStyle(fontSize: 12, color: AdminColors.muted.withValues(alpha: 0.95))),
-      AdminDataTableCells.cell(
-        align: TextAlign.right,
-        child: Row(
-          mainAxisAlignment: MainAxisAlignment.end,
-          children: [
-            IconButton(
-              padding: EdgeInsets.zero,
-              constraints: const BoxConstraints(minWidth: 36, minHeight: 36),
-              onPressed: () => _open(row),
-              icon: Icon(Icons.visibility_outlined, size: 18, color: AdminColors.statBlue.withValues(alpha: 0.9)),
-            ),
-            IconButton(
-              padding: EdgeInsets.zero,
-              constraints: const BoxConstraints(minWidth: 36, minHeight: 36),
-              onPressed: () {},
-              icon: Icon(Icons.edit_outlined, size: 18, color: AdminColors.muted.withValues(alpha: 0.85)),
-            ),
-          ],
-        ),
-      ),
-    ];
-  }
-
-  Color _zoneStatusColor(String status) {
-    switch (status) {
-      case 'Active (Outbreak)':
-        return AdminColors.statRed;
-      case 'Scheduled':
-        return AdminColors.statYellow;
-      default:
-        return AdminColors.statGreen;
-    }
-  }
-
-  Color _zoneRiskColor(String risk) {
-    switch (risk) {
-      case 'High':
-        return AdminColors.statRed;
-      case 'Moderate':
-        return AdminColors.statYellow;
-      default:
-        return AdminColors.statGreen;
-    }
-  }
-}
-
-class _ZoneRow {
-  const _ZoneRow(
-    this.id,
-    this.name,
-    this.location,
-    this.status,
-    this.risk,
-    this.density,
-    this.lastMonitoring,
-    this.lastUpdated,
-  );
-  final String id;
-  final String name;
-  final String location;
-  final String status;
-  final String risk;
-  final double density;
-  final String lastMonitoring;
-  final String lastUpdated;
 }

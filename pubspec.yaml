@@ -1,7 +1,7 @@
 name: cots_monitor
 description: COTS Monitor capstone dashboard
 publish_to: "none"
-version: 1.0.2+3
+version: 1.0.3+4
 
 environment:
   sdk: ">=3.0.0 <4.0.0"
@@ -25,7 +25,16 @@ dependencies:
   fl_chart: ^0.69.2
   google_fonts: ^6.2.1
   flutter_onnxruntime: ^1.7.1
-  image: ^4.8.0
+  image: 4.10.0
+  supabase_flutter: 2.18.3
+  flutter_secure_storage: 11.2.0
+  path_provider: ^2.1.5
+  connectivity_plus: ^6.1.4
+  pdf: ^3.13.1
+  file_saver: ^0.4.0
+  firebase_messaging: ^16.7.1
+  crypto: ^3.0.8
+  qr_flutter: ^4.1.0
 
 dev_dependencies:
   flutter_test:
@@ -44,4 +53,10 @@ flutter:
   uses-material-design: true
   assets:
     - assets/images/cots_logo.png
+    - assets/images/landing_coral.jpg
     - assets/models/yolov8_best.onnx
+    - assets/models/yolo26_best.onnx
+    - assets/map/parts.json
+    - assets/map/areas.json
+    - assets/map/part_outlines.json
+    - assets/map/lookup.bin

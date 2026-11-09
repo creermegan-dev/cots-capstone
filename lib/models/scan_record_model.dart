@@ -1,6 +1,8 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:intl/intl.dart';
 
+import '../utils/staff_record_time.dart';
+
 import '../features/admin/models/admin_record_table_row.dart';
 import 'activity_type.dart';
 import 'capture_model.dart';
@@ -8,7 +10,10 @@ import 'cots_confidence_policy.dart';
 import 'cots_detection_result.dart';
 import 'follow_up_monitoring_model.dart';
 import 'record_collection.dart';
+import 'submission_identity.dart';
 import 'removal_record_model.dart';
+import 'zone_review.dart';
+import 'cots_tally.dart';
 import '../utils/scan_record_image.dart';
 
 /// Firestore `scan_records/{id}` citizen science submission.
@@ -48,6 +53,8 @@ class ScanRecordModel {
     this.followUpSurvey,
     this.followUpStatus,
     this.sourceCapture,
+    this.locationSource = '',
+    this.timeSource = '',
   });
 
   final String id;
@@ -84,6 +91,13 @@ class ScanRecordModel {
   final FollowUpSurveyModel? followUpSurvey;
   final FollowUpSurveyStatus? followUpStatus;
   final CaptureModel? sourceCapture;
+
+  String get encounterId => sourceCapture?.encounterId ?? '';
+  String get monitoringAreaId => sourceCapture?.monitoringAreaId ?? '';
+
+  /// Where the location and the time came from (see PhotoSource).
+  final String locationSource;
+  final String timeSource;
 
   /// Parses a Firestore REST API document (`fields` map).
   factory ScanRecordModel.fromRestDocument(Map<String, dynamic> doc) {
@@ -143,7 +157,8 @@ class ScanRecordModel {
     );
   }
 
-  factory ScanRecordModel.fromCapture(CaptureModel capture) {
+  factory ScanRecordModel.fromCapture(CaptureModel capture,
+      {int? removedQuantity, bool hasRemovalRecord = false}) {
     return ScanRecordModel(
       sourceCapture: capture,
       id: capture.id,
@@ -151,7 +166,11 @@ class ScanRecordModel {
       submittedBy: capture.submittedBy,
       imageName: capture.imageName,
       imagePath: '',
-      activityType: CotsActivityType.detectionOnly,
+      storageObjectPath: capture.storageObjectPath,
+      activityType: removedQuantity == null && !hasRemovalRecord
+          ? CotsActivityType.detectionOnly
+          : CotsActivityType.removalActivity,
+      removedQuantity: removedQuantity,
       aiDetectedCount: capture.aiDetectedCount,
       confidence: capture.confidence,
       captureSource: capture.captureSource,
@@ -172,6 +191,8 @@ class ScanRecordModel {
       adminCotsDecisions: capture.adminCotsDecisions,
       storedDisplayRecordId: capture.storedDisplayRecordId,
       recordCollection: RecordCollection.captures,
+      locationSource: capture.locationSource,
+      timeSource: capture.timeSource,
     );
   }
 
@@ -182,6 +203,7 @@ class ScanRecordModel {
       submittedBy: removal.submittedBy,
       imageName: removal.imageName,
       imagePath: '',
+      storageObjectPath: removal.storageObjectPath,
       activityType: CotsActivityType.removalActivity,
       aiDetectedCount:
           removal.linkedCaptureAiCount ?? removal.aiVerifiedCount ?? 0,
@@ -203,6 +225,7 @@ class ScanRecordModel {
       linkedCaptureDisplayId: removal.linkedCaptureDisplayId.isNotEmpty
           ? removal.linkedCaptureDisplayId
           : null,
+      locationSource: removal.locationSource,
     );
   }
 
@@ -215,7 +238,7 @@ class ScanRecordModel {
       id: survey.id,
       uid: survey.uid,
       submittedBy: survey.submittedBy,
-      imageName: '${survey.captureIds.length} GoPro image(s)',
+      imageName: '${survey.captureIds.length} photo(s)',
       imagePath: '',
       activityType: CotsActivityType.followUpSurvey,
       aiDetectedCount: survey.aiDetectedCount,
@@ -231,6 +254,11 @@ class ScanRecordModel {
       longitude: survey.longitude,
       recordCollection: RecordCollection.followUpSurveys,
       followUpSurvey: survey,
+      // The Diver types the visit's coordinates and picks its date.
+      locationSource: survey.latitude != null && survey.longitude != null
+          ? 'manual_surface'
+          : 'unavailable',
+      timeSource: 'manual',
     );
   }
 
@@ -293,7 +321,7 @@ class ScanRecordModel {
       index,
       displayRecordId,
       zone,
-      fmt.format(when),
+      fmt.format(StaffRecordTime.inManila(when)),
       count,
       followUpSurvey != null ||
               sourceCapture?.followUpSurveyId.isNotEmpty == true
@@ -313,9 +341,15 @@ class ScanRecordModel {
       documentId: id,
       imageName: imageName,
       notes: notes,
-      dateCaptured: dateTaken != null ? fmt.format(dateTaken!) : 'Unknown',
-      dateUploaded:
-          submittedAt != null ? fmt.format(submittedAt!) : fmt.format(when),
+      dateCaptured: dateTaken == null
+          ? 'Unknown'
+          : (timeSource == 'manual' ? DateFormat('MMM d, yyyy') : fmt).format(
+              timeSource == 'manual'
+                  ? dateTaken!
+                  : StaffRecordTime.inManila(dateTaken!)),
+      dateUploaded: submittedAt != null
+          ? fmt.format(StaffRecordTime.inManila(submittedAt!))
+          : fmt.format(StaffRecordTime.inManila(when)),
       latitude: latitude,
       longitude: longitude,
       imagePath: imagePath,
@@ -331,6 +365,20 @@ class ScanRecordModel {
       linkedCaptureId: linkedCaptureId,
       linkedCaptureDisplayId: linkedCaptureDisplayId,
       ownerUid: uid,
+      zoneAssignedTo: zoneAssignedTo,
+      cotsTally: cotsTally,
+      locationSource: locationSource,
+      timeSource: timeSource,
+      submissionId: recordCollection == RecordCollection.captures &&
+              sourceCapture?.followUpSurveyId.isNotEmpty != true
+          ? SubmissionIdentity.forBatch(uid, encounterId, monitoringAreaId)
+          : '',
+      encounterId: encounterId,
+      siteId: monitoringAreaId,
+      submittedAt: submittedAt,
+      capturedAt: dateTaken,
+      serverStatus: sourceCapture?.serverStatus ?? '',
+      followUpSurveyId: sourceCapture?.followUpSurveyId ?? '',
     );
   }
 
@@ -366,12 +414,66 @@ class ScanRecordModel {
         imageHeight: imageHeight > 0 ? imageHeight : 1080,
       );
 
+  /// Stage 3: confirmed, waiting and not-accepted COTS in this photo record.
+  /// Supabase supplies the numbers (one rule for every screen); Firebase
+  /// records are counted from their per-COTS decisions as before. Removal
+  /// records and visit summaries add no COTS: their photos are counted.
+  CotsTally get cotsTally {
+    final countsPhotos = recordCollection == RecordCollection.captures ||
+        (recordCollection == RecordCollection.legacyScanRecords &&
+            !CotsActivityType.isRemoval(activityType));
+    if (!countsPhotos) return CotsTally.zero;
+    final capture = sourceCapture;
+    final confirmed = capture?.confirmedCount;
+    if (capture != null && confirmed != null) {
+      final waiting = capture.waitingCount ?? 0;
+      final rest = aiDetectedCount - confirmed - waiting;
+      return CotsTally(
+          confirmed: confirmed,
+          waiting: waiting,
+          notAccepted: rest < 0 ? 0 : rest);
+    }
+    var accepted = 0, pending = 0, rejected = 0;
+    final items = detectionReviewItems;
+    for (var i = 0; i < items.length; i++) {
+      final decision = adminRejected
+          ? PerCotsAdminDecision.rejected
+          : i < adminCotsDecisions.length
+              ? adminCotsDecisions[i]
+              : adminConfirmed
+                  ? PerCotsAdminDecision.confirmed
+                  : CotsConfidencePolicy.initialDecisionForPercent(
+                      items[i].confidencePercent);
+      switch (decision) {
+        case PerCotsAdminDecision.confirmed:
+          accepted++;
+        case PerCotsAdminDecision.pending:
+          pending++;
+        case PerCotsAdminDecision.rejected:
+          rejected++;
+      }
+    }
+    return CotsTally(
+        confirmed: accepted, waiting: pending, notAccepted: rejected);
+  }
+
+  /// Stage 2: who the zone is assigned to, for another Diver's record.
+  String get zoneAssignedTo => sourceCapture?.zoneAssignedTo ?? '';
+
+  bool get _waitingForZoneApproval => ZoneReview.isWaiting(
+        assignedTo: zoneAssignedTo,
+        confirmed: adminConfirmed,
+        rejected: adminRejected,
+      );
+
   String get userStatusLabel {
     if (recordCollection == RecordCollection.followUpSurveys) {
       return followUpSurveyStatusLabel(
           followUpStatus ?? FollowUpSurveyStatus.submitted);
     }
-    if (CotsActivityType.isRemoval(activityType)) {
+    if (_waitingForZoneApproval) return ZoneReview.statusLabel;
+    if (CotsActivityType.isRemoval(activityType) &&
+        recordCollection != RecordCollection.captures) {
       if (adminConfirmed) return 'Verified';
       if (adminRejected) return 'Rejected';
       return 'Pending Verification';
@@ -387,7 +489,11 @@ class ScanRecordModel {
     if (recordCollection == RecordCollection.followUpSurveys) {
       return 'Monthly follow-up survey saved for ${followUpSurvey?.areaName ?? zone}.';
     }
-    if (CotsActivityType.isRemoval(activityType)) {
+    if (_waitingForZoneApproval) {
+      return ZoneReview.waitingMessage(zoneAssignedTo);
+    }
+    if (CotsActivityType.isRemoval(activityType) &&
+        recordCollection != RecordCollection.captures) {
       if (adminConfirmed) {
         return 'Removal evidence was verified. This intervention record is closed.';
       }

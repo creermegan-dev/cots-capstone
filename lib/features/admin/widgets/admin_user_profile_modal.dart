@@ -5,7 +5,8 @@ import '../models/admin_user_models.dart';
 import '../theme/admin_theme.dart';
 import 'admin_record_details_dialogs.dart';
 
-Future<void> showAdminUserProfileDialog(BuildContext context, AdminUserProfileData d) {
+Future<void> showAdminUserProfileDialog(
+    BuildContext context, AdminUserProfileData d) {
   return showAdminBlurredDialog(
     context: context,
     maxWidthFraction: 0.72,
@@ -25,17 +26,22 @@ class _UserProfileModalBody extends StatelessWidget {
     final roleColor = adminUserRoleColor(data.role);
     return CallbackShortcuts(
       bindings: {
-        const SingleActivator(LogicalKeyboardKey.escape): () => Navigator.of(context).maybePop(),
+        const SingleActivator(LogicalKeyboardKey.escape): () =>
+            Navigator.of(context).maybePop(),
       },
       child: GestureDetector(
         onTap: () {},
         child: Container(
-          constraints: BoxConstraints(maxHeight: MediaQuery.sizeOf(context).height * 0.9),
+          constraints: BoxConstraints(
+              maxHeight: MediaQuery.sizeOf(context).height * 0.9),
           decoration: BoxDecoration(
             color: Colors.white,
             borderRadius: BorderRadius.circular(18),
             boxShadow: [
-              BoxShadow(color: Colors.black.withValues(alpha: 0.18), blurRadius: 36, offset: const Offset(0, 18)),
+              BoxShadow(
+                  color: Colors.black.withValues(alpha: 0.18),
+                  blurRadius: 36,
+                  offset: const Offset(0, 18)),
             ],
           ),
           clipBehavior: Clip.antiAlias,
@@ -57,7 +63,11 @@ class _UserProfileModalBody extends StatelessWidget {
                           if (narrow) {
                             return Column(
                               crossAxisAlignment: CrossAxisAlignment.stretch,
-                              children: [left, const SizedBox(height: 14), right],
+                              children: [
+                                left,
+                                const SizedBox(height: 14),
+                                right
+                              ],
                             );
                           }
                           return IntrinsicHeight(
@@ -79,7 +89,11 @@ class _UserProfileModalBody extends StatelessWidget {
                           final roleCard = _roleCard(roleColor);
                           final orgCard = _orgCard();
                           if (narrow) {
-                            return Column(children: [roleCard, const SizedBox(height: 12), orgCard]);
+                            return Column(children: [
+                              roleCard,
+                              const SizedBox(height: 12),
+                              orgCard
+                            ]);
                           }
                           return Row(
                             crossAxisAlignment: CrossAxisAlignment.start,
@@ -96,7 +110,8 @@ class _UserProfileModalBody extends StatelessWidget {
                       const SizedBox(height: 16),
                       Align(
                         alignment: Alignment.centerRight,
-                        child: _OutlinedCloseButton(onPressed: () => Navigator.pop(context)),
+                        child: _OutlinedCloseButton(
+                            onPressed: () => Navigator.pop(context)),
                       ),
                     ],
                   ),
@@ -121,11 +136,16 @@ class _UserProfileModalBody extends StatelessWidget {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text('User Profile', style: TextStyle(fontSize: 22, fontWeight: FontWeight.w900, color: AdminColors.headerTitle)),
+                    Text('User Profile',
+                        style: TextStyle(
+                            fontSize: 22,
+                            fontWeight: FontWeight.w900,
+                            color: AdminColors.headerTitle)),
                     SizedBox(height: 6),
                     Text(
                       'View user information and account details.',
-                      style: TextStyle(fontSize: 13, color: AdminColors.muted, height: 1.35),
+                      style: TextStyle(
+                          fontSize: 13, color: AdminColors.muted, height: 1.35),
                     ),
                   ],
                 ),
@@ -133,7 +153,8 @@ class _UserProfileModalBody extends StatelessWidget {
               IconButton(
                 onPressed: () => Navigator.pop(context),
                 icon: const Icon(Icons.close_rounded),
-                style: IconButton.styleFrom(foregroundColor: AdminColors.headerTitle),
+                style: IconButton.styleFrom(
+                    foregroundColor: AdminColors.headerTitle),
               ),
             ],
           ),
@@ -159,16 +180,24 @@ class _UserProfileModalBody extends StatelessWidget {
             backgroundColor: AdminColors.statBlue.withValues(alpha: 0.15),
             child: Text(
               adminUserInitials(data.name),
-              style: const TextStyle(fontSize: 22, fontWeight: FontWeight.w900, color: AdminColors.statBlue),
+              style: const TextStyle(
+                  fontSize: 22,
+                  fontWeight: FontWeight.w900,
+                  color: AdminColors.statBlue),
             ),
           ),
           const SizedBox(height: 12),
-          Text(data.name, textAlign: TextAlign.center, style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w900)),
+          Text(data.name,
+              textAlign: TextAlign.center,
+              style:
+                  const TextStyle(fontSize: 18, fontWeight: FontWeight.w900)),
           const SizedBox(height: 8),
           Container(
             padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
             decoration: BoxDecoration(
-              color: data.active ? AdminColors.statGreen.withValues(alpha: 0.14) : AdminColors.statRed.withValues(alpha: 0.12),
+              color: data.active
+                  ? AdminColors.statGreen.withValues(alpha: 0.14)
+                  : AdminColors.statRed.withValues(alpha: 0.12),
               borderRadius: BorderRadius.circular(20),
             ),
             child: Text(
@@ -176,7 +205,8 @@ class _UserProfileModalBody extends StatelessWidget {
               style: TextStyle(
                 fontWeight: FontWeight.w800,
                 fontSize: 12,
-                color: data.active ? AdminColors.statGreen : AdminColors.statRed,
+                color:
+                    data.active ? AdminColors.statGreen : AdminColors.statRed,
               ),
             ),
           ),
@@ -187,16 +217,28 @@ class _UserProfileModalBody extends StatelessWidget {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 _smallLabel('Email'),
-                Text(data.email, style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 13)),
+                Text(data.email,
+                    style: const TextStyle(
+                        fontWeight: FontWeight.w600, fontSize: 13)),
                 const SizedBox(height: 10),
                 _smallLabel('Phone'),
-                Text(data.phone, style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 13)),
+                Text(data.phone,
+                    style: const TextStyle(
+                        fontWeight: FontWeight.w600, fontSize: 13)),
                 const SizedBox(height: 10),
                 _smallLabel('Member since'),
-                Text(data.memberSince, style: TextStyle(fontSize: 13, color: AdminColors.headerTitle.withValues(alpha: 0.88))),
+                Text(data.memberSince,
+                    style: TextStyle(
+                        fontSize: 13,
+                        color:
+                            AdminColors.headerTitle.withValues(alpha: 0.88))),
                 const SizedBox(height: 10),
                 _smallLabel('Last login'),
-                Text(data.lastLogin, style: TextStyle(fontSize: 13, color: AdminColors.headerTitle.withValues(alpha: 0.88))),
+                Text(data.lastLogin,
+                    style: TextStyle(
+                        fontSize: 13,
+                        color:
+                            AdminColors.headerTitle.withValues(alpha: 0.88))),
               ],
             ),
           ),
@@ -208,7 +250,11 @@ class _UserProfileModalBody extends StatelessWidget {
   Widget _smallLabel(String t) {
     return Padding(
       padding: const EdgeInsets.only(bottom: 4),
-      child: Text(t, style: TextStyle(fontSize: 11, fontWeight: FontWeight.w800, color: AdminColors.muted.withValues(alpha: 0.85))),
+      child: Text(t,
+          style: TextStyle(
+              fontSize: 11,
+              fontWeight: FontWeight.w800,
+              color: AdminColors.muted.withValues(alpha: 0.85))),
     );
   }
 
@@ -221,7 +267,11 @@ class _UserProfileModalBody extends StatelessWidget {
           children: [
             SizedBox(
               width: 128,
-              child: Text(k, style: TextStyle(fontSize: 12, fontWeight: FontWeight.w700, color: AdminColors.muted.withValues(alpha: 0.85))),
+              child: Text(k,
+                  style: TextStyle(
+                      fontSize: 12,
+                      fontWeight: FontWeight.w700,
+                      color: AdminColors.muted.withValues(alpha: 0.85))),
             ),
             Expanded(child: v),
           ],
@@ -235,36 +285,61 @@ class _UserProfileModalBody extends StatelessWidget {
         color: Colors.white,
         borderRadius: BorderRadius.circular(14),
         border: Border.all(color: Colors.black.withValues(alpha: 0.08)),
-        boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.04), blurRadius: 12, offset: const Offset(0, 4))],
+        boxShadow: [
+          BoxShadow(
+              color: Colors.black.withValues(alpha: 0.04),
+              blurRadius: 12,
+              offset: const Offset(0, 4))
+        ],
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           row(
             'User ID',
-            Text(data.userId, style: const TextStyle(fontWeight: FontWeight.w900, fontSize: 13)),
+            Text(data.userId,
+                style:
+                    const TextStyle(fontWeight: FontWeight.w900, fontSize: 13)),
           ),
           row(
             'Role',
             Align(
               alignment: Alignment.centerLeft,
               child: Container(
-                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                decoration: BoxDecoration(color: roleColor.withValues(alpha: 0.12), borderRadius: BorderRadius.circular(20)),
-                child: Text(data.role, style: TextStyle(fontWeight: FontWeight.w800, color: roleColor, fontSize: 12)),
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                decoration: BoxDecoration(
+                    color: roleColor.withValues(alpha: 0.12),
+                    borderRadius: BorderRadius.circular(20)),
+                child: Text(data.role,
+                    style: TextStyle(
+                        fontWeight: FontWeight.w800,
+                        color: roleColor,
+                        fontSize: 12)),
               ),
             ),
           ),
-          row('Organization', Text(data.organization, style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 13))),
-          row('Assigned Zone(s)', Text(data.assignedZones, style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 13))),
+          row(
+              'Organization',
+              Text(data.organization,
+                  style: const TextStyle(
+                      fontWeight: FontWeight.w600, fontSize: 13))),
+          row(
+              'Assigned Site(s)',
+              Text(data.assignedZones,
+                  style: const TextStyle(
+                      fontWeight: FontWeight.w600, fontSize: 13))),
           row(
             'Status',
             Align(
               alignment: Alignment.centerLeft,
               child: Container(
-                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
                 decoration: BoxDecoration(
-                  color: data.active ? AdminColors.statGreen.withValues(alpha: 0.14) : AdminColors.statRed.withValues(alpha: 0.12),
+                  color: data.active
+                      ? AdminColors.statGreen.withValues(alpha: 0.14)
+                      : AdminColors.statRed.withValues(alpha: 0.12),
                   borderRadius: BorderRadius.circular(20),
                 ),
                 child: Text(
@@ -273,7 +348,9 @@ class _UserProfileModalBody extends StatelessWidget {
                     fontWeight: FontWeight.w900,
                     fontSize: 11,
                     letterSpacing: 0.6,
-                    color: data.active ? AdminColors.statGreen : AdminColors.statRed,
+                    color: data.active
+                        ? AdminColors.statGreen
+                        : AdminColors.statRed,
                   ),
                 ),
               ),
@@ -295,13 +372,27 @@ class _UserProfileModalBody extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const Text('Role information', style: TextStyle(fontWeight: FontWeight.w900, fontSize: 14, color: AdminColors.headerTitle)),
+          const Text('Role information',
+              style: TextStyle(
+                  fontWeight: FontWeight.w900,
+                  fontSize: 14,
+                  color: AdminColors.headerTitle)),
           const SizedBox(height: 10),
-          Text(data.role, style: TextStyle(fontWeight: FontWeight.w900, fontSize: 16, color: roleColor)),
+          Text(data.role,
+              style: TextStyle(
+                  fontWeight: FontWeight.w900, fontSize: 16, color: roleColor)),
           const SizedBox(height: 8),
-          Text(data.roleDescription, style: TextStyle(fontSize: 13, height: 1.45, color: AdminColors.headerTitle.withValues(alpha: 0.88))),
+          Text(data.roleDescription,
+              style: TextStyle(
+                  fontSize: 13,
+                  height: 1.45,
+                  color: AdminColors.headerTitle.withValues(alpha: 0.88))),
           const SizedBox(height: 14),
-          Text('Permissions', style: TextStyle(fontSize: 11, fontWeight: FontWeight.w800, color: AdminColors.muted.withValues(alpha: 0.85))),
+          Text('Permissions',
+              style: TextStyle(
+                  fontSize: 11,
+                  fontWeight: FontWeight.w800,
+                  color: AdminColors.muted.withValues(alpha: 0.85))),
           const SizedBox(height: 8),
           for (final p in data.permissions)
             Padding(
@@ -309,9 +400,13 @@ class _UserProfileModalBody extends StatelessWidget {
               child: Row(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Icon(Icons.check_circle_rounded, size: 18, color: AdminColors.statGreen),
+                  Icon(Icons.check_circle_rounded,
+                      size: 18, color: AdminColors.statGreen),
                   const SizedBox(width: 8),
-                  Expanded(child: Text(p, style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600))),
+                  Expanded(
+                      child: Text(p,
+                          style: const TextStyle(
+                              fontSize: 13, fontWeight: FontWeight.w600))),
                 ],
               ),
             ),
@@ -331,14 +426,24 @@ class _UserProfileModalBody extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const Text('Organization information', style: TextStyle(fontWeight: FontWeight.w900, fontSize: 14, color: AdminColors.headerTitle)),
+          const Text('Organization information',
+              style: TextStyle(
+                  fontWeight: FontWeight.w900,
+                  fontSize: 14,
+                  color: AdminColors.headerTitle)),
           const SizedBox(height: 10),
-          Text(data.organization, style: const TextStyle(fontWeight: FontWeight.w900, fontSize: 16)),
+          Text(data.organization,
+              style:
+                  const TextStyle(fontWeight: FontWeight.w900, fontSize: 16)),
           const SizedBox(height: 8),
           _orgLine('Organization type', data.orgType),
           _orgLine('Location', data.orgLocation),
           const SizedBox(height: 8),
-          Text(data.orgDescription, style: TextStyle(fontSize: 13, height: 1.45, color: AdminColors.headerTitle.withValues(alpha: 0.88))),
+          Text(data.orgDescription,
+              style: TextStyle(
+                  fontSize: 13,
+                  height: 1.45,
+                  color: AdminColors.headerTitle.withValues(alpha: 0.88))),
           const SizedBox(height: 12),
           _orgLine('Organization email', data.orgEmail),
           _orgLine('Contact number', data.orgPhone),
@@ -355,9 +460,16 @@ class _UserProfileModalBody extends StatelessWidget {
         children: [
           SizedBox(
             width: 140,
-            child: Text(k, style: TextStyle(fontSize: 11.5, fontWeight: FontWeight.w700, color: AdminColors.muted.withValues(alpha: 0.85))),
+            child: Text(k,
+                style: TextStyle(
+                    fontSize: 11.5,
+                    fontWeight: FontWeight.w700,
+                    color: AdminColors.muted.withValues(alpha: 0.85))),
           ),
-          Expanded(child: Text(v, style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 13))),
+          Expanded(
+              child: Text(v,
+                  style: const TextStyle(
+                      fontWeight: FontWeight.w600, fontSize: 13))),
         ],
       ),
     );
@@ -368,12 +480,17 @@ class _UserProfileModalBody extends StatelessWidget {
       return Container(
         padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
         decoration: BoxDecoration(
-          color: ok ? AdminColors.statGreen.withValues(alpha: 0.14) : AdminColors.statRed.withValues(alpha: 0.1),
+          color: ok
+              ? AdminColors.statGreen.withValues(alpha: 0.14)
+              : AdminColors.statRed.withValues(alpha: 0.1),
           borderRadius: BorderRadius.circular(20),
         ),
         child: Text(
           text,
-          style: TextStyle(fontWeight: FontWeight.w800, fontSize: 12, color: ok ? AdminColors.statGreen : AdminColors.statRed),
+          style: TextStyle(
+              fontWeight: FontWeight.w800,
+              fontSize: 12,
+              color: ok ? AdminColors.statGreen : AdminColors.statRed),
         ),
       );
     }
@@ -386,9 +503,16 @@ class _UserProfileModalBody extends StatelessWidget {
           children: [
             Expanded(
               flex: 2,
-              child: Text(k, style: TextStyle(fontSize: 12.5, fontWeight: FontWeight.w700, color: AdminColors.muted.withValues(alpha: 0.88))),
+              child: Text(k,
+                  style: TextStyle(
+                      fontSize: 12.5,
+                      fontWeight: FontWeight.w700,
+                      color: AdminColors.muted.withValues(alpha: 0.88))),
             ),
-            Expanded(flex: 3, child: Align(alignment: Alignment.centerRight, child: trailing)),
+            Expanded(
+                flex: 3,
+                child:
+                    Align(alignment: Alignment.centerRight, child: trailing)),
           ],
         ),
       );
@@ -406,21 +530,40 @@ class _UserProfileModalBody extends StatelessWidget {
         children: [
           const Padding(
             padding: EdgeInsets.only(top: 12, bottom: 4),
-            child: Text('Account information', style: TextStyle(fontWeight: FontWeight.w900, fontSize: 14)),
+            child: Text('Account information',
+                style: TextStyle(fontWeight: FontWeight.w900, fontSize: 14)),
           ),
           Divider(height: 1, color: Colors.black.withValues(alpha: 0.06)),
-          line('Email verified', badge(data.emailVerified ? 'Verified' : 'Not verified', data.emailVerified)),
-          line('Two-factor authentication', badge(data.twoFactorEnabled ? 'Enabled' : 'Disabled', data.twoFactorEnabled)),
-          line('Last login', Text(data.lastLogin, style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 13))),
-          line('Login access', Text(data.loginAccess, style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 13))),
+          line(
+              'Email verified',
+              badge(data.emailVerified ? 'Verified' : 'Not verified',
+                  data.emailVerified)),
+          line(
+              'Two-factor authentication',
+              badge(data.twoFactorEnabled ? 'Enabled' : 'Disabled',
+                  data.twoFactorEnabled)),
+          line(
+              'Last login',
+              Text(data.lastLogin,
+                  style: const TextStyle(
+                      fontWeight: FontWeight.w700, fontSize: 13))),
+          line(
+              'Login access',
+              Text(data.loginAccess,
+                  style: const TextStyle(
+                      fontWeight: FontWeight.w700, fontSize: 13))),
           line(
             'Login IP address',
             Row(
               mainAxisAlignment: MainAxisAlignment.end,
               children: [
-                Icon(Icons.public_rounded, size: 18, color: AdminColors.statBlue.withValues(alpha: 0.85)),
+                Icon(Icons.public_rounded,
+                    size: 18,
+                    color: AdminColors.statBlue.withValues(alpha: 0.85)),
                 const SizedBox(width: 6),
-                Text(data.loginIp, style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 13)),
+                Text(data.loginIp,
+                    style: const TextStyle(
+                        fontWeight: FontWeight.w800, fontSize: 13)),
               ],
             ),
           ),
@@ -451,11 +594,17 @@ class _OutlinedCloseButtonState extends State<_OutlinedCloseButton> {
         style: OutlinedButton.styleFrom(
           foregroundColor: AdminColors.headerTitle,
           padding: const EdgeInsets.symmetric(horizontal: 22, vertical: 14),
-          side: BorderSide(color: AdminColors.headerTitle.withValues(alpha: _hover ? 0.45 : 0.28)),
-          backgroundColor: _hover ? AdminColors.headerTitle.withValues(alpha: 0.05) : Colors.white,
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+          side: BorderSide(
+              color: AdminColors.headerTitle
+                  .withValues(alpha: _hover ? 0.45 : 0.28)),
+          backgroundColor: _hover
+              ? AdminColors.headerTitle.withValues(alpha: 0.05)
+              : Colors.white,
+          shape:
+              RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
         ),
-        child: const Text('Close', style: TextStyle(fontWeight: FontWeight.w800)),
+        child:
+            const Text('Close', style: TextStyle(fontWeight: FontWeight.w800)),
       ),
     );
   }

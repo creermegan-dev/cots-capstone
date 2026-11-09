@@ -1,10 +1,12 @@
 import 'package:intl/intl.dart';
 import 'package:flutter/foundation.dart';
+import '../core/supabase_config.dart';
 import '../models/follow_up_monitoring_model.dart';
 import '../models/follow_up_infestation_assessment.dart';
 import '../models/follow_up_reassignment.dart';
 import '../models/user_model.dart';
 import 'follow_up_workflow_store.dart';
+import 'supabase_follow_up_service.dart';
 
 abstract final class FollowUpReassignmentRepository {
   static FollowUpWorkflowStore _store = FollowUpWorkflowStore();
@@ -13,7 +15,15 @@ abstract final class FollowUpReassignmentRepository {
   static set store(FollowUpWorkflowStore value) => _store = value;
   static const collection = 'follow_up_reassignments';
 
+  static bool get _useSupabase => SupabaseConfig.isConfigured;
+
+  /// With Supabase, the database returns only the requests the signed-in
+  /// person may see (all of them for the Expert), so [uid] is not needed.
   static Stream<List<FollowUpReassignment>> watch({String? uid}) async* {
+    if (_useSupabase) {
+      yield* SupabaseFollowUpService.poll(SupabaseFollowUpService.reassignments);
+      return;
+    }
     Future<List<FollowUpReassignment>> load() async {
       final docs = await store.query(collection,
           field: uid == null ? null : 'participants',
@@ -33,8 +43,31 @@ abstract final class FollowUpReassignmentRepository {
     yield* Stream.periodic(const Duration(seconds: 15)).asyncMap((_) => load());
   }
 
+  /// One request by its ID.
+  static Future<FollowUpReassignment?> getRequest(String id) async {
+    if (_useSupabase) {
+      final list = await SupabaseFollowUpService.reassignments(requestId: id);
+      return list.isEmpty ? null : list.first;
+    }
+    final doc = await store.get('$collection/$id');
+    return doc == null
+        ? null
+        : FollowUpReassignment(id, FollowUpWorkflowStore.data(doc));
+  }
+
   static Future<FollowUpReassignment?> forMonth(
       String areaId, DateTime instant) async {
+    if (_useSupabase) {
+      final key = MonitoringMonth.key(instant);
+      for (final request in await SupabaseFollowUpService.reassignments()) {
+        if (request.areaId == areaId &&
+            '${request.data['year']}_${request.data['month']}' == key &&
+            !['cancelled'].contains(request.status)) {
+          return request;
+        }
+      }
+      return null;
+    }
     final id = MonitoringMonth.id(areaId, instant);
     final doc = await store.get('$collection/$id');
     return doc == null
@@ -44,6 +77,10 @@ abstract final class FollowUpReassignmentRepository {
 
   static Future<bool> isResponsible(FollowUpAssignmentModel assignment,
       String uid, DateTime surveyDate) async {
+    if (_useSupabase) {
+      // The database knows this month's responsible Diver.
+      return SupabaseFollowUpService.canSubmit(assignment.areaId, surveyDate);
+    }
     // Survey dates are calendar dates, not UTC instants.
     final instant =
         DateTime.utc(surveyDate.year, surveyDate.month, surveyDate.day, 4);
@@ -56,6 +93,8 @@ abstract final class FollowUpReassignmentRepository {
 
   static Future<void> ensureMonthAuthorization(
       FollowUpAssignmentModel assignment, String uid, DateTime date) async {
+    // Supabase starts each month for the original Diver by itself.
+    if (_useSupabase) return;
     final id = '${assignment.areaId}_${date.year}_${date.month}';
     if (await store.get('follow_up_month_authorizations/$id') != null) return;
     if (uid != assignment.primaryDiverUid) {
@@ -82,17 +121,21 @@ abstract final class FollowUpReassignmentRepository {
     }
   }
 
-  static Future<List<Map<String, dynamic>>> directory() async =>
-      (await store.query('follow_up_personnel', field: 'eligible', value: true))
-          .map((doc) => {
-                ...FollowUpWorkflowStore.data(doc),
-                'uid': (doc['name'] as String).split('/').last,
-              })
-          .where((entry) => entry['eligible'] == true)
-          .toList();
+  static Future<List<Map<String, dynamic>>> directory() async {
+    if (_useSupabase) return SupabaseFollowUpService.directory();
+    return (await store.query('follow_up_personnel',
+            field: 'eligible', value: true))
+        .map((doc) => {
+              ...FollowUpWorkflowStore.data(doc),
+              'uid': (doc['name'] as String).split('/').last,
+            })
+        .where((entry) => entry['eligible'] == true)
+        .toList();
+  }
 
   static Future<FollowUpInfestationAssessment?> latestAssessment(
       String areaId) async {
+    if (_useSupabase) return SupabaseFollowUpService.latestAssessment(areaId);
     final assessments = (await store.query('follow_up_assessments',
             field: 'area_id', value: areaId))
         .map((doc) => FollowUpInfestationAssessment.fromMap(
@@ -108,6 +151,8 @@ abstract final class FollowUpReassignmentRepository {
 
   /// Admin-only publication. No email, phone, photo or organization is exposed.
   static Future<void> publishPersonnel(List<UserModel> users) async {
+    // Supabase reads approved Divers directly; nothing to publish.
+    if (_useSupabase) return;
     for (final user in users) {
       final eligible = user.accountRole == 'user' &&
           user.isActive &&
@@ -133,6 +178,10 @@ abstract final class FollowUpReassignmentRepository {
       required String reason}) async {
     if (reason.trim().isEmpty || reason.trim().length > 2000) {
       throw ArgumentError('Enter a reason of up to 2,000 characters.');
+    }
+    if (_useSupabase) {
+      await SupabaseFollowUpService.request(assignment.areaId, reason);
+      return;
     }
     final now = MonitoringMonth.local(DateTime.now());
     final id = MonitoringMonth.id(assignment.areaId, DateTime.now());
@@ -174,6 +223,11 @@ abstract final class FollowUpReassignmentRepository {
         personnel['eligible'] != true) {
       throw StateError('Select another eligible field diver.');
     }
+    if (_useSupabase) {
+      await SupabaseFollowUpService.propose(
+          request.id, personnel['uid'] as String);
+      return;
+    }
     await _change(request, expertUid, 'proposed', {
       'status': 'awaiting_acceptance',
       'expert_uid': expertUid,
@@ -187,19 +241,39 @@ abstract final class FollowUpReassignmentRepository {
   }
 
   static Future<void> respond(
-          FollowUpReassignment request, String uid, bool accept) =>
-      _change(request, uid, accept ? 'accepted' : 'declined', {
-        'status': accept ? 'accepted' : 'replacement_needed',
-        if (accept) 'responsible_uid': uid,
-      });
+      FollowUpReassignment request, String uid, bool accept) async {
+    if (_useSupabase) {
+      final proposalId = request.data['proposal_id'] as String? ?? '';
+      if (proposalId.isEmpty) {
+        throw StateError('This proposal is no longer available. Refresh.');
+      }
+      await SupabaseFollowUpService.respond(proposalId, accept);
+      return;
+    }
+    await _change(request, uid, accept ? 'accepted' : 'declined', {
+      'status': accept ? 'accepted' : 'replacement_needed',
+      if (accept) 'responsible_uid': uid,
+    });
+  }
 
   static Future<void> cancelProposal(
-          FollowUpReassignment request, String expertUid) =>
-      _change(request, expertUid, 'proposal_cancelled',
-          {'status': 'replacement_needed'});
+      FollowUpReassignment request, String expertUid) async {
+    if (_useSupabase) {
+      await SupabaseFollowUpService.cancelProposal(request.id);
+      return;
+    }
+    await _change(request, expertUid, 'proposal_cancelled',
+        {'status': 'replacement_needed'});
+  }
 
-  static Future<void> cancelRequest(FollowUpReassignment request, String uid) =>
-      _change(request, uid, 'cancelled', {'status': 'cancelled'});
+  static Future<void> cancelRequest(
+      FollowUpReassignment request, String uid) async {
+    if (_useSupabase) {
+      await SupabaseFollowUpService.cancelRequest(request.id);
+      return;
+    }
+    await _change(request, uid, 'cancelled', {'status': 'cancelled'});
+  }
 
   static Future<void> _change(FollowUpReassignment request, String actor,
       String action, Map<String, dynamic> changes) async {
@@ -301,11 +375,13 @@ abstract final class FollowUpReassignmentRepository {
     ]);
   }
 
-  static Future<List<Map<String, dynamic>>> history(String requestId) async =>
-      (await store.query('follow_up_reassignment_events',
-              field: 'request_id', value: requestId))
-          .map(FollowUpWorkflowStore.data)
-          .toList()
-        ..sort(
-            (a, b) => (a['revision'] as int).compareTo(b['revision'] as int));
+  static Future<List<Map<String, dynamic>>> history(String requestId) async {
+    if (_useSupabase) return SupabaseFollowUpService.history(requestId);
+    return (await store.query('follow_up_reassignment_events',
+            field: 'request_id', value: requestId))
+        .map(FollowUpWorkflowStore.data)
+        .toList()
+      ..sort(
+          (a, b) => (a['revision'] as int).compareTo(b['revision'] as int));
+  }
 }

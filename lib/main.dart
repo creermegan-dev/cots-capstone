@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
 import 'core/firebase_bootstrap.dart';
+import 'core/supabase_config.dart';
 import 'features/admin/admin_routes.dart';
 import 'features/admin/screens/admin_shell_screen.dart';
 import 'features/auth/auth_routes.dart';
@@ -14,13 +15,18 @@ import 'features/user/follow_up_page.dart';
 import 'features/user/user_bottom_nav.dart';
 import 'core/root_scaffold_messenger.dart';
 import 'firebase_options.dart';
+import 'models/davao_gulf_geography.dart';
 import 'providers/admin_record_review_tracker.dart';
 import 'providers/auth_provider.dart';
+import 'services/offline_submission_service.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
+  // Stage 6 monitoring map (zones, areas, parts) bundled with the app.
+  await DavaoGulfGeography.load();
 
-  if (!deferFirebaseUntilFirstUse) {
+  final useSupabase = await SupabaseConfig.initializeIfConfigured();
+  if (!useSupabase && !deferFirebaseUntilFirstUse) {
     try {
       await Firebase.initializeApp(
         options: DefaultFirebaseOptions.currentPlatform,
@@ -31,6 +37,8 @@ Future<void> main() async {
       }
     }
   }
+
+  await OfflineSubmissionService.instance.initialize();
 
   runApp(const CotsMonitorApp());
 }
@@ -47,6 +55,9 @@ class CotsMonitorApp extends StatelessWidget {
         ),
         ChangeNotifierProvider(
           create: (_) => AdminRecordReviewTracker(),
+        ),
+        ChangeNotifierProvider.value(
+          value: OfflineSubmissionService.instance,
         ),
       ],
       child: MaterialApp(

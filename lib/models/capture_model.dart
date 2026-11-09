@@ -1,6 +1,8 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:intl/intl.dart';
 
+import '../utils/staff_record_time.dart';
+
 import '../features/admin/models/admin_record_table_row.dart';
 import 'activity_type.dart';
 import 'cots_confidence_policy.dart';
@@ -14,6 +16,7 @@ class CaptureModel {
     required this.uid,
     required this.submittedBy,
     required this.imageName,
+    this.storageObjectPath = '',
     required this.aiDetectedCount,
     required this.confidence,
     required this.captureSource,
@@ -21,6 +24,8 @@ class CaptureModel {
     required this.notes,
     required this.submittedAt,
     this.monitoringAreaId = '',
+    this.encounterId = '',
+    this.serverStatus = '',
     this.followUpSurveyId = '',
     this.sourceCollection = RecordCollection.captures,
     this.municipality = '',
@@ -38,12 +43,18 @@ class CaptureModel {
     this.adminReviewedAt,
     this.adminCotsDecisions = const [],
     this.storedDisplayRecordId = '',
+    this.zoneAssignedTo = '',
+    this.confirmedCount,
+    this.waitingCount,
+    this.locationSource = '',
+    this.timeSource = '',
   });
 
   final String id;
   final String uid;
   final String submittedBy;
   final String imageName;
+  final String storageObjectPath;
   final int aiDetectedCount;
   final double confidence;
   final String captureSource;
@@ -51,6 +62,12 @@ class CaptureModel {
   final String notes;
   final DateTime? submittedAt;
   final String monitoringAreaId;
+
+  /// Original upload batch, retained separately from the individual photo ID.
+  final String encounterId;
+
+  /// Supabase evidence lifecycle; empty for legacy Firebase records.
+  final String serverStatus;
   final String followUpSurveyId;
   final String sourceCollection;
   final String municipality;
@@ -68,6 +85,20 @@ class CaptureModel {
   final DateTime? adminReviewedAt;
   final List<PerCotsAdminDecision> adminCotsDecisions;
   final String storedDisplayRecordId;
+
+  /// Stage 2: the Diver the zone is assigned to when this is another Diver's
+  /// record in an assigned zone (needs Expert approval); empty otherwise.
+  final String zoneAssignedTo;
+
+  /// Stage 3: confirmed and waiting COTS as counted by the database (null
+  /// for Firebase records, which are counted in the app as before).
+  final int? confirmedCount;
+  final int? waitingCount;
+
+  /// Where the location and the time came from, as stored with the photo
+  /// (see PhotoSource). Empty for Firebase records.
+  final String locationSource;
+  final String timeSource;
 
   factory CaptureModel.fromFirestore(
     DocumentSnapshot<Map<String, dynamic>> doc,
@@ -95,6 +126,7 @@ class CaptureModel {
       notes: data['notes'] as String? ?? '',
       submittedAt: _asDateTime(data['submitted_at']),
       monitoringAreaId: data['monitoring_area_id'] as String? ?? '',
+      encounterId: data['encounter_id'] as String? ?? '',
       followUpSurveyId: data['follow_up_survey_id'] as String? ?? '',
       municipality: data['municipality'] as String? ?? '',
       barangay: data['barangay'] as String? ?? '',
@@ -147,6 +179,7 @@ class CaptureModel {
       notes: _readString(fields, 'notes'),
       submittedAt: _readTimestamp(fields, 'submitted_at'),
       monitoringAreaId: _readString(fields, 'monitoring_area_id'),
+      encounterId: _readString(fields, 'encounter_id'),
       followUpSurveyId: _readString(fields, 'follow_up_survey_id'),
       municipality: _readString(fields, 'municipality'),
       barangay: _readString(fields, 'barangay'),
@@ -208,7 +241,7 @@ class CaptureModel {
       index,
       displayRecordId,
       zone,
-      fmt.format(when),
+      fmt.format(StaffRecordTime.inManila(when)),
       count,
       followUpSurveyId.isNotEmpty ? null : _densityEstimate(count),
       followUpSurveyId.isNotEmpty ? 'Not validated' : _riskFromCount(count),
@@ -219,10 +252,14 @@ class CaptureModel {
       captureSource: captureSource,
       documentId: id,
       imageName: imageName,
+      storageObjectPath: storageObjectPath,
       notes: notes,
-      dateCaptured: dateTaken != null ? fmt.format(dateTaken!) : 'Unknown',
-      dateUploaded:
-          submittedAt != null ? fmt.format(submittedAt!) : fmt.format(when),
+      dateCaptured: dateTaken != null
+          ? fmt.format(StaffRecordTime.inManila(dateTaken!))
+          : 'Unknown',
+      dateUploaded: submittedAt != null
+          ? fmt.format(StaffRecordTime.inManila(submittedAt!))
+          : fmt.format(StaffRecordTime.inManila(when)),
       latitude: latitude,
       longitude: longitude,
       detectionBoxes: detectionBoxes,

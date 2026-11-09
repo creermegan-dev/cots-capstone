@@ -1,18 +1,19 @@
 import 'package:flutter/material.dart';
-import 'package:provider/provider.dart';
+import 'package:intl/intl.dart';
 
 import '../../../models/user_model.dart';
-import '../../../providers/auth_provider.dart';
 import '../../../services/personnel_repository.dart';
-import '../../../services/follow_up_reassignment_repository.dart';
 import '../models/admin_user_models.dart';
 import '../theme/admin_theme.dart';
 import '../widgets/admin_dashboard_header.dart';
 import '../widgets/admin_data_table.dart';
 import '../widgets/admin_user_profile_modal.dart';
+import '../../../widgets/cots_loading_skeleton.dart';
 
 class AdminUsersScreen extends StatefulWidget {
-  const AdminUsersScreen({super.key});
+  const AdminUsersScreen({super.key, this.usersStream});
+
+  final Stream<List<UserModel>>? usersStream;
 
   @override
   State<AdminUsersScreen> createState() => _AdminUsersScreenState();
@@ -33,6 +34,7 @@ class _AdminUsersScreenState extends State<AdminUsersScreen> {
     AdminDataTableColumn('Role', 200, headerAlign: TextAlign.center),
     AdminDataTableColumn('Organization', 180),
     AdminDataTableColumn('Status', 100, headerAlign: TextAlign.center),
+    AdminDataTableColumn('Expert verification', 180),
     AdminDataTableColumn('Date Joined', 120),
     AdminDataTableColumn('Actions', 96, headerAlign: TextAlign.right),
   ];
@@ -57,126 +59,44 @@ class _AdminUsersScreenState extends State<AdminUsersScreen> {
   ];
   static const _statuses = ['All Status', 'Active', 'Inactive'];
 
-  static const _allRows = <AdminUserTableRow>[
-    AdminUserTableRow(
-      id: 'USR-00048',
-      name: 'Juan Dela Cruz',
-      email: 'juan.delacruz@bfar.gov.ph',
-      role: 'Administrator',
-      organization: 'BFAR Region 7',
-      active: true,
-      joined: 'May 18, 2026',
-    ),
-    AdminUserTableRow(
-      id: 'USR-00047',
-      name: 'Maria Santos',
-      email: 'maria.santos@bfar.gov.ph',
-      role: 'Marine Conservation Officer',
-      organization: 'BFAR Region 7',
-      active: true,
-      joined: 'May 17, 2026',
-    ),
-    AdminUserTableRow(
-      id: 'USR-00046',
-      name: 'Pedro Reyes',
-      email: 'pedro.reyes@cebu.gov.ph',
-      role: 'LGU Staff',
-      organization: 'LGU Cebu City',
-      active: true,
-      joined: 'May 16, 2026',
-    ),
-    AdminUserTableRow(
-      id: 'USR-00045',
-      name: 'Anna Garcia',
-      email: 'anna.garcia@marine.edu.ph',
-      role: 'Researcher',
-      organization: 'Marine Institute',
-      active: true,
-      joined: 'May 15, 2026',
-    ),
-    AdminUserTableRow(
-      id: 'USR-00044',
-      name: 'Luis Mendoza',
-      email: 'luis.m@reefwatch.org',
-      role: 'Volunteer',
-      organization: 'NGO ReefWatch',
-      active: false,
-      joined: 'May 14, 2026',
-    ),
-    AdminUserTableRow(
-      id: 'USR-00043',
-      name: 'Riza Padilla',
-      email: 'r.padilla@bfar.gov.ph',
-      role: 'Field Officer',
-      organization: 'BFAR Region 7',
-      active: true,
-      joined: 'May 14, 2026',
-    ),
-    AdminUserTableRow(
-      id: 'USR-00042',
-      name: 'Carla Ramos',
-      email: 'c.ramos@bfar.gov.ph',
-      role: 'BFAR Staff',
-      organization: 'BFAR Region 7',
-      active: true,
-      joined: 'May 12, 2026',
-    ),
-    AdminUserTableRow(
-      id: 'USR-00041',
-      name: 'Miguel Torres',
-      email: 'm.torres@denr.gov.ph',
-      role: 'Marine Conservation Officer',
-      organization: 'DENR Region 7',
-      active: true,
-      joined: 'May 10, 2026',
-    ),
-    AdminUserTableRow(
-      id: 'USR-00040',
-      name: 'Elena Cruz',
-      email: 'elena.cruz@bfar.gov.ph',
-      role: 'LGU Staff',
-      organization: 'LGU Cebu City',
-      active: false,
-      joined: 'May 8, 2026',
-    ),
-    AdminUserTableRow(
-      id: 'USR-00039',
-      name: 'James Ong',
-      email: 'j.ong@marine.edu.ph',
-      role: 'Researcher',
-      organization: 'Marine Institute',
-      active: true,
-      joined: 'May 5, 2026',
-    ),
-    AdminUserTableRow(
-      id: 'USR-00038',
-      name: 'Sofia Lim',
-      email: 'sofia.lim@bfar.gov.ph',
-      role: 'Field Officer',
-      organization: 'BFAR Region 7',
-      active: true,
-      joined: 'May 3, 2026',
-    ),
-    AdminUserTableRow(
-      id: 'USR-00037',
-      name: 'Daniel Cruz',
-      email: 'daniel@reefwatch.org',
-      role: 'Volunteer',
-      organization: 'NGO ReefWatch',
-      active: true,
-      joined: 'Apr 28, 2026',
-    ),
-  ];
-
   @override
   void dispose() {
     _searchCtrl.dispose();
     super.dispose();
   }
 
-  List<AdminUserTableRow> get _filtered {
+  List<AdminUserTableRow> _rowsFromUsers(List<UserModel> users) {
+    return users
+        .map(
+          (user) => AdminUserTableRow(
+            id: user.uid,
+            name: user.fullName.isEmpty ? 'Unnamed user' : user.fullName,
+            email: user.email,
+            role: user.isAdmin
+                ? 'Administrator'
+                : user.isExpert
+                    ? 'Expert'
+                    : user.role,
+            organization: user.organization,
+            active: user.isActive,
+            verificationStatus: user.isAdmin || user.isExpert
+                ? 'Not applicable'
+                : user.fieldPersonnelVerified
+                    ? 'Verified'
+                    : 'Awaiting verification',
+            joined: user.createdAt == null
+                ? 'Not available'
+                : DateFormat('MMM d, yyyy').format(user.createdAt!),
+            phone: user.phoneNumber,
+            assignedArea: user.assignedArea,
+          ),
+        )
+        .toList();
+  }
+
+  List<AdminUserTableRow> _filtered(List<AdminUserTableRow> rows) {
     final q = _searchCtrl.text.trim().toLowerCase();
-    return _allRows.where((r) {
+    return rows.where((r) {
       final byQ = q.isEmpty ||
           r.id.toLowerCase().contains(q) ||
           r.name.toLowerCase().contains(q) ||
@@ -191,7 +111,10 @@ class _AdminUsersScreenState extends State<AdminUsersScreen> {
     }).toList();
   }
 
-  static const _totalUsers = 48;
+  void _submitSearch() {
+    setState(() => _page = 0);
+    FocusScope.of(context).unfocus();
+  }
 
   void _openProfile(AdminUserTableRow row) {
     showAdminUserProfileDialog(context, AdminUserProfileData.fromTableRow(row));
@@ -202,25 +125,41 @@ class _AdminUsersScreenState extends State<AdminUsersScreen> {
     ScaffoldMessenger.of(context).showSnackBar(
       const SnackBar(
         behavior: SnackBarBehavior.floating,
-        content: Text('Users list refreshed (demo).'),
+        content: Text('Users are synchronized with the account directory.'),
       ),
     );
   }
 
   @override
   Widget build(BuildContext context) {
-    final filtered = _filtered;
+    return StreamBuilder<List<UserModel>>(
+      stream: widget.usersStream ?? PersonnelRepository.watchUsers(),
+      builder: (context, snapshot) {
+        if (snapshot.hasError) {
+          return Center(child: Text('Could not load users: ${snapshot.error}'));
+        }
+        if (!snapshot.hasData) {
+          return const Padding(
+            padding: EdgeInsets.all(24),
+            child: CotsLoadingSkeleton(
+              layout: CotsSkeletonLayout.table,
+              label: 'Loading registered users',
+            ),
+          );
+        }
+        return _buildUsers(_rowsFromUsers(snapshot.data!));
+      },
+    );
+  }
+
+  Widget _buildUsers(List<AdminUserTableRow> allRows) {
+    final filtered = _filtered(allRows);
     final pageCount = (filtered.length / _rowsPerPage).ceil().clamp(1, 999);
     _page = _page.clamp(0, pageCount - 1);
     final start = _page * _rowsPerPage;
     final pageRows = filtered.skip(start).take(_rowsPerPage).toList();
     final end = pageRows.isEmpty ? 0 : start + pageRows.length;
-    final displayTotal = _searchCtrl.text.trim().isEmpty &&
-            _role == 'All Roles' &&
-            _org == 'All Organizations' &&
-            _status == 'All Status'
-        ? _totalUsers
-        : filtered.length;
+    final displayTotal = filtered.length;
 
     return SingleChildScrollView(
       padding: const EdgeInsets.fromLTRB(24, 22, 24, 28),
@@ -229,9 +168,7 @@ class _AdminUsersScreenState extends State<AdminUsersScreen> {
         children: [
           _header(),
           const SizedBox(height: 18),
-          const _PersonnelVerificationPanel(),
-          const SizedBox(height: 18),
-          _statRow(),
+          _statRow(allRows),
           const SizedBox(height: 18),
           _filterCard(),
           const SizedBox(height: 14),
@@ -244,40 +181,27 @@ class _AdminUsersScreenState extends State<AdminUsersScreen> {
   }
 
   Widget _header() {
-    final addUserBtn = FilledButton.icon(
-      onPressed: () {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-              content: Text('Add New User (mock) — form not implemented.')),
-        );
-      },
-      icon: const Icon(Icons.person_add_outlined, size: 20),
-      label: const Text('Add New User'),
-      style: FilledButton.styleFrom(
-        backgroundColor: AdminColors.statBlue,
-        foregroundColor: Colors.white,
-        padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 12),
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-      ),
-    );
-
     return AdminDashboardHeader(
       title: 'Users',
-      subtitle: 'Manage user accounts, roles, and organization access.',
+      subtitle:
+          'Read-only account directory and personnel verification status. Verification decisions belong to Experts.',
       onRefreshTap: _onUsersHeaderRefresh,
-      trailingExtra: addUserBtn,
     );
   }
 
-  Widget _statRow() {
-    const specs = [
-      _UserStatSpec(Icons.groups_outlined, 'Total Users', '48',
+  Widget _statRow(List<AdminUserTableRow> rows) {
+    final active = rows.where((row) => row.active).length;
+    final inactive = rows.length - active;
+    final roles =
+        rows.map((row) => row.role).where((r) => r.isNotEmpty).toSet().length;
+    final specs = [
+      _UserStatSpec(Icons.groups_outlined, 'Total Users', '${rows.length}',
           'All registered users', AdminColors.statBlue),
-      _UserStatSpec(Icons.verified_user_outlined, 'Active Users', '42',
+      _UserStatSpec(Icons.verified_user_outlined, 'Active Users', '$active',
           'Enabled accounts', AdminColors.statGreen),
-      _UserStatSpec(Icons.person_off_outlined, 'Inactive Users', '6',
+      _UserStatSpec(Icons.person_off_outlined, 'Inactive Users', '$inactive',
           'Disabled accounts', AdminColors.statYellow),
-      _UserStatSpec(Icons.admin_panel_settings_outlined, 'Roles', '8',
+      _UserStatSpec(Icons.admin_panel_settings_outlined, 'Roles', '$roles',
           'User roles defined', AdminColors.statPurple),
     ];
     return LayoutBuilder(
@@ -315,12 +239,18 @@ class _AdminUsersScreenState extends State<AdminUsersScreen> {
               child: TextField(
                 controller: _searchCtrl,
                 onChanged: (_) => setState(() => _page = 0),
-                decoration: const InputDecoration(
+                textInputAction: TextInputAction.search,
+                onSubmitted: (_) => _submitSearch(),
+                decoration: InputDecoration(
                   hintText: 'Search users...',
-                  prefixIcon: Icon(Icons.search_rounded),
+                  prefixIcon: IconButton(
+                    onPressed: _submitSearch,
+                    tooltip: 'Search users',
+                    icon: const Icon(Icons.search_rounded),
+                  ),
                   isDense: true,
                   filled: true,
-                  fillColor: Color(0xFFF7F9FC),
+                  fillColor: const Color(0xFFF7F9FC),
                 ),
               ),
             ),
@@ -437,7 +367,7 @@ class _AdminUsersScreenState extends State<AdminUsersScreen> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
-                AdminDataTableHeader(columns: _tableColumns),
+                const AdminDataTableHeader(columns: _tableColumns),
                 for (final r in pageRows)
                   AdminDataTableClickableRow(
                     columnWidths: colMap,
@@ -523,6 +453,7 @@ class _AdminUsersScreenState extends State<AdminUsersScreen> {
               .withValues(alpha: 0.14),
         ),
       ),
+      AdminDataTableCells.text(r.verificationStatus),
       AdminDataTableCells.text(r.joined,
           style: TextStyle(
               fontSize: 12, color: AdminColors.muted.withValues(alpha: 0.95))),
@@ -538,13 +469,6 @@ class _AdminUsersScreenState extends State<AdminUsersScreen> {
               onPressed: () => _openProfile(r),
               icon: Icon(Icons.visibility_outlined,
                   size: 20, color: AdminColors.statBlue.withValues(alpha: 0.9)),
-            ),
-            IconButton(
-              padding: EdgeInsets.zero,
-              constraints: const BoxConstraints(minWidth: 32, minHeight: 32),
-              onPressed: () {},
-              icon: Icon(Icons.more_vert_rounded,
-                  size: 20, color: AdminColors.muted.withValues(alpha: 0.85)),
             ),
           ],
         ),
@@ -594,11 +518,11 @@ class _AdminUsersScreenState extends State<AdminUsersScreen> {
                   style: TextStyle(fontWeight: FontWeight.w900, fontSize: 14)),
               const SizedBox(height: 10),
               _legendLine(const Color(0xFF6A1B9A), 'Administrator',
-                  'Full system access and management'),
+                  'System oversight and technical preferences'),
               _legendLine(
                   AdminColors.statBlue,
                   'Marine Conservation Officer / Field Officer',
-                  'Monitoring and review access'),
+                  'Field monitoring and submission access'),
               _legendLine(AdminColors.statGreen, 'LGU Staff / BFAR Staff',
                   'Data submission and monitoring access'),
               _legendLine(const Color(0xFFF57C00), 'Researcher',
@@ -676,239 +600,6 @@ class _AdminUsersScreenState extends State<AdminUsersScreen> {
         ],
       ),
       child: child,
-    );
-  }
-}
-
-class _PersonnelVerificationPanel extends StatefulWidget {
-  const _PersonnelVerificationPanel();
-
-  @override
-  State<_PersonnelVerificationPanel> createState() =>
-      _PersonnelVerificationPanelState();
-}
-
-class _PersonnelVerificationPanelState
-    extends State<_PersonnelVerificationPanel> {
-  String? _savingUid;
-
-  Future<void> _setVerified(UserModel user, bool verified) async {
-    final action = verified ? 'verify' : 'revoke verification for';
-    final confirmed = await showDialog<bool>(
-      context: context,
-      builder: (dialogContext) => AlertDialog(
-        title:
-            Text(verified ? 'Verify field personnel?' : 'Revoke verification?'),
-        content: Text(
-          'Do you want to $action ${user.fullName}? '
-          '${verified ? 'Only confirm credentials that were checked outside the app.' : 'They will no longer be eligible for new assignments.'}',
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(dialogContext, false),
-            child: const Text('Cancel'),
-          ),
-          FilledButton(
-            onPressed: () => Navigator.pop(dialogContext, true),
-            child: Text(verified ? 'Verify' : 'Revoke'),
-          ),
-        ],
-      ),
-    );
-    if (confirmed != true || !mounted) return;
-
-    final admin = context.read<AuthProvider>().userModel;
-    setState(() => _savingUid = user.uid);
-    try {
-      await PersonnelRepository.setVerification(
-        userId: user.uid,
-        verified: verified,
-        verifiedBy: admin?.uid ?? '',
-      );
-      await FollowUpReassignmentRepository.publishPersonnel(
-          [user.copyWith(fieldPersonnelVerified: verified)]);
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(
-            verified
-                ? '${user.fullName} is now verified field personnel.'
-                : '${user.fullName} is no longer verified field personnel.',
-          ),
-        ),
-      );
-    } catch (error) {
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Could not update verification: $error')),
-      );
-    } finally {
-      if (mounted) setState(() => _savingUid = null);
-    }
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: AdminColors.statGreen.withValues(alpha: 0.2)),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withValues(alpha: 0.06),
-            blurRadius: 18,
-            offset: const Offset(0, 6),
-          ),
-        ],
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          const Row(
-            children: [
-              Icon(Icons.verified_user_outlined, color: AdminColors.statGreen),
-              SizedBox(width: 10),
-              Expanded(
-                child: Text(
-                  'Field Personnel Verification',
-                  style: TextStyle(
-                    fontWeight: FontWeight.w900,
-                    fontSize: 15,
-                    color: AdminColors.headerTitle,
-                  ),
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 6),
-          const Text(
-            'Confirm only credentials checked with the issuing organization. '
-            'Verified users become available for intervention and temporary follow-up assignment.',
-            style: TextStyle(color: AdminColors.muted, fontSize: 12.5),
-          ),
-          const SizedBox(height: 12),
-          StreamBuilder<List<UserModel>>(
-            stream: PersonnelRepository.watchUsers(),
-            builder: (context, snapshot) {
-              if (snapshot.connectionState == ConnectionState.waiting &&
-                  !snapshot.hasData) {
-                return const Center(child: CircularProgressIndicator());
-              }
-              if (snapshot.hasError) {
-                return Text(
-                  'Could not load registered users: ${snapshot.error}',
-                  style: const TextStyle(color: AdminColors.statRed),
-                );
-              }
-              final users = (snapshot.data ?? const <UserModel>[])
-                  .where((u) => !u.isAdmin && !u.isExpert && u.isActive)
-                  .toList();
-              if (users.isEmpty) {
-                return const Text('No eligible registered users found.');
-              }
-              return Column(
-                children: [
-                  OutlinedButton.icon(
-                    icon: const Icon(Icons.publish_outlined),
-                    label: const Text('Publish follow-up personnel directory'),
-                    onPressed: _savingUid != null
-                        ? null
-                        : () async {
-                            setState(() => _savingUid = 'directory');
-                            try {
-                              await FollowUpReassignmentRepository
-                                  .publishPersonnel(snapshot.data ?? []);
-                              if (context.mounted) {
-                                ScaffoldMessenger.of(context).showSnackBar(
-                                    const SnackBar(
-                                        content: Text(
-                                            'Follow-up personnel directory published.')));
-                              }
-                            } catch (error) {
-                              if (context.mounted) {
-                                ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-                                    content: Text(
-                                        'Could not publish directory: $error')));
-                              }
-                            } finally {
-                              if (mounted) setState(() => _savingUid = null);
-                            }
-                          },
-                  ),
-                  for (var index = 0; index < users.length; index++) ...[
-                    if (index > 0) const Divider(height: 18),
-                    _personnelRow(users[index]),
-                  ],
-                ],
-              );
-            },
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _personnelRow(UserModel user) {
-    final verified = user.fieldPersonnelVerified;
-    final busy = _savingUid == user.uid;
-    return Row(
-      children: [
-        CircleAvatar(
-          backgroundColor:
-              (verified ? AdminColors.statGreen : AdminColors.muted)
-                  .withValues(alpha: 0.14),
-          child: Icon(
-            verified ? Icons.verified_rounded : Icons.person_outline_rounded,
-            color: verified ? AdminColors.statGreen : AdminColors.muted,
-          ),
-        ),
-        const SizedBox(width: 10),
-        Expanded(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                user.fullName.isEmpty ? user.email : user.fullName,
-                style: const TextStyle(
-                  fontWeight: FontWeight.w800,
-                  color: AdminColors.headerTitle,
-                ),
-              ),
-              Text(
-                [
-                  if (user.role.isNotEmpty) user.role,
-                  if (user.organization.isNotEmpty) user.organization,
-                  if (user.assignedArea.isNotEmpty) user.assignedArea,
-                ].join(' · '),
-                style: const TextStyle(fontSize: 12, color: AdminColors.muted),
-              ),
-            ],
-          ),
-        ),
-        const SizedBox(width: 10),
-        OutlinedButton.icon(
-          onPressed: busy ? null : () => _setVerified(user, !verified),
-          icon: busy
-              ? const SizedBox(
-                  width: 16,
-                  height: 16,
-                  child: CircularProgressIndicator(strokeWidth: 2),
-                )
-              : Icon(
-                  verified
-                      ? Icons.verified_user_outlined
-                      : Icons.fact_check_outlined,
-                  size: 18,
-                ),
-          label: Text(verified ? 'Verified' : 'Verify'),
-          style: OutlinedButton.styleFrom(
-            foregroundColor:
-                verified ? AdminColors.statGreen : AdminColors.statBlue,
-          ),
-        ),
-      ],
     );
   }
 }

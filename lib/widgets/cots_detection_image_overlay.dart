@@ -27,6 +27,7 @@ class CotsDetectionImageOverlay extends StatelessWidget {
     this.placeholderMessage,
     this.showBoxLabels = true,
     this.boxColorOverride,
+    this.loadImage,
   });
 
   final int imageWidth;
@@ -45,6 +46,7 @@ class CotsDetectionImageOverlay extends StatelessWidget {
   final String? placeholderMessage;
   final bool showBoxLabels;
   final Color? boxColorOverride;
+  final Future<Uint8List?> Function()? loadImage;
 
   double get _aspectRatio {
     if (imageWidth > 0 && imageHeight > 0) {
@@ -66,28 +68,30 @@ class CotsDetectionImageOverlay extends StatelessWidget {
             final srcW = imageWidth > 0 ? imageWidth.toDouble() : w;
             final srcH = imageHeight > 0 ? imageHeight.toDouble() : h;
 
-            return Stack(
-              fit: StackFit.expand,
-              children: [
-                _buildImage(),
-                for (var i = 0; i < items.length; i++)
-                  _buildBox(
-                    item: items[i],
-                    index: i,
-                    displayWidth: w,
-                    displayHeight: h,
-                    sourceWidth: srcW,
-                    sourceHeight: srcH,
-                  ),
-              ],
-            );
+            return _buildImage(
+                loadedBuilder: (context, image) => Stack(
+                      fit: StackFit.expand,
+                      children: [
+                        image,
+                        for (var i = 0; i < items.length; i++)
+                          _buildBox(
+                            item: items[i],
+                            index: i,
+                            displayWidth: w,
+                            displayHeight: h,
+                            sourceWidth: srcW,
+                            sourceHeight: srcH,
+                          ),
+                      ],
+                    ));
           },
         ),
       ),
     );
   }
 
-  Widget _buildImage() {
+  Widget _buildImage(
+      {required Widget Function(BuildContext, Widget) loadedBuilder}) {
     return SubmittedScanImage(
       recordId: recordId,
       recordCollection: recordCollection,
@@ -97,6 +101,8 @@ class CotsDetectionImageOverlay extends StatelessWidget {
       storageObjectPath: storageObjectPath,
       placeholderMessage: placeholderMessage,
       fit: BoxFit.contain,
+      loadedBuilder: loadedBuilder,
+      loadImage: loadImage,
     );
   }
 
@@ -121,14 +127,22 @@ class CotsDetectionImageOverlay extends StatelessWidget {
         ? decisions![index]
         : PerCotsAdminDecision.pending;
 
-    final color = boxColorOverride ?? _boxColor(item.confidencePercent, decision);
+    final color =
+        boxColorOverride ?? _boxColor(item.confidencePercent, decision);
     final selected = selectedIndex == index;
+    final reviewLabel = decision == PerCotsAdminDecision.rejected &&
+            item.confidencePercent >= CotsConfidencePolicy.adminReviewMin
+        ? ' · Expert rejected'
+        : decision == PerCotsAdminDecision.confirmed &&
+                item.confidencePercent < CotsConfidencePolicy.autoApproveMin
+            ? ' · Expert accepted'
+            : '';
 
     return Positioned(
       left: left,
       top: top,
-      width: width.clamp(24, displayWidth),
-      height: height.clamp(24, displayHeight),
+      width: width.clamp(0, displayWidth - left),
+      height: height.clamp(0, displayHeight - top),
       child: GestureDetector(
         onTap: interactive && onBoxTap != null ? () => onBoxTap!(index) : null,
         child: Container(
@@ -152,7 +166,7 @@ class CotsDetectionImageOverlay extends StatelessWidget {
                   children: [
                     Positioned(
                       left: 0,
-                      top: -22,
+                      top: top < 22 ? 0 : -22,
                       child: Container(
                         padding: const EdgeInsets.symmetric(
                           horizontal: 6,
@@ -163,7 +177,7 @@ class CotsDetectionImageOverlay extends StatelessWidget {
                           borderRadius: BorderRadius.circular(4),
                         ),
                         child: Text(
-                          '${item.label} — ${item.confidencePercent}%',
+                          '${item.label} — ${item.confidencePercent}%$reviewLabel',
                           style: const TextStyle(
                             color: Colors.white,
                             fontSize: 9,
@@ -181,8 +195,13 @@ class CotsDetectionImageOverlay extends StatelessWidget {
   }
 
   Color _boxColor(int confidencePercent, PerCotsAdminDecision decision) {
-    if (decision == PerCotsAdminDecision.confirmed) return kSuccessGreen;
     if (decision == PerCotsAdminDecision.rejected) return kDangerRed;
+    // Initial auto-accepted decisions may also be stored as "confirmed".
+    // Keep those blue rather than implying a manual Expert decision.
+    if (confidencePercent >= CotsConfidencePolicy.autoApproveMin) {
+      return kInfoBlue;
+    }
+    if (decision == PerCotsAdminDecision.confirmed) return kSuccessGreen;
     return switch (CotsConfidencePolicy.bandFromPercent(confidencePercent)) {
       CotsVerificationBand.aiAutoApproved => kInfoBlue,
       CotsVerificationBand.adminReview => kWarningOrange,

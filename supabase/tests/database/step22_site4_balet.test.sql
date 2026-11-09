@@ -1,0 +1,13 @@
+begin;
+create extension if not exists pgtap with schema extensions;
+set local search_path = public, extensions, pg_temp;
+select plan(7);
+select is((select name from public.monitoring_areas where code = 'S4' and active and map_zone = 'Samal'), 'Site 4 · Balet', 'Site 4 · Balet is active in the Samal zone');
+select is((select code from public.monitoring_areas where id = cots_private.area_at(7.175877, 125.775144)), 'S4', 'the site centre finds Site 4');
+select is((select code from public.monitoring_areas where id = cots_private.area_at(7.171475, 125.744961)), 'S4', 'the mainland reef strip finds Site 4');
+select is((select code from public.monitoring_areas where id = cots_private.area_at(7.182, 125.755)), null, 'deep water past the 300 m line is outside');
+select is((select code from public.monitoring_areas where id = cots_private.area_at(7.0123935, 125.7183122)), 'S2', 'Site 2 still works');
+select is((select count(*)::int from cots_private.area_cells ac join public.monitoring_areas a on a.id = ac.area_id where a.code = 'S4'), 356, 'Site 4 lookup runs');
+select is(cots_private.area_short_code((select id from public.monitoring_areas where code = 'S4')), 'Site 4 · Balet', 'messages use the site name');
+select * from finish();
+rollback;

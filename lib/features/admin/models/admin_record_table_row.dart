@@ -1,12 +1,14 @@
 import '../../../models/cots_confidence_policy.dart';
 import '../../../models/cots_detection_result.dart';
 import '../../../models/record_collection.dart';
+import '../../../models/zone_review.dart';
+import '../../../models/cots_tally.dart';
 
 /// Row model for the Records / Submissions table (shared with details navigation).
 ///
 /// Verification bands — see [CotsConfidencePolicy] (evaluated per COTS, not average alone):
-  /// - **Accepted**: every COTS ≥80%, or admin finished per-COTS review
-  /// - **Under Review**: any COTS is 20–79% and awaits admin verification
+/// - **Accepted**: every COTS ≥80%, or admin finished per-COTS review
+/// - **Under Review**: any COTS is 20–79% and awaits admin verification
 /// - **Rejected / Retake**: all COTS below 20%, or admin rejected after review
 class AdminRecordTableRow {
   const AdminRecordTableRow(
@@ -44,6 +46,19 @@ class AdminRecordTableRow {
     this.linkedCaptureId,
     this.linkedCaptureDisplayId,
     this.ownerUid = '',
+    this.zoneAssignedTo = '',
+    this.cotsTally = CotsTally.zero,
+    this.locationSource = '',
+    this.timeSource = '',
+    this.submissionId = '',
+    this.encounterId = '',
+    this.siteId = '',
+    this.submittedAt,
+    this.capturedAt,
+    this.serverStatus = '',
+    this.followUpSurveyId = '',
+    this.submissionPhotos = const [],
+    this.submissionStatus = '',
   });
 
   final int number;
@@ -51,6 +66,7 @@ class AdminRecordTableRow {
   final String zone;
   final String dateTime;
   final int cotsCount;
+
   /// Null when an image/visit has no reliable surveyed area or unique count.
   final double? density;
   final String risk;
@@ -82,6 +98,27 @@ class AdminRecordTableRow {
   final String? linkedCaptureDisplayId;
   final String ownerUid;
 
+  /// Stage 2: the Diver the zone is assigned to when this is another Diver's
+  /// record in an assigned zone; empty otherwise.
+  final String zoneAssignedTo;
+
+  /// Stage 3: confirmed, waiting and not-accepted COTS (zero for removal
+  /// records and visit summaries, whose photos are counted separately).
+  final CotsTally cotsTally;
+
+  /// Where the location and the time came from (see PhotoSource).
+  final String locationSource;
+  final String timeSource;
+  final String submissionId,
+      encounterId,
+      siteId,
+      serverStatus,
+      followUpSurveyId;
+  final DateTime? submittedAt, capturedAt;
+  final List<AdminRecordTableRow> submissionPhotos;
+  final String submissionStatus;
+  bool get isSubmissionSummary => submissionPhotos.isNotEmpty;
+
   int get displayAiCount => aiCount ?? cotsCount;
 
   List<CotsDetectionReviewItem> get detectionReviewItems =>
@@ -93,11 +130,23 @@ class AdminRecordTableRow {
         imageHeight: imageHeight > 0 ? imageHeight : 1080,
       );
 
-  String get displayStatus => CotsConfidencePolicy.adminStatusKeyFromItems(
-        items: detectionReviewItems,
-        adminConfirmed: adminConfirmed,
-        adminRejected: adminRejected,
-      );
+  String get displayStatus => isSubmissionSummary
+      ? (submissionStatus == 'Under Review'
+          ? 'Needs Review'
+          : submissionStatus == 'Accepted'
+              ? 'Verified'
+              : submissionStatus)
+      : ZoneReview.isWaiting(
+          assignedTo: zoneAssignedTo,
+          confirmed: adminConfirmed,
+          rejected: adminRejected,
+        )
+          ? 'Needs Review'
+          : CotsConfidencePolicy.adminStatusKeyFromItems(
+              items: detectionReviewItems,
+              adminConfirmed: adminConfirmed,
+              adminRejected: adminRejected,
+            );
 
   /// User-facing status labels in admin records UI.
   String get displayStatusLabel {
@@ -153,6 +202,19 @@ class AdminRecordTableRow {
       linkedCaptureId: linkedCaptureId,
       linkedCaptureDisplayId: linkedCaptureDisplayId,
       ownerUid: ownerUid,
+      zoneAssignedTo: zoneAssignedTo,
+      cotsTally: cotsTally,
+      locationSource: locationSource,
+      timeSource: timeSource,
+      submissionId: submissionId,
+      encounterId: encounterId,
+      siteId: siteId,
+      submittedAt: submittedAt,
+      capturedAt: capturedAt,
+      serverStatus: serverStatus,
+      followUpSurveyId: followUpSurveyId,
+      submissionPhotos: submissionPhotos,
+      submissionStatus: submissionStatus,
     );
   }
 }

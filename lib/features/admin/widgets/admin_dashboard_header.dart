@@ -1,22 +1,26 @@
 import 'package:flutter/material.dart';
+import 'package:intl/intl.dart';
 
 import '../theme/admin_theme.dart';
 
+/// Uniform, clean, and professional page header used across all Admin screens.
 class AdminDashboardHeader extends StatelessWidget {
   const AdminDashboardHeader({
     super.key,
     required this.title,
     required this.subtitle,
-    required this.onRefreshTap,
+    this.onRefreshTap,
     this.breadcrumb,
     this.leading,
     this.showRefreshButton = true,
     this.trailingExtra,
+    this.showDateChip = false,
+    this.showDateTime = false,
   });
 
   final String title;
   final String subtitle;
-  final VoidCallback onRefreshTap;
+  final VoidCallback? onRefreshTap;
 
   /// Optional trail (e.g. `Dashboard › Zones`); styled small and muted.
   final String? breadcrumb;
@@ -24,17 +28,23 @@ class AdminDashboardHeader extends StatelessWidget {
   /// Optional control shown before the title column (e.g. back on detail routes).
   final Widget? leading;
 
-  /// When false, the Refresh button is hidden (date and [trailingExtra] still show).
+  /// When false or when [onRefreshTap] is null, the Refresh button is hidden.
   final bool showRefreshButton;
 
-  /// Optional widget after date / refresh (e.g. primary CTA like "Add New User").
+  /// Optional widget after refresh button (e.g. primary CTA like "Export PDF", "Add User").
   final Widget? trailingExtra;
+
+  /// Optional date filter chip (default false to keep pages clean and uncluttered).
+  final bool showDateChip;
+
+  /// In the dashboard, displays the live formatted date and time.
+  final bool showDateTime;
 
   static const double _narrowActionsBreakpoint = 720;
 
   TextStyle get _subtitleStyle => TextStyle(
-        fontSize: 13,
-        fontWeight: FontWeight.w600,
+        fontSize: 13.5,
+        fontWeight: FontWeight.w500,
         color: AdminColors.muted.withValues(alpha: 0.95),
         height: 1.35,
         decoration: TextDecoration.none,
@@ -45,20 +55,23 @@ class AdminDashboardHeader extends StatelessWidget {
     return LayoutBuilder(
       builder: (context, c) {
         final narrow = c.maxWidth < _narrowActionsBreakpoint;
+        final actions = _actions(context);
+
         final titleBlock = Column(
           crossAxisAlignment: CrossAxisAlignment.start,
+          mainAxisSize: MainAxisSize.min,
           children: [
             Text(
               title,
               style: const TextStyle(
-                fontSize: 28,
+                fontSize: 24,
                 fontWeight: FontWeight.w800,
                 color: AdminColors.headerTitle,
-                letterSpacing: -0.6,
+                letterSpacing: -0.4,
                 decoration: TextDecoration.none,
               ),
             ),
-            const SizedBox(height: 6),
+            const SizedBox(height: 4),
             if (breadcrumb != null) ...[
               Text(
                 breadcrumb!,
@@ -70,7 +83,7 @@ class AdminDashboardHeader extends StatelessWidget {
                   decoration: TextDecoration.none,
                 ),
               ),
-              const SizedBox(height: 6),
+              const SizedBox(height: 4),
             ],
             Text(subtitle, style: _subtitleStyle),
           ],
@@ -82,32 +95,38 @@ class AdminDashboardHeader extends StatelessWidget {
             children: [
               if (leading != null) ...[
                 Align(alignment: Alignment.centerLeft, child: leading!),
-                const SizedBox(height: 10),
+                const SizedBox(height: 8),
               ],
               titleBlock,
-              const SizedBox(height: 16),
-              Wrap(
-                spacing: 10,
-                runSpacing: 10,
-                alignment: WrapAlignment.start,
-                crossAxisAlignment: WrapCrossAlignment.center,
-                children: _actions(context),
-              ),
+              if (actions.isNotEmpty) ...[
+                const SizedBox(height: 12),
+                Wrap(
+                  spacing: 8,
+                  runSpacing: 8,
+                  alignment: WrapAlignment.start,
+                  crossAxisAlignment: WrapCrossAlignment.center,
+                  children: actions,
+                ),
+              ],
             ],
           );
         }
 
         return Row(
-          crossAxisAlignment: CrossAxisAlignment.start,
+          crossAxisAlignment: CrossAxisAlignment.center,
           children: [
             if (leading != null) ...[
               Padding(
-                padding: const EdgeInsets.only(right: 4, top: 2),
+                padding: const EdgeInsets.only(right: 8),
                 child: leading!,
               ),
             ],
             Expanded(child: titleBlock),
-            ..._actions(context),
+            if (actions.isNotEmpty)
+              Row(
+                mainAxisSize: MainAxisSize.min,
+                children: actions,
+              ),
           ],
         );
       },
@@ -115,29 +134,75 @@ class AdminDashboardHeader extends StatelessWidget {
   }
 
   List<Widget> _actions(BuildContext context) {
-    final list = <Widget>[
-      OutlinedButton.icon(
-        onPressed: () {},
-        icon: AdminDateTimeTokens.dateChipIcon(),
-        label: Text(AdminDateTimeTokens.demoDateRangeLabel, style: AdminDateTimeTokens.dateRangeChipTextStyle),
-        style: AdminDateTimeTokens.dateRangeOutlinedButtonStyle(),
-      ),
-    ];
+    final list = <Widget>[];
 
-    if (showRefreshButton) {
-      list.add(const SizedBox(width: 10));
+    if (showDateTime) {
+      final now = DateTime.now();
+      list.add(
+        Container(
+          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+          decoration: BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(12),
+            border: const Border.fromBorderSide(
+              BorderSide(color: Color(0xFFDCE6EB)),
+            ),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withValues(alpha: 0.03),
+                blurRadius: 6,
+                offset: const Offset(0, 2),
+              ),
+            ],
+          ),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const Icon(Icons.access_time_rounded,
+                  size: 16, color: Color(0xFF008D94)),
+              const SizedBox(width: 8),
+              Text(
+                DateFormat('MMM d, yyyy  •  h:mm a').format(now),
+                style: const TextStyle(
+                  fontSize: 13,
+                  fontWeight: FontWeight.w600,
+                  color: AdminColors.headerTitle,
+                ),
+              ),
+            ],
+          ),
+        ),
+      );
+    }
+
+    if (showDateChip) {
+      if (list.isNotEmpty) list.add(const SizedBox(width: 8));
+      list.add(
+        OutlinedButton.icon(
+          onPressed: () {},
+          icon: AdminDateTimeTokens.dateChipIcon(),
+          label: Text(AdminDateTimeTokens.currentDateRangeLabel,
+              style: AdminDateTimeTokens.dateRangeChipTextStyle),
+          style: AdminDateTimeTokens.dateRangeOutlinedButtonStyle(),
+        ),
+      );
+    }
+
+    if (showRefreshButton && onRefreshTap != null) {
+      if (list.isNotEmpty) list.add(const SizedBox(width: 8));
       list.add(
         OutlinedButton.icon(
           onPressed: onRefreshTap,
           icon: AdminDateTimeTokens.refreshIcon,
-          label: const Text('Refresh', style: AdminDateTimeTokens.refreshChipTextStyle),
+          label: const Text('Refresh',
+              style: AdminDateTimeTokens.refreshChipTextStyle),
           style: AdminDateTimeTokens.refreshOutlinedButtonStyle(),
         ),
       );
     }
 
     if (trailingExtra != null) {
-      list.add(const SizedBox(width: 10));
+      if (list.isNotEmpty) list.add(const SizedBox(width: 8));
       list.add(trailingExtra!);
     }
 
