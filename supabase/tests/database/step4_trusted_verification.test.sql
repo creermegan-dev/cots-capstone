@@ -136,8 +136,8 @@ select public.record_expert_decision(
 reset role;
 select is(
   (select state from cots_private.evidence_verification_jobs where variant_id=pg_temp.uid(31)),
-  'pending',
-  'Expert decision requeues verified evidence for finalization'
+  'verified',
+  'Expert decision finishes already-verified evidence at once (20261108000500)'
 );
 
 set local role service_role;
@@ -147,10 +147,7 @@ create temporary table completed_capture as
   select public.finalize_linked_evidence(pg_temp.uid(31)) result;
 select is((select status from public.captures where id=pg_temp.uid(20)), 'finalized',
   'Capture finalizes after byte verification and required Expert decision');
-select public.record_evidence_verification_outcome(
-  pg_temp.uid(31), (select lock_token from second_claim),
-  'verified', null, null, (select result from completed_capture), 60
-);
+-- 20261108000500: nothing left for the worker to record (the job is already closed).
 select is(
   (select count(*)::integer from public.claim_evidence_verification_jobs(pg_temp.uid(31), 1)),
   0,

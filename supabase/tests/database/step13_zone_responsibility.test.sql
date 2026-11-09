@@ -166,7 +166,8 @@ set local role authenticated;
 select lives_ok($q$select public.record_expert_decision('d0000000-0000-4000-8000-000000000036',null,'reject','Duplicate of an earlier record',null,'[]'::jsonb)$q$,
   'The Expert rejects with a reason');
 reset role;
-select lives_ok($q$select public.finalize_capture('d0000000-0000-4000-8000-000000000036')$q$,'The worker closes it');
+-- 20261108000500: the record is finished right after the Expert's decision.
+select lives_ok($q$select public.finalize_capture('d0000000-0000-4000-8000-000000000036') where (select status from public.captures where id='d0000000-0000-4000-8000-000000000036')='pending'$q$,'The record is closed (by the database right after the decision)');
 select is((select status from public.captures where id=pg_temp.uid(36)),'rejected','The rejected record is not counted');
 select is(cots_private.capture_confirmed_count(pg_temp.uid(36)),0,'Rejected: 0 confirmed');
 select is(pg_temp.zone_notices(3),array['zone_record_approved'],'Diver A gets nothing after a rejection');

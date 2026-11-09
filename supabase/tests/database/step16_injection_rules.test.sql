@@ -141,7 +141,7 @@ select pg_temp.act(2);
 set local role authenticated;
 select public.record_expert_decision(pg_temp.uid(117),null,'approve','Approved after per-COTS review.',null,'[]'::jsonb);
 reset role;
-select public.finalize_capture(pg_temp.uid(117));
+select public.finalize_capture(pg_temp.uid(117)) where (select status from public.captures where id=pg_temp.uid(117))='pending';
 select is((select status from public.captures where id=pg_temp.uid(117)),'finalized','Diver B''s record is approved');
 select is(pg_temp.missed(13),0,'After approval the month is excused');
 
@@ -153,7 +153,7 @@ select pg_temp.act(2);
 set local role authenticated;
 select public.record_expert_decision(pg_temp.uid(119),null,'reject','Duplicate of an earlier record',null,'[]'::jsonb);
 reset role;
-select public.finalize_capture(pg_temp.uid(119));
+select public.finalize_capture(pg_temp.uid(119)) where (select status from public.captures where id=pg_temp.uid(119))='pending';
 select is((select status from public.captures where id=pg_temp.uid(119)),'rejected','Diver B''s record is rejected');
 select is(pg_temp.missed(14),3,'A rejected record never counts');
 
@@ -183,7 +183,7 @@ select pg_temp.act(2);
 set local role authenticated;
 select public.record_expert_decision(pg_temp.uid(121),null,'approve','Approved after per-COTS review.',null,'[]'::jsonb);
 reset role;
-select public.finalize_capture(pg_temp.uid(121));
+select public.finalize_capture(pg_temp.uid(121)) where (select status from public.captures where id=pg_temp.uid(121))='pending';
 select is(pg_temp.body(121),
   'Another Diver recorded COTS at your site Notice Reef on '
   || to_char((now() - interval '3 hours') at time zone 'Asia/Manila', 'FMMonth FMDD, YYYY')
@@ -203,7 +203,7 @@ select pg_temp.act(2);
 set local role authenticated;
 select public.record_expert_decision(pg_temp.uid(123),null,'approve','Approved after per-COTS review.',null,'[]'::jsonb);
 reset role;
-select public.finalize_capture(pg_temp.uid(123));
+select public.finalize_capture(pg_temp.uid(123)) where (select status from public.captures where id=pg_temp.uid(123))='pending';
 select is(pg_temp.body(123),
   'Another Diver recorded COTS at your site Manual Reef on '
   || to_char((now() - interval '3 hours') at time zone 'Asia/Manila', 'FMMonth FMDD, YYYY')
@@ -258,7 +258,7 @@ select pg_temp.act(2);
 set local role authenticated;
 select public.record_expert_decision(pg_temp.uid(140),null,'approve','Approved after per-COTS review.',null,'[]'::jsonb);
 reset role;
-select public.finalize_capture(pg_temp.uid(140));
+select public.finalize_capture(pg_temp.uid(140)) where (select status from public.captures where id=pg_temp.uid(140))='pending';
 select is(pg_temp.note(306),
   'Visit within 2 days of an injection on ' || cots_private.ph_time_label(now() - interval '30 hours')
   || ': injected COTS may still be alive.',

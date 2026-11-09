@@ -1,4 +1,6 @@
 begin;
+create extension if not exists pgtap with schema extensions;
+set local search_path = public, extensions, pg_temp;
 select plan(7);
 select is((select name from public.monitoring_areas where code = 'S4' and active and map_zone = 'Samal'), 'Site 4 · Balet', 'Site 4 · Balet is active in the Samal zone');
 select is((select code from public.monitoring_areas where id = cots_private.area_at(7.175877, 125.775144)), 'S4', 'the site centre finds Site 4');
