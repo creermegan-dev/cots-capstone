@@ -8,15 +8,15 @@ coordinate monitoring with Administrators.
 ## Submission links
 
 - **Source code:** [creermegan-dev/cots-capstone](https://github.com/creermegan-dev/cots-capstone)
-- **Current submission branch:** [supabase-migration](https://github.com/creermegan-dev/cots-capstone/tree/supabase-migration)
-- **Android application:** [GitHub Releases](https://github.com/creermegan-dev/cots-capstone/releases)
-- **Browser demo:** Appetize setup pending; no demo URL has been published yet.
+- **Android application:** [COTS Monitor v1.0.3 release](https://github.com/creermegan-dev/cots-capstone/releases/tag/v1.0.3)
+- **Live browser demo:** [Run COTS Monitor on Appetize](https://appetize.io/app/b_i3fjcp3fuphgq3yupuzinpqaq4)
 - **Custom domain:** Not applicable.
 
-The application is installed on an Android device. The Releases page distributes
-the APK; it is not a browser-hosted application. Instructor acceptance of an APK
-link for the live-application requirement should be confirmed. Version **1.0.3+4**
-is being prepared; the final APK still needs rebuilding and publishing.
+Version **1.0.3+4** is available as an installable Android APK and as an interactive
+browser demo running the same APK on a cloud Android device. Appetize free-plan
+session and monthly usage limits apply. The browser launch and navigation to
+registration were verified; authenticated detection and field workflows still
+require account access and separate acceptance testing.
 
 ## Features
 

@@ -54,16 +54,21 @@ download link, not a browser-hosted version. A custom domain is not applicable.
   35 existing informational notices remain.
 - Local database suite: **840 checks across 31 files passed**, including privacy,
   permissions, monthly site levels, notifications, and evidence completion.
-- An earlier preparation APK built successfully and passed v2 signature
-  verification. It predates the final source cleanup and must be rebuilt;
-  its checksum is not the final release checksum.
+- Final APK rebuilt from commit `cf9dd44d365303618ba08dddcbe4579ba0e92a44`; version 1.0.3, build 4,
+  minimum API 24; Android v2 signature verification passed.
+- GitHub confirmed the uploaded APK SHA-256 matches the local verified build.
 - Background cron scheduling was not exercised in the isolated local database.
 - Android phone acceptance testing and hosted-database tests were not run during
   this release preparation. No backend migrations were deployed.
 
-## Final release assets
+## Release assets
 
-The final rebuild will produce `COTS-Monitor-v1.0.3-android.apk`. Publish its
-SHA-256 checksum in the accompanying `SHA256SUMS.txt` after verifying the final
-APK's version and signature. Release and browser-demo URLs will be confirmed
-after publication.
+- `COTS-Monitor-v1.0.3-android.apk` (193,455,650 bytes).
+- `SHA256SUMS.txt` contains the verified APK checksum.
+
+SHA-256: `ad0ac8d063a576a408a8cc9c711b6db99976bd9a31022e2bd47730c39f4b6c09`.
+
+Browser demo: [Run COTS Monitor](https://appetize.io/app/b_i3fjcp3fuphgq3yupuzinpqaq4). Launch and navigation to
+registration verified on a cloud Pixel 7 / Android 13. Authenticated detection,
+camera, and GPS workflows were not tested in the browser. Free-plan session and
+monthly usage limits apply.
