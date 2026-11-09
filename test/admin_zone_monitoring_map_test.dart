@@ -32,7 +32,7 @@ void main() {
     await tester.pumpWidget(const MaterialApp(home: CotsMapPage()));
     await tester.pump();
     expect(find.byType(UserBottomNavBar), findsOneWidget);
-    await tester.tap(find.text('Map View: Sites'));
+    await tester.tap(find.byKey(const ValueKey('map-view-picker')));
     await tester.pumpAndSettle();
     expect(find.text('Heatmap'), findsOneWidget);
     expect(find.text('Density Layer'), findsOneWidget);
@@ -56,14 +56,28 @@ void main() {
       expect(find.textContaining('No saved detections yet'), findsOneWidget);
       final map = tester.widget<CotsMapPage>(find.byType(CotsMapPage));
       expect(map.embedded, isTrue);
+      expect(map.diverStyle, isTrue);
+      expect(
+          find.text('SITE LEVEL (confirmed COTS per month)'), findsOneWidget);
+      final viewRect =
+          tester.getRect(find.byKey(const ValueKey('map-view-picker')));
+      final monthRect =
+          tester.getRect(find.byKey(const ValueKey('map-month-picker')));
+      expect(viewRect.top, monthRect.top);
+      expect(monthRect.left, greaterThan(viewRect.left));
+      await tester.tap(find.byKey(const ValueKey('map-month-picker')));
+      await tester.pumpAndSettle();
+      expect(find.text('Show month'), findsOneWidget);
+      await tester.tap(find.byType(RadioListTile<DateTime?>).at(1));
+      await tester.pumpAndSettle();
       expect(map.recordMarkers, isEmpty);
       expect(
           tester.widget<PolygonLayer>(find.byType(PolygonLayer).first).polygons,
           isNotEmpty);
-      await tester.tap(find.text('Map View: Sites'));
+      await tester.tap(find.byKey(const ValueKey('map-view-picker')));
       await tester.pumpAndSettle();
-      expect(find.text('Heatmap'), findsNothing);
-      expect(find.text('Density Layer'), findsNothing);
+      expect(find.text('Heatmap'), findsOneWidget);
+      expect(find.text('Density Layer'), findsOneWidget);
       await tester.tap(find.text('Sites').last);
       await tester.pumpAndSettle();
       await tester.tap(find.text('Satellite'));
@@ -77,9 +91,6 @@ void main() {
       expect(find.text('Site 1 · Tambo'), findsOneWidget);
       expect(find.text('Site 2 · Adecor'), findsOneWidget);
       expect(find.text('Site 3 · Linosutan'), findsOneWidget);
-      // Close the info banner so it does not cover the site at phone width.
-      await tester.tap(find.byIcon(Icons.close).first);
-      await tester.pump();
       await tester.tap(find.text('Site 2 · Adecor'));
       await tester.pump();
       expect(find.textContaining('Barangay Adecor, Samal'), findsOneWidget);
@@ -101,8 +112,10 @@ void main() {
                 child: AdminZoneMonitoringMap(records: records)))));
     await tester.pump();
     final map = tester.widget<CotsMapPage>(find.byType(CotsMapPage));
-    expect(map.recordMarkers, hasLength(1));
-    expect(map.recordMarkers.single.point.latitude, 7.05);
+    // The map draws the dots itself, following its month picker.
+    final pins = mappableRecords(map.records!);
+    expect(pins, hasLength(1));
+    expect(pins.single.latitude, 7.05);
     expect(find.textContaining('No saved detections yet'), findsNothing);
     await tester.pumpWidget(const SizedBox());
   });

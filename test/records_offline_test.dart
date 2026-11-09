@@ -38,6 +38,8 @@ class _Queue extends OfflineSubmissionService {
         PendingSubmissionSummary(
             id: 'pending-1',
             name: 'my-offline-photo.jpg',
+            failureReason:
+                'Upload not permitted. Ask the Expert to check your Diver verification.',
             createdAt: DateTime(2026, 11, 5, 20)),
       ];
 }
@@ -65,6 +67,7 @@ void main() {
         findsOneWidget);
     await tester.ensureVisible(find.text('my-offline-photo.jpg'));
     expect(find.text('my-offline-photo.jpg'), findsOneWidget);
+    expect(find.textContaining('Ask the Expert'), findsOneWidget);
     expect(find.textContaining('Pending synchronization'), findsOneWidget);
     expect(tester.takeException(), isNull);
     stream.add(const []);

@@ -34,8 +34,10 @@ void main() {
   test('Divers choose from manual removal, vinegar and ox bile only', () {
     expect(RemovalMethod.options,
         [RemovalMethod.manual, RemovalMethod.vinegar, RemovalMethod.oxBile]);
-    expect(RemovalMethod.options, isNot(contains(RemovalMethod.communityCleanup)));
-    expect(RemovalMethod.options, isNot(contains(RemovalMethod.researchCollection)));
+    expect(
+        RemovalMethod.options, isNot(contains(RemovalMethod.communityCleanup)));
+    expect(RemovalMethod.options,
+        isNot(contains(RemovalMethod.researchCollection)));
   });
 
   test('old records keep their method and still count under "Other"', () {
@@ -55,12 +57,12 @@ void main() {
     expect(_visit().earlyVisitNote, isNull);
   });
 
-  testWidgets('the Expert sees the flag on the Assessments tab', (tester) async {
+  testWidgets('the Expert sees the flag on the Assessments tab',
+      (tester) async {
     await tester.pumpWidget(MaterialApp(
         home: Scaffold(
             body: ExpertAssessmentsScreen(
-      loadVisits: () async =>
-          [_visit(note: _flag), _visit(id: 'visit-2')],
+      loadVisits: () async => [_visit(note: _flag), _visit(id: 'visit-2')],
       confirm: ({required surveyId, required level, reason = ''}) async {},
     ))));
     await tester.pumpAndSettle();
@@ -68,19 +70,18 @@ void main() {
     expect(find.byType(EarlyVisitFlag), findsOneWidget);
   });
 
-  test('"Needs your action" shows the flag with the visit', () {
+  // 2026-11-08: site levels are automatic, so monthly visits no longer wait
+  // in "Needs your action"; the flag stays in the visit details (below).
+  test('monthly visits no longer wait in "Needs your action"', () {
     final items = ExpertActions.build(
         visits: [_visit(note: _flag), _visit(id: 'visit-2')],
         now: DateTime.utc(2026, 11, 4));
-    expect(items[0].detail,
-        'Zone C · C-01 · Test Barangay · Nov 4, 2026 · by Diver A\n$_flag');
-    expect(items[1].detail,
-        'Zone C · C-01 · Test Barangay · Nov 4, 2026 · by Diver A');
+    expect(items, isEmpty);
   });
 
   testWidgets('visit details show the flag', (tester) async {
-    await tester.pumpWidget(const MaterialApp(
-        home: Scaffold(body: EarlyVisitFlag(note: _flag))));
+    await tester.pumpWidget(
+        const MaterialApp(home: Scaffold(body: EarlyVisitFlag(note: _flag))));
     expect(find.text(_flag), findsOneWidget);
     expect(find.byIcon(Icons.warning_amber_rounded), findsOneWidget);
   });

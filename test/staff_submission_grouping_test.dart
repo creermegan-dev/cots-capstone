@@ -160,6 +160,15 @@ void main() {
             .single
             .displayStatusLabel,
         'Processing evidence');
+    // 2026-11-08: a pending record with COTS waiting for the Expert is
+    // "Under Review", so the Expert is asked to review it.
+    final waiting =
+        fixtures.photo('d', confidence: .6, serverStatus: 'pending');
+    expect(
+        StaffSubmissionRows.group([waiting.toAdminTableRow(1)])
+            .single
+            .displayStatusLabel,
+        'Under Review');
   });
 
   test(

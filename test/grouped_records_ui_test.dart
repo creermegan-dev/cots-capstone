@@ -81,6 +81,29 @@ Widget _app(Widget page, _Queue queue) => MultiProvider(providers: [
     ], child: MaterialApp(home: page));
 
 void main() {
+  testWidgets(
+      'one-photo submissions open full record details without an extra step',
+      (tester) async {
+    final photo = _photo('single');
+    final queue = _Queue();
+    addTearDown(queue.dispose);
+    await tester.pumpWidget(_app(
+        UserSubmissionDetailsPage(
+            initialGroup: SubmissionGroup.fromRecords([photo]).single,
+            recordsStream: Stream.value([photo])),
+        queue));
+    await tester.pumpAndSettle();
+    expect(find.text('Record Details'), findsOneWidget);
+    expect(find.text('Detection Image'), findsOneWidget);
+    expect(find.text('Detection Results'), findsOneWidget);
+    expect(find.text('Information'), findsOneWidget);
+    expect(find.byType(ExpansionTile), findsNothing);
+    expect(find.byType(DropdownButtonFormField<String>), findsNothing);
+    expect(find.text('View photo details'), findsNothing);
+    expect(find.text(photo.displayRecordId), findsOneWidget);
+    expect(tester.takeException(), isNull);
+    await tester.pumpWidget(const SizedBox());
+  });
   for (final width in [390.0, 1200.0]) {
     testWidgets(
         'Records groups batch/site, searches child names, and opens photo details at $width',
@@ -109,9 +132,15 @@ void main() {
       await tester.ensureVisible(find.text(group.displayId));
       await tester.tap(find.text(group.displayId));
       await tester.pumpAndSettle();
-      expect(find.text('Submission Details'), findsOneWidget);
-      expect(find.text('a.jpg'), findsOneWidget);
-      expect(find.text('b.jpg'), findsOneWidget);
+      expect(find.text('Record Details'), findsOneWidget);
+      expect(find.text('Detection Image'), findsOneWidget);
+      expect(find.text('View photo details'), findsNothing);
+      await tester.tap(find.byType(DropdownButtonFormField<String>));
+      await tester.pumpAndSettle();
+      expect(find.textContaining('b.jpg'), findsWidgets);
+      await tester.tap(find.textContaining('b.jpg').last);
+      await tester.pumpAndSettle();
+      expect(find.text('Photo file'), findsOneWidget);
       expect(find.text('c.jpg'), findsNothing);
       expect(find.text('old.jpg'), findsNothing);
       expect(tester.takeException(), isNull);
@@ -165,7 +194,10 @@ void main() {
     queue.replace([]);
     await tester.pumpAndSettle();
     expect(find.text('2 photos · 2 COTS detected'), findsOneWidget);
-    expect(find.text('Accepted'), findsOneWidget);
+    final recordCard =
+        find.ancestor(of: find.text(id), matching: find.byType(Material)).first;
+    expect(find.descendant(of: recordCard, matching: find.text('Accepted')),
+        findsOneWidget);
     expect(find.text(id), findsOneWidget);
     expect(find.text('Pending synchronization'), findsNothing);
     expect(tester.takeException(), isNull);
@@ -190,11 +222,13 @@ void main() {
     expect(find.text('Requires Expert Validation'), findsOneWidget);
     expect(find.text('Confirmed: 1 · Waiting: 1 · Not accepted: 0'),
         findsOneWidget);
-    await tester.tap(find.text('b.jpg'));
+    await tester.tap(find.byType(DropdownButtonFormField<String>));
     await tester.pumpAndSettle();
-    expect(find.text('1 COTS · 60% confidence'), findsOneWidget);
-    expect(find.text('Coordinates: ${b.formattedCoordinates}'), findsOneWidget);
-    expect(find.text('Location from: Photo GPS'), findsOneWidget);
+    await tester.tap(find.textContaining('b.jpg').last);
+    await tester.pumpAndSettle();
+    expect(find.text('60% avg'), findsOneWidget);
+    expect(find.text(b.formattedCoordinates), findsOneWidget);
+    expect(find.text('Photo GPS'), findsOneWidget);
     expect(
         find.textContaining(
             DateFormat('MMM d, yyyy h:mm a').format(b.dateTaken!.toLocal())),

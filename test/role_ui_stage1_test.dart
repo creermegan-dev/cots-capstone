@@ -32,7 +32,7 @@ void main() {
         onOpenMap: () => mapOpened = true,
       ))));
       await tester.pumpAndSettle();
-      await tester.tap(find.text('Assignments & Reassignments'));
+      await tester.tap(find.text('Site Coverage'));
       expect(opened, ExpertActionPlace.reassignments);
       await tester.ensureVisible(find.text('Open Map Monitoring'));
       await tester.tap(find.text('Open Map Monitoring'));

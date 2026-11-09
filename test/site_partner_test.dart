@@ -35,7 +35,8 @@ SitePartnerRequest _request(String id,
       'main_diver_name': 'Maria Santos',
       'status': status,
       'created_at': '2026-11-05T01:00:00Z',
-      'queued_at': (queuedAt ?? DateTime.utc(2026, 11, 5, 6, 30)).toIso8601String(),
+      'queued_at':
+          (queuedAt ?? DateTime.utc(2026, 11, 5, 6, 30)).toIso8601String(),
       'can_decide': canDecide,
       'can_respond': canRespond,
     });
@@ -93,6 +94,18 @@ Widget _app(Widget child) =>
     MaterialApp(home: Scaffold(body: SingleChildScrollView(child: child)));
 
 void main() {
+  testWidgets(
+      'assigned diver remains visible when the site team is unavailable',
+      (tester) async {
+    await tester.pumpWidget(_app(SiteTeamPanel(
+        areaCode: 'S4',
+        api: _FakePartners(),
+        fallbackDiverName: 'Megan Creer')));
+    await tester.pumpAndSettle();
+    expect(find.text('Assigned diver: Megan Creer'), findsOneWidget);
+    expect(find.textContaining('Main Divers:'), findsNothing);
+    expect(tester.takeException(), isNull);
+  });
   test('a site shows both main Divers once there is a site partner', () {
     final team = SiteTeam.fromJson({
       'area_code': 'S1',
@@ -126,7 +139,8 @@ void main() {
     expect(items.map((i) => i.id), ['pedro', 'juan']);
     expect(items.first.kind, ExpertActionKind.sitePartner);
     expect(items.first.title, 'Site 1 · Tambo: approve a site partner?');
-    expect(items.first.detail, startsWith('Pedro Reyes · recorded COTS at this site · '));
+    expect(items.first.detail,
+        startsWith('Pedro Reyes · recorded COTS at this site · '));
     expect(items.first.detail, endsWith('Main Diver: Maria Santos'));
     expect(items.first.decidedHere, isTrue);
   });
@@ -150,8 +164,8 @@ void main() {
     await tester.pumpWidget(MaterialApp(
         home: Scaffold(body: ExpertNotificationsScreen(actions: actions))));
     await tester.pumpAndSettle();
-    expect(find.text('Site 1 · Tambo: approve a site partner?'),
-        findsNWidgets(2));
+    expect(
+        find.text('Site 1 · Tambo: approve a site partner?'), findsNWidgets(2));
     expect(find.text('Approve'), findsNWidgets(2));
     await tester.tap(find.text('Approve').last);
     await tester.pumpAndSettle();
@@ -159,8 +173,10 @@ void main() {
     await tester.tap(find.widgetWithText(FilledButton, 'Approve').last);
     await tester.pumpAndSettle();
     expect(partners.calls, ['decide juan true']);
-    expect(find.text('Juan Dela Cruz is now the site partner.'), findsOneWidget);
-    expect(find.text('Site 1 · Tambo: approve a site partner?'), findsOneWidget);
+    expect(
+        find.text('Juan Dela Cruz is now the site partner.'), findsOneWidget);
+    expect(
+        find.text('Site 1 · Tambo: approve a site partner?'), findsOneWidget);
     expect(tester.takeException(), isNull);
   });
 
@@ -181,12 +197,22 @@ void main() {
         {'uid': 'pedro', 'name': 'Pedro Reyes'},
       ],
     );
-    await tester.pumpWidget(
-        _app(SiteTeamPanel(areaCode: 'S1', api: partners)));
+    await tester.pumpWidget(_app(SiteTeamPanel(areaCode: 'S1', api: partners)));
     await tester.pumpAndSettle();
     expect(find.textContaining('Maria Santos'), findsOneWidget);
     await tester.tap(find.text('Add site partner'));
     await tester.pumpAndSettle();
+    await tester.enterText(
+        find.widgetWithText(TextField, 'Search diver by name'), 'nobody');
+    await tester.pumpAndSettle();
+    expect(find.text('No divers match your search.'), findsOneWidget);
+    expect(find.text('Juan Dela Cruz'), findsNothing);
+    await tester.enterText(
+        find.widgetWithText(TextField, 'Search diver by name'), ' JUAN ');
+    await tester.pumpAndSettle();
+    expect(find.text('Juan Dela Cruz'), findsOneWidget);
+    expect(find.text('Pedro Reyes'), findsNothing);
+    expect(partners.calls, isEmpty);
     await tester.tap(find.text('Juan Dela Cruz'));
     await tester.pumpAndSettle();
     expect(find.text('Invite Juan Dela Cruz?'), findsOneWidget);
@@ -212,8 +238,7 @@ void main() {
         _request('juan', status: 'invited', canDecide: false),
       ],
     );
-    await tester.pumpWidget(
-        _app(SiteTeamPanel(areaCode: 'S1', api: partners)));
+    await tester.pumpWidget(_app(SiteTeamPanel(areaCode: 'S1', api: partners)));
     await tester.pumpAndSettle();
     expect(find.text('Add site partner'), findsNothing);
     expect(
@@ -299,8 +324,7 @@ void main() {
         'can_leave': true,
       }),
     ]);
-    await tester.pumpWidget(
-        _app(SiteTeamPanel(areaCode: 'S1', api: partners)));
+    await tester.pumpWidget(_app(SiteTeamPanel(areaCode: 'S1', api: partners)));
     await tester.pumpAndSettle();
     expect(find.text('Add site partner'), findsNothing);
     await tester.tap(find.text('Leave site'));

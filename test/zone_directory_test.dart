@@ -130,7 +130,8 @@ void main() {
       report('practice', 'P1'),
       report('removal', 'S1', activity: CotsActivityType.removalActivity),
     ]);
-    expect(rows.map((row) => row.site.id), ['S1', 'S2', 'S3', 'S4', 'P1', 'P2']);
+    expect(
+        rows.map((row) => row.site.id), ['S1', 'S2', 'S3', 'S4', 'P1', 'P2']);
     expect(rows.map((row) => row.reports), [1, 1, 1, 0, 1, 0]);
     expect(rows[2].analytics.pendingRecords, 1);
     expect(SiteDirectorySummary.siteIdFor(report('unknown', 'Samal')), isNull);
@@ -218,8 +219,9 @@ void main() {
       await tester.ensureVisible(find.text('View site'));
       await tester.tap(find.text('View site'));
       await tester.pumpAndSettle();
-      expect(find.text('Barangay Adecor · 340 ha'), findsOneWidget);
-      await tester.tap(find.text('Close'));
+      expect(find.text('Site Details'), findsOneWidget);
+      expect(find.text('340 ha'), findsOneWidget);
+      await tester.pageBack();
       await tester.pumpAndSettle();
       await tester.ensureVisible(selector);
       await tester.tap(selector);

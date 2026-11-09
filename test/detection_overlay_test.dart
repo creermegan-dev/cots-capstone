@@ -1,5 +1,6 @@
 import 'dart:typed_data';
 import 'dart:async';
+import 'package:cots_monitor/core/cots_colors.dart';
 
 import 'package:cots_monitor/models/cots_confidence_policy.dart';
 import 'package:cots_monitor/models/cots_detection_result.dart';
@@ -11,6 +12,59 @@ import 'package:image/image.dart' as img;
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 void main() {
+  testWidgets('saved decisions color boxes without changing confidence or taps',
+      (tester) async {
+    final bytes =
+        Uint8List.fromList(img.encodePng(img.Image(width: 640, height: 640)));
+    final items = CotsConfidencePolicy.buildDetectionItems(
+        count: 4,
+        averagePercent: 70,
+        imageWidth: 640,
+        imageHeight: 640,
+        boxes: const [
+          CotsBoundingBox(x1: 20, y1: 60, x2: 300, y2: 160, score: .79),
+          CotsBoundingBox(x1: 20, y1: 200, x2: 300, y2: 300, score: .40),
+          CotsBoundingBox(x1: 20, y1: 340, x2: 300, y2: 440, score: .50),
+          CotsBoundingBox(x1: 20, y1: 480, x2: 300, y2: 580, score: .90),
+        ]);
+    int? tapped;
+    await tester.pumpWidget(MaterialApp(
+        home: Scaffold(
+            body: SizedBox(
+                width: 640,
+                child: CotsDetectionImageOverlay(
+                  imageWidth: 640,
+                  imageHeight: 640,
+                  items: items,
+                  imageBytes: bytes,
+                  interactive: true,
+                  onBoxTap: (index) => tapped = index,
+                  decisions: const [
+                    PerCotsAdminDecision.confirmed,
+                    PerCotsAdminDecision.rejected,
+                    PerCotsAdminDecision.pending,
+                    PerCotsAdminDecision.confirmed
+                  ],
+                )))));
+    await tester.runAsync(() => precacheImage(MemoryImage(bytes),
+        tester.element(find.byType(CotsDetectionImageOverlay))));
+    await tester.pumpAndSettle();
+    final boxBorders = tester
+        .widgetList<Container>(find.byType(Container))
+        .map((widget) => widget.decoration)
+        .whereType<BoxDecoration>()
+        .where((decoration) => decoration.border != null)
+        .map((decoration) => (decoration.border! as Border).top.color)
+        .toList();
+    expect(boxBorders, [kSuccessGreen, kDangerRed, kWarningOrange, kInfoBlue]);
+    expect(find.text('COTS 1 — 79% · Expert accepted'), findsOneWidget);
+    expect(find.text('COTS 2 — 40% · Expert rejected'), findsOneWidget);
+    expect(find.text('COTS 4 — 90%'), findsOneWidget);
+    await tester.tapAt(const Offset(100, 250));
+    expect(tapped, 1);
+    expect(tester.takeException(), isNull);
+  });
+
   testWidgets('small detection boxes keep their true scaled size',
       (tester) async {
     final image =

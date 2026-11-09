@@ -38,7 +38,8 @@ void main() {
     expect(preferences.systemUpdates, isTrue);
   });
 
-  testWidgets('admin settings load and save persisted preferences',
+  testWidgets(
+      'admin settings load security preferences and hide removed controls',
       (tester) async {
     tester.view.physicalSize = const Size(1200, 1000);
     tester.view.devicePixelRatio = 1;
@@ -75,22 +76,12 @@ void main() {
     await tester.pumpAndSettle();
 
     final switches = tester.widgetList<Switch>(find.byType(Switch)).toList();
-    expect(switches.map((item) => item.value),
-        [false, true, false, true, true, false, true]);
-
-    final weeklyReportsSwitch = find.byType(Switch).at(3);
-    await tester.ensureVisible(weeklyReportsSwitch);
-    await tester.pumpAndSettle();
-    await tester.tap(weeklyReportsSwitch);
-    final saveButton = find.text('Save Preferences').first;
-    await tester.ensureVisible(saveButton);
-    await tester.tap(saveButton);
-    await tester.pumpAndSettle();
-
-    expect(store.saved, isNotNull);
-    expect(store.saved!.uid, 'admin-1');
-    expect(store.saved!.weeklyReports, isFalse);
-    expect(find.text('Preferences saved.'), findsOneWidget);
+    expect(switches.length, 1);
+    expect(switches.single.value, isTrue);
+    expect(find.text('Two-Factor Authentication'), findsOneWidget);
+    expect(find.text('Notification Settings'), findsNothing);
+    expect(find.text('Login Alerts'), findsNothing);
+    expect(find.text('Auto Session Timeout'), findsNothing);
     expect(tester.takeException(), isNull);
   });
 }

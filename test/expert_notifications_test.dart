@@ -78,8 +78,8 @@ AreaMissedMonths _missed(String code, int months, {bool open = false}) =>
     });
 
 class _FakeHandovers extends AreaHandoverApi {
-  _FakeHandovers({this.handovers = const [], this.missed = const []});
-  List<AreaHandover> handovers;
+  _FakeHandovers({this.missed = const []});
+  List<AreaHandover> handovers = const [];
   List<AreaMissedMonths> missed;
   @override
   Future<List<AreaHandover>> list() async => handovers;
@@ -94,6 +94,7 @@ ExpertActionsController _controller({
   _FakeHandovers? handovers,
 }) =>
     ExpertActionsController(
+      supabase: false,
       records: () => Stream.value(records),
       reassignments: () => Stream.value(reassignments),
       visits: () async => (visits ?? () => const <FollowUpSurveyModel>[])(),
@@ -162,20 +163,18 @@ void main() {
     ], [
       ExpertActionKind.recordReview,
       ExpertActionKind.zoneApproval,
-      ExpertActionKind.visitAssessment,
       ExpertActionKind.reassignment,
       ExpertActionKind.reassignment,
       ExpertActionKind.handover,
       ExpertActionKind.missedMonths,
     ]);
     expect([for (final item in items) item.id],
-        ['doc-CAP-1', 'doc-CAP-2', 'visit-1', 'r-1', 'r-2', 'h-1', 'A-5']);
+        ['doc-CAP-1', 'doc-CAP-2', 'r-1', 'r-2', 'h-1', 'A-5']);
     expect([
       for (final item in items) item.title
     ], [
       'Detection needs review',
       'Record needs your approval',
-      'Monthly visit waiting for assessment',
       'Reassignment request: choose a replacement Diver',
       'Replacement declined: choose another Diver',
       'Handover offer declined: choose another Diver',
@@ -186,7 +185,6 @@ void main() {
     ], [
       ExpertActionPlace.verification,
       ExpertActionPlace.verification,
-      ExpertActionPlace.assessments,
       ExpertActionPlace.reassignments,
       ExpertActionPlace.reassignments,
       ExpertActionPlace.reassignments,
@@ -195,12 +193,10 @@ void main() {
     expect(items[1].detail,
         'Another Diver in an assigned area · CAP-2 · Reef A · by Diver Bravo · area assigned to Diver Alpha');
     expect(items[2].detail,
-        'Zone C · C-01 · Test Barangay · Oct 5, 2026 · by Diver A');
-    expect(items[3].detail,
         'Zone B · B-02 · October 2026 · main Diver: Diver Alpha');
-    expect(items[5].detail,
+    expect(items[4].detail,
         'Stage Four Reef · requested by Diver Alpha · Moving to another city');
-    expect(items[6].detail,
+    expect(items[5].detail,
         'Area A-5 · main Diver: Diver Alpha · You can start an area handover.');
   });
 
@@ -225,6 +221,7 @@ void main() {
   test('the controller counts items once every source has answered', () async {
     final records = StreamController<List<AdminRecordTableRow>>();
     final actions = ExpertActionsController(
+      supabase: false,
       records: () => records.stream,
       reassignments: () => Stream.value([_request('r-1', 'requested')]),
       visits: () async => [_visit()],
@@ -238,16 +235,18 @@ void main() {
     records.add([_row('CAP-1', confidence: 60)]);
     await pumpEventQueue();
     expect(actions.loaded, isTrue);
-    expect(actions.count, 4);
+    // Record, reassignment and missed months (visits no longer wait).
+    expect(actions.count, 3);
     records.add(const []);
     await pumpEventQueue();
-    expect(actions.count, 3);
+    expect(actions.count, 2);
     actions.dispose();
     await records.close();
   });
 
   test('a source that fails is reported and the rest still show', () async {
     final actions = ExpertActionsController(
+      supabase: false,
       records: () => Stream.value([_row('CAP-1', confidence: 60)]),
       reassignments: () => Stream.value(const []),
       visits: () async => throw StateError('offline'),
@@ -274,14 +273,13 @@ void main() {
         _app(ExpertNotificationsScreen(actions: actions, onOpen: opened.add)));
     await tester.pumpAndSettle();
 
-    expect(find.text('Needs your action (2)'), findsOneWidget);
+    expect(find.text('Needs your action (1)'), findsOneWidget);
     expect(find.text('Record needs your approval'), findsOneWidget);
     expect(find.text('Open Verification'), findsOneWidget);
-    expect(find.text('Monthly visit waiting for assessment'), findsOneWidget);
-    await tester.tap(find.text('Monthly visit waiting for assessment'));
+    // 2026-11-08: monthly visits no longer wait for an assessment.
+    expect(find.text('Monthly visit waiting for assessment'), findsNothing);
     await tester.tap(find.text('Record needs your approval'));
-    expect(opened,
-        [ExpertActionPlace.assessments, ExpertActionPlace.verification]);
+    expect(opened, [ExpertActionPlace.verification]);
     actions.dispose();
   });
 
@@ -327,7 +325,7 @@ void main() {
       'Dashboard',
       'Verification',
       'Personnel Verification',
-      'Assignments & Reassignments',
+      'Site Coverage',
       'Assessments',
       'Map Monitoring',
       'Notifications',

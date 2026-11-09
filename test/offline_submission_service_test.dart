@@ -7,6 +7,7 @@ import 'package:cots_monitor/models/cots_detection_result.dart';
 import 'package:cots_monitor/services/offline_submission_service.dart';
 import 'package:cots_monitor/services/supabase_evidence_service.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:image/image.dart' as img;
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
@@ -147,6 +148,21 @@ void main() {
         await _submit(authorization, id: 'record-4', uid: 'diver-a');
     expect(blocked.state, OfflineSubmitState.authorizationBlocked);
     expect(authorization.pendingCount, 1);
+    expect(authorization.pendingSubmissions.single.failureReason,
+        contains('Ask the Expert to check your Diver verification'));
+    final restarted = OfflineSubmissionService(
+      directoryProvider: () async => temporaryDirectory,
+      enableAutomaticSync: false,
+      recordUploader: (_, image) async =>
+          throw const EvidenceAuthorizationException('private-server-details'),
+    );
+    await restarted.initialize();
+    await restarted.setActiveUser('diver-a');
+    expect(restarted.pendingSubmissions.single.failureReason,
+        authorization.pendingSubmissions.single.failureReason);
+    expect(restarted.pendingSubmissions.single.failureReason,
+        isNot(contains('private-server-details')));
+    restarted.dispose();
 
     await temporaryDirectory.delete(recursive: true);
     await temporaryDirectory.create(recursive: true);
@@ -172,7 +188,9 @@ Future<OfflineSubmitResult> _submit(
     uid: uid,
     submittedBy: 'Test Diver',
     imageName: 'cots.jpg',
-    imageBytes: Uint8List.fromList(List<int>.generate(32, (index) => index)),
+    imageBytes: Uint8List.fromList(
+      img.encodePng(img.Image(width: 2, height: 2)),
+    ),
     activityType: CotsActivityType.removalActivity,
     detection: const CotsDetectionResult(
       count: 1,
