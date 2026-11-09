@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import 'secure_supabase_local_storage.dart';
@@ -8,6 +9,11 @@ import 'supabase_auth_callback.dart';
 /// Only the public project URL and publishable key belong in the Flutter build.
 /// Never pass a service-role key through `--dart-define`.
 abstract final class SupabaseConfig {
+  /// Lets unit/widget tests exercise the legacy/local repository path without
+  /// constructing a real Supabase client. Production code leaves this null.
+  @visibleForTesting
+  static bool? configuredForTesting;
+
   /// Explicit rollback: --dart-define=USE_FIREBASE=true.
   static const bool useFirebase = bool.fromEnvironment('USE_FIREBASE');
 
@@ -24,7 +30,10 @@ abstract final class SupabaseConfig {
   );
 
   static bool get isConfigured =>
-      !useFirebase && url.trim().isNotEmpty && publishableKey.trim().isNotEmpty;
+      configuredForTesting ??
+      (!useFirebase &&
+          url.trim().isNotEmpty &&
+          publishableKey.trim().isNotEmpty);
 
   static Future<bool> initializeIfConfigured() async {
     if (!isConfigured) return false;

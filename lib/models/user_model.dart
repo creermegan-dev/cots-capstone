@@ -184,7 +184,7 @@ class UserModel {
       organization: row['organization'] as String? ?? '',
       assignedArea: '',
       createdAt: _dateTimeFromDynamic(row['created_at']),
-      profileImage: '',
+      profileImage: row['avatar_path'] as String? ?? '',
       isActive: row['active'] as bool? ?? true,
       fieldPersonnelVerified: row['field_verified'] as bool? ?? false,
       personnelVerifiedBy: row['verified_by'] as String? ?? '',

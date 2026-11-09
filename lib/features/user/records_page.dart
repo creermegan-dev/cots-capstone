@@ -6,7 +6,6 @@ import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
 
 import '../../models/activity_type.dart';
-import '../../models/cots_confidence_policy.dart';
 import '../../models/scan_record_model.dart';
 import '../../models/submission_group.dart';
 import '../../providers/auth_provider.dart';
@@ -35,6 +34,7 @@ class ScanRecord {
     this.group,
     this.pendingSync = false,
     this.searchText = '',
+    this.failureReason,
   });
 
   final String recordId;
@@ -46,6 +46,7 @@ class ScanRecord {
   final int? confidencePercent;
   final SubmissionGroup? group;
   final bool pendingSync;
+  final String? failureReason;
   final String searchText;
   final String scanSubmittedAt;
   final String zone;
@@ -96,9 +97,36 @@ class RecordsPage extends StatefulWidget {
   State<RecordsPage> createState() => _RecordsPageState();
 }
 
+enum _RecordGroup {
+  all('All Records'),
+  accepted('Accepted'),
+  review('Expert Review'),
+  processing('Processing');
+
+  const _RecordGroup(this.label);
+  final String label;
+
+  bool includes(String status) => switch (this) {
+        all => true,
+        accepted => const [
+            'Accepted',
+            'Automatically Accepted',
+            'Partially accepted'
+          ].contains(status),
+        review =>
+          const ['Under Review', 'Requires Expert Validation'].contains(status),
+        processing => const [
+            'Processing evidence',
+            'Submitted',
+            'Pending Validation',
+            'Pending synchronization'
+          ].contains(status),
+      };
+}
+
 class _RecordsPageState extends State<RecordsPage> {
   final TextEditingController _search = TextEditingController();
-  String? _statusFilter;
+  _RecordGroup _group = _RecordGroup.all;
   int _visibleCount = 8;
   Stream<List<ScanRecordModel>>? _recordsStream;
   String? _recordsUid;
@@ -118,17 +146,15 @@ class _RecordsPageState extends State<RecordsPage> {
   }
 
   int get _total => _allRecords.length;
-  int get _countAccepted => _allRecords
-      .where(
-          (r) => r.status == 'Accepted' || r.status == 'Automatically Accepted')
-      .length;
-  int get _countUnderReview => _allRecords
-      .where((r) =>
-          r.status == 'Under Review' ||
-          r.status == 'Requires Expert Validation')
-      .length;
-  int get _countRetake =>
-      _allRecords.where((r) => r.status == 'Retake Photo').length;
+  int _countGroup(_RecordGroup group) =>
+      _allRecords.where((record) => group.includes(record.status)).length;
+
+  void _selectGroup(_RecordGroup group) {
+    setState(() {
+      _group = group == _group ? _RecordGroup.all : group;
+      _visibleCount = 8;
+    });
+  }
 
   List<ScanRecord> _allRecords = const [];
   List<ScanRecordModel> _allModels = const [];
@@ -136,7 +162,7 @@ class _RecordsPageState extends State<RecordsPage> {
   List<ScanRecord> get _filtered {
     final q = _search.text.trim().toLowerCase();
     return _allRecords.where((r) {
-      if (_statusFilter != null && r.status != _statusFilter) return false;
+      if (!_group.includes(r.status)) return false;
       if (q.isEmpty) return true;
       final hay =
           '${r.displayId} ${r.submittedBy} ${r.activityType} ${r.zone} ${r.searchText}'
@@ -148,77 +174,6 @@ class _RecordsPageState extends State<RecordsPage> {
   void _submitSearch() {
     setState(() => _visibleCount = 8);
     FocusScope.of(context).unfocus();
-  }
-
-  void _openFilters() {
-    showModalBottomSheet<void>(
-      context: context,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
-      ),
-      builder: (ctx) {
-        return Padding(
-          padding: const EdgeInsets.fromLTRB(20, 16, 20, 24),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              const Text(
-                'Filter by status',
-                style: TextStyle(
-                  fontSize: 17,
-                  fontWeight: FontWeight.w700,
-                  color: kNavy,
-                ),
-              ),
-              const SizedBox(height: 12),
-              Wrap(
-                spacing: 8,
-                runSpacing: 8,
-                children: [
-                  _filterChip('All', null),
-                  _filterChip(
-                      'Automatically Accepted', 'Automatically Accepted'),
-                  _filterChip('Requires Expert Validation',
-                      'Requires Expert Validation'),
-                  _filterChip('Retake Photo', 'Retake Photo'),
-                  _filterChip('Submitted', 'Submitted'),
-                  _filterChip('Pending Validation', 'Pending Validation'),
-                  _filterChip('Completed Monitoring', 'Completed Monitoring'),
-                  _filterChip('Accepted', 'Accepted'),
-                  _filterChip('Partially accepted', 'Partially accepted'),
-                  _filterChip(
-                      'Pending synchronization', 'Pending synchronization'),
-                  _filterChip('Processing evidence', 'Processing evidence'),
-                  _filterChip('Needs Correction', 'Needs Correction'),
-                ],
-              ),
-            ],
-          ),
-        );
-      },
-    );
-  }
-
-  Widget _filterChip(String label, String? value) {
-    final selected = _statusFilter == value;
-    return FilterChip(
-      label: Text(label),
-      selected: selected,
-      onSelected: (_) {
-        setState(() {
-          _statusFilter = value;
-          _visibleCount = 8;
-        });
-        Navigator.pop(context);
-      },
-      selectedColor: kGreen.withValues(alpha: 0.15),
-      checkmarkColor: kGreen,
-      labelStyle: TextStyle(
-        color: selected ? kGreen : kNavy,
-        fontWeight: selected ? FontWeight.w700 : FontWeight.w500,
-      ),
-    );
   }
 
   @override
@@ -341,6 +296,13 @@ class _RecordsPageState extends State<RecordsPage> {
           zone: first.zone,
           group: group,
           pendingSync: pending,
+          failureReason: local
+              .where(
+                  (task) => group.records.any((r) => r.id == task.record!.id))
+              .map((task) => task.failureReason)
+              .whereType<String>()
+              .toSet()
+              .join('\n'),
           searchText: group.records
               .map((r) => '${r.displayRecordId} ${r.imageName}')
               .join(' '));
@@ -353,7 +315,7 @@ class _RecordsPageState extends State<RecordsPage> {
     final shown = filtered.take(_visibleCount).toList();
     final hasMore = _visibleCount < filtered.length;
     final hasSearchOrFilter =
-        _search.text.trim().isNotEmpty || _statusFilter != null;
+        _search.text.trim().isNotEmpty || _group != _RecordGroup.all;
 
     return SafeArea(
       bottom: false,
@@ -385,24 +347,6 @@ class _RecordsPageState extends State<RecordsPage> {
                                 child: const Text('Retry records')),
                         ]),
                   )),
-                const Text(
-                  'RECORDS PAGE',
-                  style: TextStyle(
-                    fontSize: 12,
-                    fontWeight: FontWeight.w800,
-                    color: kGreen,
-                    letterSpacing: 0.8,
-                  ),
-                ),
-                const SizedBox(height: 6),
-                Text(
-                  'View your COTS photo submissions and verification status.',
-                  style: TextStyle(
-                    fontSize: 13,
-                    color: Colors.grey.shade700,
-                    height: 1.35,
-                  ),
-                ),
                 Consumer<OfflineSubmissionService>(
                   builder: (context, offline, _) {
                     if (offline.pendingCount == 0 && !offline.isSyncing) {
@@ -468,7 +412,7 @@ class _RecordsPageState extends State<RecordsPage> {
                             leading: const Icon(Icons.cloud_upload_outlined),
                             title: Text(task.name),
                             subtitle: Text(
-                                'Pending synchronization${task.createdAt == null ? '' : '\n${DateFormat('MMM d, yyyy h:mm a').format(task.createdAt!.toLocal())}'}'),
+                                'Pending synchronization${task.createdAt == null ? '' : '\n${DateFormat('MMM d, yyyy h:mm a').format(task.createdAt!.toLocal())}'}${task.failureReason == null ? '' : '\n${task.failureReason}'}'),
                             isThreeLine: task.createdAt != null,
                           )),
                       ]);
@@ -517,41 +461,17 @@ class _RecordsPageState extends State<RecordsPage> {
                         ),
                       ),
                     ),
-                    const SizedBox(width: 10),
-                    OutlinedButton.icon(
-                      onPressed: _openFilters,
-                      icon: Icon(Icons.filter_list,
-                          size: 18, color: Colors.grey.shade800),
-                      label: Text(
-                        'Filters',
-                        style: TextStyle(
-                          color: Colors.grey.shade800,
-                          fontWeight: FontWeight.w600,
-                          fontSize: 13,
-                        ),
-                      ),
-                      style: OutlinedButton.styleFrom(
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 14,
-                          vertical: 12,
-                        ),
-                        side: BorderSide(color: Colors.grey.shade300),
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(12),
-                        ),
-                      ),
-                    ),
                   ],
                 ),
-                if (_statusFilter != null) ...[
+                if (_group != _RecordGroup.all) ...[
                   const SizedBox(height: 8),
                   Align(
                     alignment: Alignment.centerLeft,
                     child: TextButton.icon(
-                      onPressed: () => setState(() => _statusFilter = null),
+                      onPressed: () => _selectGroup(_RecordGroup.all),
                       icon: const Icon(Icons.close, size: 18),
                       label: Text(
-                        'Clear filter: $_statusFilter',
+                        'Clear filter: ${_group.label}',
                         style: const TextStyle(fontSize: 12),
                       ),
                     ),
@@ -578,7 +498,7 @@ class _RecordsPageState extends State<RecordsPage> {
                               TextButton(
                                 onPressed: () => setState(() {
                                   _search.clear();
-                                  _statusFilter = null;
+                                  _group = _RecordGroup.all;
                                   _visibleCount = 8;
                                 }),
                                 style: TextButton.styleFrom(
@@ -639,8 +559,6 @@ class _RecordsPageState extends State<RecordsPage> {
                       label: const Text('Load more'),
                     ),
                   ),
-                const SizedBox(height: 20),
-                _statusGuideFooter(),
               ],
             ),
           ),
@@ -655,7 +573,8 @@ class _RecordsPageState extends State<RecordsPage> {
         Expanded(
           child: _summaryTile(
             icon: Icons.description_outlined,
-            label: 'Total Records',
+            label: 'All Records',
+            group: _RecordGroup.all,
             value: '$_total',
             accent: kGreen,
           ),
@@ -664,8 +583,9 @@ class _RecordsPageState extends State<RecordsPage> {
         Expanded(
           child: _summaryTile(
             icon: Icons.circle,
-            label: 'Auto Accepted',
-            value: '$_countAccepted',
+            label: 'Accepted',
+            group: _RecordGroup.accepted,
+            value: '${_countGroup(_RecordGroup.accepted)}',
             accent: kLow,
             iconIsDot: true,
           ),
@@ -675,7 +595,8 @@ class _RecordsPageState extends State<RecordsPage> {
           child: _summaryTile(
             icon: Icons.circle,
             label: 'Expert Review',
-            value: '$_countUnderReview',
+            group: _RecordGroup.review,
+            value: '${_countGroup(_RecordGroup.review)}',
             accent: kModerate,
             iconIsDot: true,
           ),
@@ -684,9 +605,10 @@ class _RecordsPageState extends State<RecordsPage> {
         Expanded(
           child: _summaryTile(
             icon: Icons.circle,
-            label: 'Retake',
-            value: '$_countRetake',
-            accent: kHigh,
+            label: 'Processing',
+            group: _RecordGroup.processing,
+            value: '${_countGroup(_RecordGroup.processing)}',
+            accent: Colors.blueGrey,
             iconIsDot: true,
           ),
         ),
@@ -695,138 +617,56 @@ class _RecordsPageState extends State<RecordsPage> {
   }
 
   Widget _summaryTile({
+    required _RecordGroup group,
     required IconData icon,
     required String label,
     required String value,
     required Color accent,
     bool iconIsDot = false,
   }) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 12),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: Colors.grey.shade200),
-        boxShadow: const [
-          BoxShadow(
-            color: Color(0x0A000000),
-            blurRadius: 8,
-            offset: Offset(0, 2),
+    final selected = _group == group;
+    return Semantics(
+      key: ValueKey('records-card-${group.name}'),
+      selected: selected,
+      button: true,
+      child: Material(
+        color: selected ? accent.withValues(alpha: 0.08) : Colors.white,
+        elevation: 2,
+        shadowColor: const Color(0x0A000000),
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(12),
+          side: BorderSide(
+            color: selected ? accent : Colors.grey.shade200,
+            width: selected ? 2 : 1,
           ),
-        ],
-      ),
-      child: Column(
-        children: [
-          Icon(
-            icon,
-            size: iconIsDot ? 10 : 20,
-            color: accent,
-          ),
-          const SizedBox(height: 6),
-          Text(
-            value,
-            style: const TextStyle(
-              fontSize: 18,
-              fontWeight: FontWeight.w800,
-              color: kNavy,
-            ),
-          ),
-          const SizedBox(height: 2),
-          Text(
-            label,
-            textAlign: TextAlign.center,
-            style: TextStyle(
-              fontSize: 9,
-              fontWeight: FontWeight.w600,
-              color: Colors.grey.shade600,
-              height: 1.1,
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _statusGuideFooter() {
-    return Container(
-      padding: const EdgeInsets.all(14),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: Colors.grey.shade200),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          const Text(
-            'STATUS GUIDE',
-            style: TextStyle(
-              fontSize: 11,
-              fontWeight: FontWeight.w800,
-              color: kNavy,
-              letterSpacing: 0.6,
-            ),
-          ),
-          const SizedBox(height: 10),
-          _guideRow(kLow, 'Automatically Accepted',
-              'AI detection confidence is 80%–100%. Automatically accepted as an official monitoring record.'),
-          const SizedBox(height: 6),
-          _guideRow(kModerate, 'Requires Expert Validation',
-              'AI detection confidence is below 80%. Forwarded to the Expert for manual verification.'),
-          const SizedBox(height: 6),
-          _guideRow(kHigh, 'Retake Photo',
-              'Confidence too low (0–${CotsConfidencePolicy.adminReviewMin - 1}%) — take a clearer COTS photo.'),
-          const SizedBox(height: 12),
-          Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Icon(Icons.info_outline, size: 18, color: Colors.grey.shade600),
-              const SizedBox(width: 8),
-              Expanded(
-                child: Text(
-                  'Tap any record to view detection results, GPS info, and image preview.',
-                  style: TextStyle(
-                    fontSize: 12,
-                    color: Colors.grey.shade700,
-                    height: 1.35,
-                  ),
-                ),
-              ),
-            ],
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _guideRow(Color dot, String title, String text) {
-    return Row(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Container(
-          margin: const EdgeInsets.only(top: 5),
-          width: 8,
-          height: 8,
-          decoration: BoxDecoration(color: dot, shape: BoxShape.circle),
         ),
-        const SizedBox(width: 8),
-        Expanded(
-          child: RichText(
-            text: TextSpan(
-              style: TextStyle(
-                  fontSize: 12, color: Colors.grey.shade800, height: 1.35),
+        child: InkWell(
+          borderRadius: BorderRadius.circular(12),
+          onTap: () => _selectGroup(group),
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 12),
+            child: Column(
               children: [
-                TextSpan(
-                  text: '$title: ',
-                  style: const TextStyle(
-                      fontWeight: FontWeight.w700, color: kNavy),
-                ),
-                TextSpan(text: text),
+                Icon(icon, size: iconIsDot ? 10 : 20, color: accent),
+                const SizedBox(height: 6),
+                Text(value,
+                    style: const TextStyle(
+                        fontSize: 18,
+                        fontWeight: FontWeight.w800,
+                        color: kNavy)),
+                const SizedBox(height: 2),
+                Text(label,
+                    textAlign: TextAlign.center,
+                    style: TextStyle(
+                        fontSize: 9,
+                        fontWeight: FontWeight.w600,
+                        color: Colors.grey.shade600,
+                        height: 1.1)),
               ],
             ),
           ),
         ),
-      ],
+      ),
     );
   }
 }
@@ -835,228 +675,114 @@ class _GroupedRecordCard extends StatelessWidget {
   const _GroupedRecordCard({required this.record, required this.onTap});
   final ScanRecord record;
   final VoidCallback onTap;
-
   @override
-  Widget build(BuildContext context) => Card(
-        child: InkWell(
-          onTap: onTap,
-          borderRadius: BorderRadius.circular(12),
-          child: Padding(
-            padding: const EdgeInsets.all(16),
-            child: Column(
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: [
-                  Row(children: [
-                    Expanded(
-                        child: Text(record.displayId,
-                            style: const TextStyle(
-                                fontWeight: FontWeight.w800, color: kNavy))),
-                    const Icon(Icons.chevron_right),
-                  ]),
-                  const SizedBox(height: 6),
-                  Text(
-                      '${record.activityType} · ${record.cotsDetected} COTS detected',
-                      style: const TextStyle(fontWeight: FontWeight.w600)),
-                  const SizedBox(height: 6),
-                  Text(record.status,
-                      style: TextStyle(
-                          color: _statusColor(record.status),
-                          fontWeight: FontWeight.w600)),
-                  Text('Site: ${record.zone}'),
-                  Text('Submitted by ${record.submittedBy}'),
-                  Text('Latest activity: ${record.scanSubmittedAt}'),
-                  const Text('Confidence and GPS are shown for each photo.'),
-                ]),
-          ),
-        ),
-      );
+  Widget build(BuildContext context) =>
+      _RecordCard(record: record, onTap: onTap);
 }
 
 class _RecordCard extends StatelessWidget {
-  const _RecordCard({
-    required this.record,
-    required this.onTap,
-  });
-
+  const _RecordCard({required this.record, required this.onTap});
   final ScanRecord record;
   final VoidCallback onTap;
 
   @override
   Widget build(BuildContext context) {
-    final stColor = _statusColor(record.status);
-
+    final color = _statusColor(record.status);
+    final badge = Container(
+        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 5),
+        decoration: BoxDecoration(
+            color: color.withValues(alpha: .10),
+            borderRadius: BorderRadius.circular(20)),
+        child: Row(mainAxisSize: MainAxisSize.min, children: [
+          Icon(Icons.circle, size: 6, color: color),
+          const SizedBox(width: 4),
+          Flexible(
+              child: Text(record.status,
+                  style: TextStyle(
+                      fontSize: 10,
+                      fontWeight: FontWeight.w600,
+                      color: color))),
+        ]));
     return Material(
       color: Colors.white,
-      borderRadius: BorderRadius.circular(12),
+      borderRadius: BorderRadius.circular(14),
       clipBehavior: Clip.antiAlias,
       child: InkWell(
-        onTap: onTap,
-        child: Padding(
-          padding: const EdgeInsets.all(14),
-          child: Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Container(
-                width: 44,
-                height: 44,
-                alignment: Alignment.center,
-                decoration: BoxDecoration(
-                  color: kGreen,
-                  borderRadius: BorderRadius.circular(10),
-                ),
-                child: const Icon(
-                  Icons.description_outlined,
-                  color: Colors.white,
-                  size: 22,
-                ),
-              ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Row(
+          onTap: onTap,
+          child: Padding(
+              padding: const EdgeInsets.all(12),
+              child:
+                  Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                Container(
+                    width: 38,
+                    height: 38,
+                    alignment: Alignment.center,
+                    decoration: BoxDecoration(
+                        color: kGreen, borderRadius: BorderRadius.circular(11)),
+                    child: const Icon(Icons.description_outlined,
+                        color: Colors.white, size: 21)),
+                const SizedBox(width: 10),
+                Expanded(child: LayoutBuilder(builder: (context, constraints) {
+                  final inline = constraints.maxWidth >= 260;
+                  final id = Text(record.displayId,
+                      style: const TextStyle(
+                          fontSize: 13,
+                          fontWeight: FontWeight.w800,
+                          color: kNavy));
+                  return Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Expanded(
-                          child: Column(
+                        if (inline)
+                          Row(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Expanded(child: id),
+                                const SizedBox(width: 8),
+                                Flexible(child: badge)
+                              ])
+                        else
+                          id,
+                        const SizedBox(height: 4),
+                        Text(
+                            'Submitted by ${record.submittedBy}${record.group == null ? ' · ${record.activityType}' : ''}',
+                            style: const TextStyle(
+                                fontSize: 12,
+                                color: Color(0xFF607D8B),
+                                height: 1.35)),
+                        if (record.group != null) ...[
+                          const SizedBox(height: 3),
+                          Text(
+                              '${record.activityType} · ${record.cotsDetected} COTS detected',
+                              style:
+                                  const TextStyle(fontSize: 12, color: kNavy)),
+                        ],
+                        const SizedBox(height: 6),
+                        Row(
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
-                              Text(
-                                record.displayId,
-                                style: const TextStyle(
-                                  fontSize: 14,
-                                  fontWeight: FontWeight.w800,
-                                  color: kNavy,
-                                  letterSpacing: 0.2,
-                                ),
-                              ),
-                              const SizedBox(height: 2),
-                              Text(
-                                'Submitted by ${record.submittedBy}',
-                                style: TextStyle(
-                                  fontSize: 12,
-                                  color: Colors.grey.shade600,
-                                ),
-                              ),
-                              const SizedBox(height: 2),
-                              Text(
-                                record.activityType,
-                                style: TextStyle(
-                                  fontSize: 11,
-                                  fontWeight: FontWeight.w600,
-                                  color: Colors.grey.shade500,
-                                ),
-                              ),
-                            ],
-                          ),
-                        ),
-                        Flexible(
-                            child: Container(
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: 10,
-                            vertical: 4,
-                          ),
-                          decoration: BoxDecoration(
-                            color: stColor.withValues(alpha: 0.12),
-                            borderRadius: BorderRadius.circular(20),
-                          ),
-                          child: Row(
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              Container(
-                                width: 6,
-                                height: 6,
-                                decoration: BoxDecoration(
-                                  color: stColor,
-                                  shape: BoxShape.circle,
-                                ),
-                              ),
-                              const SizedBox(width: 6),
-                              Flexible(
+                              const Icon(Icons.calendar_today_outlined,
+                                  size: 13, color: Color(0xFF607D8B)),
+                              const SizedBox(width: 5),
+                              Expanded(
                                   child: Text(
-                                record.status,
-                                style: TextStyle(
-                                  fontSize: 11,
-                                  fontWeight: FontWeight.w700,
-                                  color: stColor,
-                                ),
-                              )),
-                            ],
-                          ),
-                        )),
-                      ],
-                    ),
-                    const SizedBox(height: 10),
-                    Row(
-                      children: [
-                        Icon(Icons.pest_control_outlined,
-                            size: 16, color: Colors.grey.shade700),
-                        const SizedBox(width: 6),
-                        Text(
-                          '${record.cotsDetected} COTS',
-                          style: const TextStyle(
-                            fontSize: 12,
-                            fontWeight: FontWeight.w600,
-                            color: kNavy,
-                          ),
-                        ),
-                        const SizedBox(width: 16),
-                        Icon(Icons.speed_outlined,
-                            size: 14, color: Colors.grey.shade700),
-                        const SizedBox(width: 6),
-                        Text(
-                          '${record.confidencePercent}%',
-                          style: const TextStyle(
-                            fontSize: 12,
-                            fontWeight: FontWeight.w600,
-                            color: kNavy,
-                          ),
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: 6),
-                    Row(
-                      children: [
-                        Icon(Icons.calendar_today_outlined,
-                            size: 14, color: Colors.grey.shade700),
-                        const SizedBox(width: 6),
-                        Expanded(
-                          child: Text(
-                            'Uploaded ${record.scanSubmittedAt}',
-                            style: TextStyle(
-                              fontSize: 11,
-                              color: Colors.grey.shade700,
-                              fontWeight: FontWeight.w500,
-                            ),
-                          ),
-                        ),
-                        if (record.zone.isNotEmpty &&
-                            record.zone != 'Unassigned') ...[
-                          Icon(Icons.place_outlined,
-                              size: 14, color: Colors.grey.shade500),
-                          const SizedBox(width: 4),
-                          Text(
-                            record.zone,
-                            style: TextStyle(
-                              fontSize: 11,
-                              color: Colors.grey.shade500,
-                              fontWeight: FontWeight.w600,
-                            ),
-                          ),
+                                      'Uploaded ${record.scanSubmittedAt}',
+                                      style: const TextStyle(
+                                          fontSize: 11,
+                                          color: Color(0xFF607D8B)))),
+                            ]),
+                        if (!inline) ...[const SizedBox(height: 7), badge],
+                        if (record.failureReason?.isNotEmpty == true) ...[
+                          const SizedBox(height: 8),
+                          Text(record.failureReason!,
+                              style: const TextStyle(
+                                  fontSize: 12, color: Color(0xFF8A5A00))),
                         ],
-                      ],
-                    ),
-                  ],
-                ),
-              ),
-              const SizedBox(width: 4),
-              Icon(Icons.chevron_right_rounded,
-                  color: Colors.grey.shade400, size: 22),
-            ],
-          ),
-        ),
-      ),
+                      ]);
+                })),
+                const SizedBox(width: 4),
+                const Icon(Icons.chevron_right,
+                    size: 20, color: Color(0xFF78909C)),
+              ]))),
     );
   }
 }

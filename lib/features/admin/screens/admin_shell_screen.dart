@@ -8,7 +8,7 @@ import '../layout/admin_nav_entries.dart';
 import '../layout/admin_responsive_chrome.dart';
 import '../models/admin_record_table_row.dart';
 import '../theme/admin_theme.dart';
-import 'admin_alerts_notifications_screen.dart';
+import 'admin_notifications_screen.dart';
 import 'admin_analytics_screen.dart';
 import 'admin_dashboard_screen.dart';
 import 'admin_map_monitoring_screen.dart';
@@ -79,7 +79,7 @@ class _AdminShellScreenState extends State<AdminShellScreen> {
               1 => const AdminMapMonitoringScreen(),
               2 => const AdminZonesScreen(),
               3 => const AdminRecordsSubmissionsScreen(viewOnly: true),
-              4 => const AdminAlertsNotificationsScreen(),
+              4 => const AdminNotificationsScreen(),
               5 => const AdminAnalyticsScreen(),
               6 => const AdminReportsScreen(),
               7 => const AdminUsersScreen(),

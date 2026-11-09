@@ -4,6 +4,7 @@ import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import 'package:flutter_map/flutter_map.dart';
 import 'package:geolocator/geolocator.dart';
+import 'package:intl/intl.dart';
 import 'package:latlong2/latlong.dart';
 import 'package:provider/provider.dart';
 
@@ -101,6 +102,7 @@ class CotsMapPage extends StatefulWidget {
   const CotsMapPage({
     super.key,
     this.embedded = false,
+    this.diverStyle = false,
     this.recordMarkers = const [],
     this.initialCenter = DavaoGulfGeography.sitesCenter,
     this.initialZoom = DavaoGulfGeography.sitesZoom,
@@ -109,10 +111,15 @@ class CotsMapPage extends StatefulWidget {
     this.siteLevels,
     this.ownRecords,
     this.mySites,
+    this.records,
+    this.onOpenRecord,
   });
 
   /// Reuses the site map inside admin chrome without diver navigation.
   final bool embedded;
+
+  /// Matches Diver controls while retaining the staff data and navigation.
+  final bool diverStyle;
   final List<Marker> recordMarkers;
   final LatLng initialCenter;
   final double initialZoom;
@@ -123,7 +130,13 @@ class CotsMapPage extends StatefulWidget {
 
   /// Stage 13 data sources (tests replace them). When null, the Supabase
   /// version loads them; the Firebase rollback shows the sites without levels.
-  final Future<List<SiteLevel>> Function()? siteLevels;
+  /// Each site's level for a month (null = each site's latest month).
+  final Future<List<SiteLevel>> Function(DateTime? month)? siteLevels;
+
+  /// Embedded (Admin/Expert) maps: all records, filtered by the month picker
+  /// like the Diver's own records.
+  final List<ScanRecordModel>? records;
+  final void Function(ScanRecordModel record)? onOpenRecord;
 
   /// The signed-in Diver's own records (dots). The admin map passes its
   /// dots through [recordMarkers] instead.
@@ -149,6 +162,10 @@ class _CotsMapPageState extends State<CotsMapPage> {
   LatLng? _userLocation;
 
   Map<String, SiteLevel> _levels = const {};
+
+  /// The month shown (null = "Latest": each site's latest month with records).
+  DateTime? _month;
+  Future<List<SiteLevel>> Function(DateTime? month)? _levelsSource;
   Set<String> _mySites = const {};
   List<ScanRecordModel> _records = const [];
   StreamSubscription<List<ScanRecordModel>>? _recordsSub;
@@ -178,8 +195,12 @@ class _CotsMapPageState extends State<CotsMapPage> {
 
   Future<void> _loadMapData() async {
     final supabase = SupabaseConfig.isConfigured;
-    final levelsSource =
-        widget.siteLevels ?? (supabase ? const SiteLevelsApi().levels : null);
+    final Future<List<SiteLevel>> Function(DateTime? month)? levelsSource =
+        widget.siteLevels ??
+            (supabase
+                ? (DateTime? month) => const SiteLevelsApi().monthLevels(month)
+                : null);
+    _levelsSource = levelsSource;
     final uid = widget.embedded ? null : _signedInUid;
     final recordsStream = widget.ownRecords ??
         (!widget.embedded && uid != null
@@ -196,22 +217,106 @@ class _CotsMapPageState extends State<CotsMapPage> {
     _recordsSub = recordsStream?.listen((records) {
       if (mounted) setState(() => _records = mappableRecords(records));
     }, onError: (_) {});
-    if (levelsSource != null) {
-      try {
-        final levels = await levelsSource();
-        if (mounted) {
-          setState(() => _levels = {for (final l in levels) l.areaCode: l});
-        }
-      } catch (_) {
-        // The sites still show, in grey ("No data yet").
-      }
-    }
+    await _loadLevels();
     if (mySitesSource != null) {
       try {
         final mine = await mySitesSource();
         if (mounted) setState(() => _mySites = mine);
       } catch (_) {}
     }
+  }
+
+  Future<void> _loadLevels() async {
+    final source = _levelsSource;
+    if (source == null) return;
+    final month = _month;
+    try {
+      final levels = await source(month);
+      if (mounted && month == _month) {
+        setState(() => _levels = {for (final l in levels) l.areaCode: l});
+      }
+    } catch (_) {
+      // The sites still show, in grey ("No records").
+    }
+  }
+
+  /// The records drawn as dots and in the heatmap: those of the month shown
+  /// (for "Latest", each site's latest month).
+  List<ScanRecordModel> get _visibleRecords {
+    final all =
+        widget.records != null ? mappableRecords(widget.records!) : _records;
+    return [
+      for (final r in all)
+        if (_recordInView(r)) r,
+    ];
+  }
+
+  bool _recordInView(ScanRecordModel r) {
+    final when = r.dateTaken ?? r.submittedAt;
+    if (when == null) return _month == null;
+    final month = MonthlySiteLevel.monthOf(when);
+    if (_month != null) return month == _month;
+    final site = DavaoGulfGeography.partAt(r.latitude!, r.longitude!)?.areaCode;
+    final shown = site == null ? null : _levels[site]?.month;
+    // Without a level yet (loading, or the Firebase rollback) show every dot.
+    return shown == null || shown == month;
+  }
+
+  void _setMonth(DateTime? month) {
+    setState(() {
+      _month = month;
+      _levels = const {};
+    });
+    _loadLevels();
+  }
+
+  String get _monthPillLabel => _month == null
+      ? 'Month: Latest'
+      : 'Month: ${MonthlySiteLevel.monthLabel(_month!)}';
+
+  void _openMonthPicker() {
+    final now = MonthlySiteLevel.monthOf(DateTime.now());
+    final months = [
+      for (var i = 0; i < 12; i++) DateTime(now.year, now.month - i),
+    ];
+    showModalBottomSheet<void>(
+      context: context,
+      isScrollControlled: true,
+      builder: (ctx) => SafeArea(
+        child: ConstrainedBox(
+          constraints:
+              BoxConstraints(maxHeight: MediaQuery.of(ctx).size.height * 0.7),
+          child: ListView(
+            shrinkWrap: true,
+            children: [
+              const ListTile(
+                  title: Text('Show month',
+                      style: TextStyle(fontWeight: FontWeight.w800))),
+              RadioListTile<DateTime?>(
+                value: null,
+                groupValue: _month,
+                title: const Text('Latest'),
+                subtitle: const Text("Each site's latest month with records"),
+                onChanged: (_) {
+                  Navigator.pop(ctx);
+                  _setMonth(null);
+                },
+              ),
+              for (final m in months)
+                RadioListTile<DateTime?>(
+                  value: m,
+                  groupValue: _month,
+                  title: Text(DateFormat('MMMM yyyy').format(m)),
+                  onChanged: (_) {
+                    Navigator.pop(ctx);
+                    _setMonth(m);
+                  },
+                ),
+            ],
+          ),
+        ),
+      ),
+    );
   }
 
   void _toggleBasemap() {
@@ -236,12 +341,13 @@ class _CotsMapPageState extends State<CotsMapPage> {
   String get _infoBannerText {
     switch (_viewMode) {
       case MapViewMode.zones:
-        return 'Sites are coloured by their latest Expert-confirmed level. '
+        return "Sites are coloured by the month's confirmed COTS "
+            '(0–15 Low, 16–100 Moderate, over 100 High). '
             'Dots are records: red = confirmed COTS, orange = waiting.';
       case MapViewMode.heatmap:
         return 'Heatmap of the records: brighter where more COTS were recorded.';
       case MapViewMode.density:
-        return 'Density (COTS/ha) of each site from its latest assessed visit.';
+        return "Each site's level: confirmed COTS recorded there in the month shown.";
     }
   }
 
@@ -262,7 +368,7 @@ class _CotsMapPageState extends State<CotsMapPage> {
   /// Heatmap from real records: soft circles, stronger with more COTS.
   List<CircleMarker> _buildHeatmapCircles() {
     final out = <CircleMarker>[];
-    for (final r in _records) {
+    for (final r in _visibleRecords) {
       final count = r.cotsTally.confirmed + r.cotsTally.waiting;
       if (count <= 0) continue;
       final strength = (count / 10).clamp(0.15, 1.0);
@@ -309,11 +415,10 @@ class _CotsMapPageState extends State<CotsMapPage> {
   }
 
   String _levelLine(SiteLevel? level) {
-    if (level?.level == null) return 'No data yet';
-    final density = level!.densityPerHa;
-    return density == null
-        ? level.level!
-        : '${level.level} · ${density.toStringAsFixed(density < 10 ? 1 : 0)} COTS/ha';
+    if (level?.level == null) return 'No records';
+    final month = level!.month;
+    return '${level.level} · ${level.confirmedCots} COTS'
+        '${month == null ? '' : ' · ${MonthlySiteLevel.monthLabel(month)}'}';
   }
 
   /// A badge on each site: its name and level (and "Your site").
@@ -328,7 +433,8 @@ class _CotsMapPageState extends State<CotsMapPage> {
       out.add(Marker(
         point: part.centroid,
         width: 170,
-        height: mine ? 56 : 42,
+        height:
+            (mine ? 50 : 36) * MediaQuery.textScalerOf(context).scale(1) + 6,
         alignment: Alignment.center,
         child: GestureDetector(
           onTap: () => _selectSite(site),
@@ -413,7 +519,8 @@ class _CotsMapPageState extends State<CotsMapPage> {
         '${site.displayName} · Barangay ${site.name}, Samal\n'
         'Size: ${site.reefHectares.toStringAsFixed(0)} ha · '
         'Level: ${_levelLine(level)}\n'
-        'Records: ${level?.records ?? 0} · Confirmed COTS: ${level?.confirmedCots ?? 0}',
+        'Records: ${level?.records ?? 0} · Confirmed COTS: ${level?.confirmedCots ?? 0}'
+        '${(level?.waitingCots ?? 0) > 0 ? ' · Waiting: ${level!.waitingCots}' : ''}',
       ),
     ));
   }
@@ -455,8 +562,11 @@ class _CotsMapPageState extends State<CotsMapPage> {
     final markers = <Marker>[];
     markers.addAll(_siteLabelMarkers());
     if (_viewMode != MapViewMode.heatmap) {
-      for (final r in _records) {
-        markers.add(recordDotMarker(r, onTap: () => _openRecord(r)));
+      for (final r in _visibleRecords) {
+        markers.add(recordDotMarker(r,
+            onTap: () => widget.onOpenRecord != null
+                ? widget.onOpenRecord!(r)
+                : _openRecord(r)));
       }
     }
     if (_userLocation != null) {
@@ -529,7 +639,7 @@ class _CotsMapPageState extends State<CotsMapPage> {
                 icon: Icons.map_outlined,
                 label: 'Sites',
               ),
-              if (!widget.embedded) ...[
+              if (!widget.embedded || widget.diverStyle) ...[
                 const SizedBox(height: 10),
                 _layerTile(
                   mode: MapViewMode.heatmap,
@@ -658,7 +768,11 @@ class _CotsMapPageState extends State<CotsMapPage> {
   @override
   Widget build(BuildContext context) {
     if (widget.embedded) {
-      return _mapContent(zoomBottom: 16, bottomOverlay: 0);
+      return _mapContent(
+          zoomBottom: widget.diverStyle
+              ? _kLegendCardApproxHeight + _kZoomAboveLegendGap
+              : 16,
+          bottomOverlay: 0);
     }
     final bottomOverlay = MediaQuery.of(context).padding.bottom + 80;
     final zoomBottom =
@@ -680,50 +794,28 @@ class _CotsMapPageState extends State<CotsMapPage> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            Padding(
-              padding: const EdgeInsets.fromLTRB(16, 8, 16, 12),
-              child: Row(
+            const Padding(
+              padding: EdgeInsets.fromLTRB(16, 8, 16, 12),
+              child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  const Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          'MAP PAGE',
-                          style: TextStyle(
-                            fontSize: 12,
-                            fontWeight: FontWeight.w800,
-                            color: kGreen,
-                            letterSpacing: 0.8,
-                          ),
-                        ),
-                        SizedBox(height: 6),
-                        Text(
-                          'Monitor the 3 dive sites in Samal.',
-                          style: TextStyle(
-                            fontSize: 13,
-                            color: Color(0xFF6B7280),
-                            height: 1.35,
-                          ),
-                        ),
-                      ],
+                  Text(
+                    'MAP PAGE',
+                    style: TextStyle(
+                      fontSize: 12,
+                      fontWeight: FontWeight.w800,
+                      color: kGreen,
+                      letterSpacing: 0.8,
                     ),
                   ),
-                  IconButton(
-                    tooltip: _basemap == BasemapKind.standard
-                        ? 'Satellite basemap'
-                        : 'Standard map basemap',
-                    padding: EdgeInsets.zero,
-                    constraints:
-                        const BoxConstraints(minWidth: 40, minHeight: 40),
-                    icon: Icon(
-                      _basemap == BasemapKind.standard
-                          ? Icons.satellite_alt
-                          : Icons.map_outlined,
-                      color: kNavy,
+                  SizedBox(height: 6),
+                  Text(
+                    'Monitor the 3 dive sites in Samal.',
+                    style: TextStyle(
+                      fontSize: 13,
+                      color: Color(0xFF6B7280),
+                      height: 1.35,
                     ),
-                    onPressed: _toggleBasemap,
                   ),
                 ],
               ),
@@ -771,6 +863,53 @@ class _CotsMapPageState extends State<CotsMapPage> {
     );
   }
 
+  Widget _mapSelector(
+      {required Key key,
+      required IconData icon,
+      required String label,
+      required String tooltip,
+      required VoidCallback onTap}) {
+    final compact = !widget.embedded || widget.diverStyle;
+    return Tooltip(
+      message: tooltip,
+      child: Material(
+        color: Colors.transparent,
+        child: InkWell(
+            key: key,
+            onTap: onTap,
+            borderRadius: BorderRadius.circular(10),
+            child: Ink(
+              padding: EdgeInsets.symmetric(
+                  horizontal: compact ? 8 : 12, vertical: compact ? 8 : 10),
+              decoration: BoxDecoration(
+                  color: Colors.white,
+                  borderRadius: BorderRadius.circular(10),
+                  boxShadow: const [
+                    BoxShadow(
+                        color: Color(0x14000000),
+                        blurRadius: 8,
+                        offset: Offset(0, 2))
+                  ]),
+              child: ConstrainedBox(
+                  constraints: BoxConstraints(minHeight: compact ? 28 : 20),
+                  child: Row(mainAxisSize: MainAxisSize.min, children: [
+                    Icon(icon, color: kNavy, size: compact ? 18 : 20),
+                    SizedBox(width: compact ? 4 : 8),
+                    Flexible(
+                        child: Text(label,
+                            style: TextStyle(
+                                color: kNavy,
+                                fontWeight: FontWeight.w600,
+                                fontSize: compact ? 11 : 12),
+                            overflow: TextOverflow.ellipsis)),
+                    Icon(Icons.keyboard_arrow_down,
+                        color: kNavy, size: compact ? 16 : 20),
+                  ])),
+            )),
+      ),
+    );
+  }
+
   List<Widget> _mapOverlayChildren({
     required double zoomBottom,
     required double bottomOverlay,
@@ -783,51 +922,43 @@ class _CotsMapPageState extends State<CotsMapPage> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Material(
-              color: Colors.transparent,
-              child: InkWell(
+            LayoutBuilder(builder: (context, constraints) {
+              final compact = !widget.embedded || widget.diverStyle;
+              final shortLabels = compact && constraints.maxWidth < 300;
+              final viewControl = _mapSelector(
+                key: const ValueKey('map-view-picker'),
+                icon: Icons.layers_outlined,
+                label: shortLabels
+                    ? _modePillLabel.replaceFirst('Map View: ', '')
+                    : _modePillLabel,
+                tooltip: _modePillLabel,
                 onTap: _openLayerPicker,
-                borderRadius: BorderRadius.circular(10),
-                child: Ink(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 12,
-                    vertical: 10,
-                  ),
-                  decoration: BoxDecoration(
-                    color: Colors.white,
-                    borderRadius: BorderRadius.circular(10),
-                    boxShadow: const [
-                      BoxShadow(
-                        color: Color(0x14000000),
-                        blurRadius: 8,
-                        offset: Offset(0, 2),
-                      ),
-                    ],
-                  ),
-                  child: Row(
-                    mainAxisSize: MainAxisSize.min,
+              );
+              final monthControl = _mapSelector(
+                key: const ValueKey('map-month-picker'),
+                icon: Icons.calendar_month_outlined,
+                label: shortLabels
+                    ? _monthPillLabel.replaceFirst('Month: ', '')
+                    : _monthPillLabel,
+                tooltip: _monthPillLabel,
+                onTap: _openMonthPicker,
+              );
+              if (widget.embedded && !widget.diverStyle) {
+                return Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      const Icon(Icons.layers_outlined, color: kNavy, size: 20),
-                      const SizedBox(width: 8),
-                      Flexible(
-                        child: Text(
-                          _modePillLabel,
-                          style: const TextStyle(
-                            color: kNavy,
-                            fontWeight: FontWeight.w600,
-                            fontSize: 12,
-                          ),
-                          overflow: TextOverflow.ellipsis,
-                        ),
-                      ),
-                      const Icon(Icons.keyboard_arrow_down,
-                          color: kNavy, size: 20),
-                    ],
-                  ),
-                ),
-              ),
-            ),
-            if (_showInfoBanner) ...[
+                      viewControl,
+                      const SizedBox(height: 8),
+                      monthControl
+                    ]);
+              }
+              return Row(mainAxisSize: MainAxisSize.min, children: [
+                Flexible(child: viewControl),
+                const SizedBox(width: 6),
+                Flexible(child: monthControl),
+              ]);
+            }),
+            if (widget.embedded && !widget.diverStyle && _showInfoBanner) ...[
               const SizedBox(height: 8),
               Container(
                 padding: const EdgeInsets.symmetric(
@@ -885,7 +1016,7 @@ class _CotsMapPageState extends State<CotsMapPage> {
         right: 12,
         child: _zoomStrip(),
       ),
-      if (!widget.embedded)
+      if (!widget.embedded || widget.diverStyle)
         Positioned(
           left: 0,
           right: 0,
@@ -1032,7 +1163,7 @@ class _CotsMapPageState extends State<CotsMapPage> {
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           const Text(
-            'SITE LEVEL (COTS/ha)',
+            'SITE LEVEL (confirmed COTS per month)',
             style: TextStyle(
               fontWeight: FontWeight.w700,
               fontSize: 13,
@@ -1048,7 +1179,7 @@ class _CotsMapPageState extends State<CotsMapPage> {
               _legendDotPair('Low ≤15', kLow),
               _legendDotPair('Moderate 16–100', kModerate),
               _legendDotPair('High >100', kHigh),
-              _legendDotPair('No data yet', _noDataColor),
+              _legendDotPair('No records', _noDataColor),
             ],
           ),
           const SizedBox(height: 6),
@@ -1059,11 +1190,6 @@ class _CotsMapPageState extends State<CotsMapPage> {
               _legendDotPair('Record: confirmed COTS', const Color(0xFFDC2626)),
               _legendDotPair('Waiting for Expert', const Color(0xFFF59E0B)),
             ],
-          ),
-          const SizedBox(height: 6),
-          const Text(
-            'Tap a site or a record to view more details.',
-            style: TextStyle(fontSize: 11, color: Color(0xFF6B7280)),
           ),
         ],
       ),
@@ -1080,12 +1206,14 @@ class _CotsMapPageState extends State<CotsMapPage> {
           decoration: BoxDecoration(color: color, shape: BoxShape.circle),
         ),
         const SizedBox(width: 6),
-        Text(
-          label,
-          style: const TextStyle(
-            fontWeight: FontWeight.w700,
-            fontSize: 12,
-            color: kNavy,
+        Flexible(
+          child: Text(
+            label,
+            style: const TextStyle(
+              fontWeight: FontWeight.w700,
+              fontSize: 12,
+              color: kNavy,
+            ),
           ),
         ),
       ],

@@ -5,8 +5,7 @@ import '../../../../models/scan_record_model.dart';
 import '../../../../models/submission_group.dart';
 import '../../../user/user_submission_details_page.dart';
 import '../../screens/admin_record_details_screen.dart';
-import '../../../user/cots_map_page.dart'
-    show CotsMapPage, mappableRecords, recordDotMarker;
+import '../../../user/cots_map_page.dart' show CotsMapPage, mappableRecords;
 import '../../theme/admin_theme.dart';
 
 /// The diver's site map, with only saved capture locations added for admin.
@@ -25,6 +24,7 @@ class AdminZoneMonitoringMap extends StatelessWidget {
             ? UserSubmissionDetailsPage(
                 initialGroup: group,
                 includePendingPhotos: false,
+                useReadOnlyLayout: true,
                 photoPageBuilder: (photo) => AdminRecordDetailsScreen(
                     row: photo.toAdminTableRow(1), viewOnly: true))
             : AdminRecordDetailsScreen(
@@ -51,9 +51,6 @@ class AdminZoneMonitoringMap extends StatelessWidget {
                   fontSize: 17,
                   fontWeight: FontWeight.w800,
                   color: AdminColors.headerTitle)),
-          const SizedBox(height: 8),
-          const Text('The 3 dive sites in Samal — tap a site for its details.',
-              style: TextStyle(color: AdminColors.muted)),
           if (located.isEmpty) ...[
             const SizedBox(height: 12),
             Container(
@@ -69,16 +66,16 @@ class AdminZoneMonitoringMap extends StatelessWidget {
           ],
           const SizedBox(height: 12),
           SizedBox(
-            height: 500,
+            height:
+                (MediaQuery.sizeOf(context).height * .72).clamp(520.0, 800.0),
             child: ClipRRect(
               borderRadius: BorderRadius.circular(12),
               child: CotsMapPage(
                 embedded: true,
-                recordMarkers: [
-                  for (final record in located)
-                    recordDotMarker(record,
-                        onTap: () => _openRecord(context, record)),
-                ],
+                diverStyle: true,
+                // Dots follow the map's month picker (all records).
+                records: records,
+                onOpenRecord: (record) => _openRecord(context, record),
               ),
             ),
           ),

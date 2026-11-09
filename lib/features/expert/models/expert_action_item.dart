@@ -85,7 +85,6 @@ abstract final class ExpertActions {
   /// 'awaiting_acceptance' waits for the offered Diver, not the Expert.
   static const reassignmentStatuses = {'requested', 'replacement_needed'};
 
-  static final _day = DateFormat('MMM d, yyyy');
   static final _month = DateFormat('MMMM yyyy');
   static final _time = DateFormat('MMM d, h:mm a');
 
@@ -140,24 +139,8 @@ abstract final class ExpertActions {
             ));
     }
 
-    // Assessments tab: every visit in it still waits for an assessment.
-    for (final visit in visits) {
-      items.add(ExpertActionItem(
-        kind: ExpertActionKind.visitAssessment,
-        id: visit.id,
-        title: visitTitle,
-        detail: [
-          _join([
-            visit.areaName,
-            visit.barangay,
-            _day.format(visit.surveyDate),
-            'by ${visit.submittedBy}',
-          ]),
-          // Stage 5: the early-visit flag.
-          if (visit.earlyVisitNote != null) visit.earlyVisitNote!,
-        ].join('\n'),
-      ));
-    }
+    // 2026-11-08: site levels are automatic (confirmed COTS per site per
+    // month), so monthly visits no longer wait for an Expert assessment.
 
     // Reassignments tab: this month's requests that wait for the Expert.
     for (final request in reassignments) {

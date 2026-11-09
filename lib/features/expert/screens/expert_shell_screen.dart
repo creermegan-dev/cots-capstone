@@ -38,7 +38,7 @@ class ExpertShellScreen extends StatefulWidget {
     'Dashboard',
     'Verification',
     'Personnel Verification',
-    'Assignments & Reassignments',
+    'Site Coverage',
     'Assessments',
     'Map Monitoring',
     'Notifications',

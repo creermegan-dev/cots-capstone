@@ -3,6 +3,7 @@ import 'package:provider/provider.dart';
 
 import '../../auth/auth_navigation.dart';
 import '../../../models/cots_confidence_policy.dart';
+import '../../../models/activity_type.dart';
 import '../../../models/intervention_assignment_model.dart';
 import '../../../models/photo_source.dart';
 import '../../../models/user_model.dart';
@@ -98,7 +99,7 @@ class AdminRecordDetailsData {
       recordId: row.recordId,
       verificationBadgeLabel: statusLabel.toUpperCase(),
       submittedBy: row.submittedBy,
-      submitterRole: 'Field Technician',
+      submitterRole: 'Diver',
       submissionMethod: 'Gallery Upload',
       cotsDetected: row.cotsCount,
       confidencePercent: row.confidencePercent,
@@ -119,7 +120,7 @@ class AdminRecordDetailsData {
       autoZoneAssignment: row.zone,
       imageUrl: row.imageUrl,
       imagePath: row.imagePath,
-      imageName: row.imageName.isNotEmpty ? row.imageName : 'GoPro image',
+      imageName: row.imageName.isNotEmpty ? row.imageName : 'Submitted photo',
       dateCaptured: PhotoSource.dateTaken(row.dateCaptured, row.timeSource),
       dateUploaded:
           row.dateUploaded.isNotEmpty ? row.dateUploaded : row.dateTime,
@@ -153,11 +154,15 @@ class AdminRecordDetailsScreen extends StatefulWidget {
     required this.row,
     this.viewOnly = false,
     this.expertContext = false,
+    this.reviewPanelOnly = false,
+    this.onReviewSaved,
   });
 
   final AdminRecordTableRow row;
   final bool viewOnly;
   final bool expertContext;
+  final bool reviewPanelOnly;
+  final VoidCallback? onReviewSaved;
 
   @override
   State<AdminRecordDetailsScreen> createState() =>
@@ -370,6 +375,7 @@ class _AdminRecordDetailsScreenState extends State<AdminRecordDetailsScreen> {
           ),
         ),
       );
+      widget.onReviewSaved?.call();
     } catch (e) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
@@ -536,6 +542,16 @@ class _AdminRecordDetailsScreenState extends State<AdminRecordDetailsScreen> {
 
   @override
   Widget build(BuildContext context) {
+    if (widget.reviewPanelOnly) {
+      return Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+        if (_isZoneRecord) ...[_zoneReviewCard(), const SizedBox(height: 12)],
+        _perCotsVerificationCard(),
+        if (_needsExpertDecision) ...[
+          const SizedBox(height: 12),
+          _recordReviewActionRow(),
+        ],
+      ]);
+    }
     final r = _record;
     final detailsBody = LayoutBuilder(
       builder: (context, c) {
@@ -942,6 +958,7 @@ class _AdminRecordDetailsScreenState extends State<AdminRecordDetailsScreen> {
           _kv('Coordinates', r.coordinates),
           _kv('Location from', r.locationAccuracy),
           _kv('Upload method', r.submissionMethod),
+          _kv('Capture type', CaptureSource.displayLabel(_row.captureSource)),
           _kv('Date taken', r.dateCaptured),
           _kv('Date uploaded', r.dateUploaded),
           _kv('User remarks', r.userRemarks),
@@ -1305,7 +1322,7 @@ class _AdminRecordDetailsScreenState extends State<AdminRecordDetailsScreen> {
           _policyRow(
             AdminColors.statRed,
             'Retake Photo (0–${CotsConfidencePolicy.adminReviewMin - 1})',
-            'Confidence too low. User should capture a clearer GoPro image.',
+            'Confidence too low. The Diver should take a clearer photo.',
           ),
         ],
       ),
@@ -1711,7 +1728,25 @@ class _AdminRecordDetailsScreenState extends State<AdminRecordDetailsScreen> {
   }
 
   Widget _statusSection(AdminRecordDetailsData r) {
-    final color = _verificationBadgeColor(r.monitoringStatus);
+    // 2026-11-08: say WHY a record is under review when it is another
+    // Diver's record at an assigned site (its COTS may already be accepted).
+    final zoneWaiting = ZoneReview.isWaiting(
+      assignedTo: _row.zoneAssignedTo,
+      confirmed: _row.adminConfirmed,
+      rejected: _row.adminRejected,
+    );
+    var statusText = r.monitoringStatus;
+    var statusDescription = r.monitoringStatusDescription;
+    if (zoneWaiting) {
+      statusText =
+          'Under Review — waiting for the Expert to approve this record';
+      statusDescription =
+          "This is another Diver's record at ${_row.zoneAssignedTo}'s site "
+          '(${_row.zone}). Its COTS are checked as usual; the Expert still '
+          'approves the record itself (right place, not a duplicate) before '
+          'it counts.';
+    }
+    final color = _verificationBadgeColor(statusText);
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
@@ -1747,7 +1782,7 @@ class _AdminRecordDetailsScreenState extends State<AdminRecordDetailsScreen> {
               const SizedBox(width: 10),
               Expanded(
                 child: Text(
-                  r.monitoringStatus,
+                  statusText,
                   style: const TextStyle(
                     fontWeight: FontWeight.w900,
                     fontSize: 16,
@@ -1760,7 +1795,7 @@ class _AdminRecordDetailsScreenState extends State<AdminRecordDetailsScreen> {
         ),
         const SizedBox(height: 10),
         Text(
-          r.monitoringStatusDescription,
+          statusDescription,
           style: TextStyle(
             fontSize: 13,
             color: AdminColors.muted.withValues(alpha: 0.92),
@@ -1855,7 +1890,8 @@ class _AdminRecordDetailsScreenState extends State<AdminRecordDetailsScreen> {
       decoration: BoxDecoration(
         color: AdminColors.statYellow.withValues(alpha: 0.08),
         borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: AdminColors.statYellow.withValues(alpha: 0.4)),
+        border:
+            Border.all(color: AdminColors.statYellow.withValues(alpha: 0.4)),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -1875,7 +1911,7 @@ class _AdminRecordDetailsScreenState extends State<AdminRecordDetailsScreen> {
             ],
           ),
           const SizedBox(height: 10),
-          Text('Area assigned to: ${_row.zoneAssignedTo}', style: textStyle),
+          Text('Site assigned to: ${_row.zoneAssignedTo}', style: textStyle),
           Text('Recorded by: ${_row.submittedBy}', style: textStyle),
           Text(
               'Photo taken: '
@@ -1890,7 +1926,7 @@ class _AdminRecordDetailsScreenState extends State<AdminRecordDetailsScreen> {
             const SizedBox(height: 10),
             Text(
               'Approve: it counts under ${_row.submittedBy}\'s name. It is not '
-              'the assigned Diver\'s monthly visit and does not change the area. '
+              'the assigned Diver\'s monthly visit and does not change the site. '
               'Reject: give a reason.',
               style: textStyle.copyWith(color: AdminColors.muted),
             ),
@@ -1989,7 +2025,8 @@ class _LegendDot extends StatelessWidget {
         Flexible(
           child: Text(label,
               style: TextStyle(
-                  fontSize: 11, color: AdminColors.muted.withValues(alpha: 0.9))),
+                  fontSize: 11,
+                  color: AdminColors.muted.withValues(alpha: 0.9))),
         ),
       ],
     );

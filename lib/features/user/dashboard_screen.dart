@@ -170,18 +170,8 @@ class _DashboardScreenState extends State<DashboardScreen> {
                       if (snapshot.hasError) _loadNotice(snapshot.error!),
                       _DashboardHeader(analytics: analytics, records: records),
                       const _AssignedTasksSection(),
-                      const SizedBox(height: 14),
-                      const Text(
-                        'Key Metrics',
-                        style: TextStyle(
-                          fontSize: 13,
-                          fontWeight: FontWeight.w800,
-                          color: kTextNavy,
-                          letterSpacing: 0.3,
-                        ),
-                      ),
-                      const SizedBox(height: 10),
-                      _MetricsGrid(analytics: analytics, records: records),
+                      const SizedBox(height: 16),
+                      _MetricsGrid(records: records),
                       const SizedBox(height: 18),
                       _RecentMonitoringActivities(records: records),
                       const SizedBox(height: 18),
@@ -416,16 +406,6 @@ class _DiverSidebarMenu extends StatelessWidget {
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
                 const Text(
-                  'Sidebar Menu',
-                  style: TextStyle(
-                    color: Colors.white70,
-                    fontSize: 11,
-                    fontWeight: FontWeight.w700,
-                    letterSpacing: 0.8,
-                  ),
-                ),
-                const SizedBox(height: 14),
-                const Text(
                   'COTS Monitor',
                   style: TextStyle(
                     color: Colors.white,
@@ -435,7 +415,7 @@ class _DiverSidebarMenu extends StatelessWidget {
                 ),
                 const SizedBox(height: 4),
                 Text(
-                  'Diver Dashboard',
+                  'Diver Portal',
                   style: TextStyle(
                     color: Colors.white.withValues(alpha: 0.7),
                     fontSize: 12,
@@ -581,7 +561,7 @@ class _RecentMonitoringActivities extends StatelessWidget {
           const SizedBox(height: 12),
           if (items.isEmpty)
             Text(
-              'No monitoring activities yet. Upload a GoPro image to get started.',
+              'No monitoring activities yet. Upload a photo to get started.',
               style: TextStyle(
                 color: kMutedGray.withValues(alpha: 0.95),
                 fontSize: 13,
@@ -691,84 +671,72 @@ class _DashboardHeader extends StatelessWidget {
       },
     );
 
-    final timeCard = Container(
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(10),
-        border: Border.all(color: kBorderGray),
-        boxShadow: kSoftCardShadow,
-      ),
+    // Minimal header: greeting + title on the left, bell on the right,
+    // then one quiet line with the subtitle and the live date/time.
+    final dateLine = Tooltip(
+      message: recordUpdated == null
+          ? 'Current device time'
+          : 'Latest record ${DateFormat('MMM d, h:mm a').format(recordUpdated.toLocal())}',
       child: Row(
+        key: const ValueKey('dashboard-clock'),
         mainAxisSize: MainAxisSize.min,
         children: [
-          Icon(
-            Icons.schedule_rounded,
-            size: 14,
-            color: kMutedGray.withValues(alpha: 0.9),
-          ),
-          const SizedBox(width: 6),
-          Flexible(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                const Text(
-                  'Current time',
-                  style: TextStyle(
-                    fontSize: 9,
-                    fontWeight: FontWeight.w700,
-                    color: kMutedGray,
-                  ),
-                ),
-                const _LiveDateTimeText(
-                  style: TextStyle(
-                    fontSize: 10,
-                    fontWeight: FontWeight.w700,
-                    color: kTextNavy,
-                  ),
-                ),
-                if (recordUpdated != null) ...[
-                  const SizedBox(height: 1),
-                  Text(
-                    'Latest record ${DateFormat('MMM d, h:mm a').format(recordUpdated.toLocal())}',
-                    style: TextStyle(
-                      fontSize: 8.5,
-                      fontWeight: FontWeight.w600,
-                      color: kMutedGray.withValues(alpha: 0.9),
-                    ),
-                  ),
-                ],
-              ],
+          Icon(Icons.schedule_rounded,
+              size: 13, color: kMutedGray.withValues(alpha: 0.9)),
+          const SizedBox(width: 4),
+          const Flexible(
+            child: _LiveDateTimeText(
+              format: 'EEE, MMM d · h:mm a',
+              style: TextStyle(
+                fontSize: 12,
+                fontWeight: FontWeight.w500,
+                color: kMutedGray,
+              ),
             ),
           ),
         ],
       ),
     );
 
-    final titleColumn = Column(
+    return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text(
-          'Welcome, $name',
-          style: const TextStyle(
-            fontSize: 13,
-            fontWeight: FontWeight.w700,
-            color: kSuccessGreen,
-          ),
+        Row(
+          crossAxisAlignment: CrossAxisAlignment.center,
+          children: [
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    'Welcome, $name',
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(
+                      fontSize: 13,
+                      fontWeight: FontWeight.w700,
+                      color: kSuccessGreen,
+                    ),
+                  ),
+                  const SizedBox(height: 2),
+                  const Text(
+                    'Diver Dashboard',
+                    style: TextStyle(
+                      fontSize: 24,
+                      fontWeight: FontWeight.w900,
+                      color: kTextNavy,
+                      letterSpacing: -0.5,
+                      height: 1.15,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(width: 12),
+            notifButton,
+          ],
         ),
-        const SizedBox(height: 3),
-        const Text(
-          'Diver Dashboard',
-          style: TextStyle(
-            fontSize: 24,
-            fontWeight: FontWeight.w900,
-            color: kTextNavy,
-            letterSpacing: -0.5,
-            height: 1.15,
-          ),
-        ),
-        const SizedBox(height: 2),
+        const SizedBox(height: 4),
         const Text(
           'Crown-of-Thorns Starfish Monitoring',
           style: TextStyle(
@@ -777,54 +745,16 @@ class _DashboardHeader extends StatelessWidget {
             color: kMutedGray,
           ),
         ),
+        const SizedBox(height: 4),
+        dateLine,
       ],
-    );
-
-    return LayoutBuilder(
-      builder: (context, constraints) {
-        final wide = constraints.maxWidth >= 640 &&
-            MediaQuery.textScalerOf(context).scale(12) <= 18;
-
-        if (wide) {
-          return Row(
-            crossAxisAlignment: CrossAxisAlignment.center,
-            children: [
-              Expanded(child: titleColumn),
-              const SizedBox(width: 12),
-              timeCard,
-              const SizedBox(width: 10),
-              notifButton,
-            ],
-          );
-        }
-
-        return Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            Row(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Expanded(child: titleColumn),
-                const SizedBox(width: 8),
-                notifButton,
-              ],
-            ),
-            const SizedBox(height: 10),
-            Align(
-              alignment: Alignment.centerLeft,
-              child: timeCard,
-            ),
-          ],
-        );
-      },
     );
   }
 }
 
 class _MetricsGrid extends StatelessWidget {
-  const _MetricsGrid({required this.analytics, required this.records});
+  const _MetricsGrid({required this.records});
 
-  final UserDashboardAnalytics analytics;
   final List<ScanRecordModel> records;
 
   @override
@@ -842,8 +772,6 @@ class _MetricsGrid extends StatelessWidget {
       iconBg: kAccentPurple.withValues(alpha: 0.12),
       title: 'Total submissions',
       value: nf.format(captures),
-      trendPct: analytics.scansTrendPct,
-      period: analytics.periodLabel,
     );
 
     final card2 = _MetricCard(
@@ -852,8 +780,6 @@ class _MetricsGrid extends StatelessWidget {
       iconBg: const Color(0xFFE6A23C).withValues(alpha: 0.12),
       title: 'Pending Validation',
       value: '$pending',
-      trendPct: null,
-      period: analytics.periodLabel,
     );
 
     final card3 = _MetricCard(
@@ -862,8 +788,6 @@ class _MetricsGrid extends StatelessWidget {
       iconBg: kSuccessGreen.withValues(alpha: 0.12),
       title: 'COTS removed (confirmed)',
       value: '$confirmed',
-      trendPct: analytics.cotsTrendPct,
-      period: analytics.periodLabel,
     );
 
     final card4 = _MetricCard(
@@ -872,8 +796,6 @@ class _MetricsGrid extends StatelessWidget {
       iconBg: kInfoBlue.withValues(alpha: 0.12),
       title: 'Removal Activities',
       value: '$removed',
-      trendPct: null,
-      period: analytics.periodLabel,
     );
 
     return LayoutBuilder(
@@ -935,8 +857,6 @@ class _MetricCard extends StatelessWidget {
     required this.iconBg,
     required this.title,
     required this.value,
-    required this.period,
-    this.trendPct,
   });
 
   final IconData icon;
@@ -944,13 +864,11 @@ class _MetricCard extends StatelessWidget {
   final Color iconBg;
   final String title;
   final String value;
-  final double? trendPct;
-  final String period;
 
   @override
   Widget build(BuildContext context) {
     return Container(
-      padding: const EdgeInsets.all(12),
+      padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.circular(14),
@@ -962,88 +880,35 @@ class _MetricCard extends StatelessWidget {
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
           Container(
-            width: 34,
-            height: 34,
+            width: 32,
+            height: 32,
             decoration: BoxDecoration(
               color: iconBg,
-              borderRadius: BorderRadius.circular(10),
+              borderRadius: BorderRadius.circular(9),
             ),
-            child: Icon(icon, size: 18, color: iconColor),
+            child: Icon(icon, size: 17, color: iconColor),
           ),
           const SizedBox(height: 10),
-          SizedBox(
-            height: 32,
-            child: Align(
-              alignment: Alignment.centerLeft,
-              child: Text(
-                title,
-                maxLines: 2,
-                overflow: TextOverflow.ellipsis,
-                style: const TextStyle(
-                  fontSize: 11,
-                  fontWeight: FontWeight.w700,
-                  color: kMutedGray,
-                  letterSpacing: 0.2,
-                  height: 1.25,
-                ),
-              ),
-            ),
-          ),
-          const SizedBox(height: 6),
           Text(
             value,
             style: const TextStyle(
               fontSize: 22,
               fontWeight: FontWeight.w900,
               color: kTextNavy,
+              letterSpacing: -0.4,
               height: 1.0,
             ),
           ),
           const SizedBox(height: 4),
-          FittedBox(
-            fit: BoxFit.scaleDown,
-            alignment: Alignment.centerLeft,
-            child: trendPct != null
-                ? _TrendLine(pct: trendPct!, period: period)
-                : Text(
-                    'vs $period',
-                    style: const TextStyle(
-                      fontSize: 10,
-                      fontWeight: FontWeight.w500,
-                      color: kMutedGray,
-                    ),
-                  ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _TrendLine extends StatelessWidget {
-  const _TrendLine({required this.pct, required this.period});
-
-  final double pct;
-  final String period;
-
-  @override
-  Widget build(BuildContext context) {
-    final up = pct >= 0;
-    final color = up ? kSuccessGreen : kDangerRed;
-    final sign = pct == 0 ? '' : (up ? '↑ ' : '↓ ');
-    return RichText(
-      text: TextSpan(
-        style: const TextStyle(fontSize: 10, height: 1.3),
-        children: [
-          TextSpan(
-            text: '$sign${pct.abs().toStringAsFixed(1)}% ',
-            style: TextStyle(fontWeight: FontWeight.w800, color: color),
-          ),
-          TextSpan(
-            text: 'vs $period',
+          Text(
+            title,
+            maxLines: 2,
+            overflow: TextOverflow.ellipsis,
             style: const TextStyle(
+              fontSize: 11.5,
+              fontWeight: FontWeight.w600,
               color: kMutedGray,
-              fontWeight: FontWeight.w500,
+              height: 1.25,
             ),
           ),
         ],
@@ -1051,7 +916,6 @@ class _TrendLine extends StatelessWidget {
     );
   }
 }
-
 class _MonitoredZonesCard extends StatelessWidget {
   const _MonitoredZonesCard({required this.records});
   final List<ScanRecordModel> records;
@@ -1199,9 +1063,13 @@ class _AnalyticsPreviewCard extends StatelessWidget {
 
 /// Ticks every second so the dashboard clock stays accurate.
 class _LiveDateTimeText extends StatefulWidget {
-  const _LiveDateTimeText({required this.style});
+  const _LiveDateTimeText({
+    required this.style,
+    this.format = 'MMM d, yyyy\nh:mm a',
+  });
 
   final TextStyle style;
+  final String format;
 
   @override
   State<_LiveDateTimeText> createState() => _LiveDateTimeTextState();
@@ -1227,7 +1095,7 @@ class _LiveDateTimeTextState extends State<_LiveDateTimeText> {
   @override
   Widget build(BuildContext context) {
     return Text(
-      DateFormat('MMM d, yyyy h:mm:ss a').format(DateTime.now()),
+      DateFormat(widget.format).format(DateTime.now()),
       style: widget.style,
     );
   }

@@ -15,7 +15,25 @@ import 'records_page.dart';
 import 'user_bottom_nav.dart';
 import '../../widgets/cots_loading_skeleton.dart';
 
-enum NotificationCategory { all, alerts, reminders, updates }
+enum NotificationCategory {
+  all,
+  alerts,
+  reminders,
+  updates;
+
+  static NotificationCategory forType(String type) => switch (type) {
+        AppNotification.reviewRejected ||
+        AppNotification.recordRejected ||
+        'site_level_high' =>
+          alerts,
+        AppNotification.interventionAssigned ||
+        AppNotification.zoneReviewReminder ||
+        'visit_reminder_first' ||
+        'visit_reminder_second' =>
+          reminders,
+        _ => updates,
+      };
+}
 
 /// Row data for [NotificationCard].
 class NotificationListItem {
@@ -93,16 +111,16 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
-        title: const Text('Clear notifications?'),
+        title: const Text('Clear listed notifications?'),
         content: const Text(
-            'This permanently removes all notifications from your account.'),
+            'Hide these notifications from your list? Your records will not be deleted.'),
         actions: [
           TextButton(
               onPressed: () => Navigator.pop(context, false),
               child: const Text('Cancel')),
           FilledButton(
               onPressed: () => Navigator.pop(context, true),
-              child: const Text('Clear all')),
+              child: const Text('Clear listed')),
         ],
       ),
     );
@@ -136,21 +154,20 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
   NotificationListItem _itemFor(AppNotification notification) {
     final createdAt = notification.createdAt;
     final today = DateUtils.isSameDay(createdAt, DateTime.now());
-    final category = switch (notification.type) {
-      AppNotification.interventionAssigned => NotificationCategory.reminders,
-      AppNotification.reviewRejected ||
-      AppNotification.recordRejected =>
-        NotificationCategory.alerts,
-      _ => NotificationCategory.updates,
-    };
+    final category = NotificationCategory.forType(notification.type);
     final accent = switch (notification.type) {
       AppNotification.interventionAssigned => kWarningOrange,
       AppNotification.reviewAccepted ||
       AppNotification.recordFinalized =>
         kSuccessGreen,
-      AppNotification.reviewRejected || AppNotification.recordRejected =>
+      AppNotification.reviewRejected ||
+      AppNotification.recordRejected =>
         kDangerRed,
-      _ => kAccentPurple,
+      _ => switch (category) {
+          NotificationCategory.alerts => kDangerRed,
+          NotificationCategory.reminders => kWarningOrange,
+          _ => kAccentPurple,
+        },
     };
     final icon = switch (notification.type) {
       AppNotification.interventionAssigned => Icons.event_note_rounded,
@@ -160,7 +177,11 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
       AppNotification.reviewRejected ||
       AppNotification.recordRejected =>
         Icons.warning_amber_rounded,
-      _ => Icons.event_available_rounded,
+      _ => switch (category) {
+          NotificationCategory.alerts => Icons.warning_amber_rounded,
+          NotificationCategory.reminders => Icons.event_note_rounded,
+          _ => Icons.event_available_rounded,
+        },
     };
     return NotificationListItem(
       id: notification.id,
@@ -207,13 +228,6 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
             color: kTextNavy,
           ),
         ),
-        actions: [
-          IconButton(
-            icon:
-                const Icon(Icons.settings_outlined, color: kTextNavy, size: 24),
-            onPressed: () {},
-          ),
-        ],
       ),
       floatingActionButton: userShellScanFab(
         context,
@@ -306,7 +320,10 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
                 ),
                 Padding(
                   padding: const EdgeInsets.fromLTRB(16, 8, 16, 12),
-                  child: Row(
+                  child: Wrap(
+                    alignment: WrapAlignment.spaceBetween,
+                    spacing: 8,
+                    runSpacing: 4,
                     children: [
                       TextButton.icon(
                         onPressed: notifications.isEmpty
@@ -315,14 +332,13 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
                         icon: const Icon(Icons.delete_outline_rounded,
                             color: kDangerRed, size: 20),
                         label: const Text(
-                          'Clear All',
+                          'Clear listed notifications',
                           style: TextStyle(
                             fontWeight: FontWeight.w600,
                             color: kDangerRed,
                           ),
                         ),
                       ),
-                      const Spacer(),
                       TextButton.icon(
                         onPressed: notifications.every((item) => item.isRead)
                             ? null

@@ -38,11 +38,13 @@ class PendingSubmissionSummary {
       {required this.id,
       required this.name,
       required this.createdAt,
-      this.record});
+      this.record,
+      this.failureReason});
   final String id;
   final String name;
   final DateTime? createdAt;
   final ScanRecordModel? record;
+  final String? failureReason;
 
   factory PendingSubmissionSummary.fromTask(
       Map<String, dynamic> task, String directory) {
@@ -127,7 +129,11 @@ class PendingSubmissionSummary {
       }
     }
     return PendingSubmissionSummary(
-        id: id, name: name, createdAt: created, record: record);
+        id: id,
+        name: name,
+        createdAt: created,
+        record: record,
+        failureReason: task['_failure_reason'] as String?);
   }
 }
 
@@ -342,6 +348,7 @@ class OfflineSubmissionService extends ChangeNotifier
             : OfflineSubmitState.synchronized,
       );
     } catch (error) {
+      await _rememberFailure(directory, error);
       final pendingState = _pendingState(error);
       if (pendingState == null) {
         await _refreshCount();
@@ -452,6 +459,7 @@ class OfflineSubmissionService extends ChangeNotifier
           }
           await _deleteTask(directory);
         } catch (error) {
+          await _rememberFailure(directory, error);
           if (_pendingState(error) == OfflineSubmitState.networkPending) break;
           // Invalid tasks remain for manual retry and diagnosis.
         } finally {
@@ -518,6 +526,11 @@ class OfflineSubmissionService extends ChangeNotifier
           );
           if (!metadata.existsSync()) continue;
           final task = jsonDecode(await metadata.readAsString());
+          final failure = File(
+              '${directory.path}${Platform.pathSeparator}upload_failure.txt');
+          if (task is Map && failure.existsSync()) {
+            task['_failure_reason'] = await failure.readAsString();
+          }
           if (task is Map && task['uid'] == activeUserId) {
             count++;
             summaries.add(PendingSubmissionSummary.fromTask(
@@ -721,6 +734,27 @@ class OfflineSubmissionService extends ChangeNotifier
       eliminationMethod: task['elimination_method'] as String? ?? '',
       notes: task['notes'] as String? ?? '',
     );
+  }
+
+  Future<void> _rememberFailure(Directory directory, Object error) async {
+    // Diagnostic sidecar only: never alter the queued upload or its retry rules.
+    final state = _pendingState(error);
+    final message = switch (state) {
+      OfflineSubmitState.authorizationBlocked =>
+        'Upload not permitted. Ask the Expert to check your Diver verification. If already verified, reconnect and sign in again before retrying.',
+      OfflineSubmitState.networkPending =>
+        'Could not reach the server. Reconnect to the internet and retry.',
+      OfflineSubmitState.uploadPending =>
+        'Photo upload did not finish. Your submission is saved on this device; retry when connected.',
+      _ =>
+        'Upload could not be completed. Your submission is saved on this device. Retry; if it continues, report this to the project team.',
+    };
+    try {
+      await File('${directory.path}${Platform.pathSeparator}upload_failure.txt')
+          .writeAsString(message, flush: true);
+    } catch (_) {
+      // Failure to save a diagnostic must not change submission behavior.
+    }
   }
 
   OfflineSubmitState? _pendingState(Object error) {

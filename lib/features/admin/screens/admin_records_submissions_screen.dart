@@ -2,7 +2,9 @@ import 'package:fl_chart/fl_chart.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
+import '../../../core/supabase_config.dart';
 import '../../../models/cots_confidence_policy.dart';
+import '../../../models/activity_type.dart';
 import '../../../models/staff_submission_rows.dart';
 import '../../user/user_submission_details_page.dart';
 import '../../../providers/admin_record_review_tracker.dart';
@@ -17,6 +19,7 @@ import '../theme/admin_theme.dart';
 import '../widgets/admin_dashboard_header.dart';
 import '../widgets/admin_data_table.dart';
 import '../widgets/admin_stat_card.dart';
+import '../widgets/admin_monthly_visits_view.dart';
 import 'admin_record_details_screen.dart';
 import '../../../widgets/cots_loading_skeleton.dart';
 
@@ -142,7 +145,18 @@ class _AdminRecordsSubmissionsScreenState
           builder: (_) => UserSubmissionDetailsPage(
                 initialGroup: StaffSubmissionRows.groupFor(row),
                 includePendingPhotos: false,
+                useReadOnlyLayout: widget.viewOnly,
                 reviewPhotos: !widget.viewOnly,
+                reviewPanelBuilder: widget.viewOnly
+                    ? null
+                    : (record, refresh) => AdminRecordDetailsScreen(
+                          key: ValueKey(
+                              '${record.id}-${record.adminConfirmed}-${record.adminRejected}'),
+                          row: record.toAdminTableRow(1),
+                          expertContext: widget.expertContext,
+                          reviewPanelOnly: true,
+                          onReviewSaved: refresh,
+                        ),
                 recordsStream: widget.recordsStream?.map((rows) => rows
                     .expand(
                         (r) => r.isSubmissionSummary ? r.submissionPhotos : [r])
@@ -393,23 +407,82 @@ class _AdminRecordsSubmissionsScreenState
                   subtitle: widget.viewOnly
                       ? 'View citizen science submissions and expert verification status. Approval is handled by experts.'
                       : widget.expertContext
-                          ? 'Review GoPro detections and approve or reject low-confidence submissions.'
-                          : 'Manage GoPro detection records, AI monitoring results, and expert verification in one place.',
+                          ? 'Review COTS detections and approve or reject low-confidence submissions.'
+                          : 'Manage COTS detection records, AI monitoring results, and expert verification in one place.',
                   onRefreshTap: _onRecordsHeaderRefresh,
                 ),
-                const SizedBox(height: 22),
-                _stats(rows),
-                const SizedBox(height: 20),
-                _filters(zoneOptions),
-                const SizedBox(height: 14),
-                _table(filtered, pageRows, start, end, pageCount),
-                const SizedBox(height: 14),
-                _bottomCharts(rows),
+                if (_showVisitsTab) ...[
+                  const SizedBox(height: 18),
+                  _sectionTabs(),
+                ],
+                if (_showVisitsTab && _visitsTab) ...[
+                  const SizedBox(height: 18),
+                  const AdminMonthlyVisitsView(),
+                ] else ...[
+                  const SizedBox(height: 22),
+                  _stats(rows),
+                  const SizedBox(height: 20),
+                  _filters(zoneOptions),
+                  const SizedBox(height: 14),
+                  _table(filtered, pageRows, start, end, pageCount),
+                  const SizedBox(height: 14),
+                  _bottomCharts(rows),
+                ],
               ],
             ),
           ),
         );
       },
+    );
+  }
+
+  /// Monthly Visits tab: Admin only, Supabase only (read-only list).
+  bool _visitsTab = false;
+  bool get _showVisitsTab =>
+      !widget.expertContext && SupabaseConfig.isConfigured;
+
+  Widget _sectionTabs() {
+    Widget tab(String label, IconData icon, bool visits) {
+      final selected = _visitsTab == visits;
+      return Padding(
+        padding: const EdgeInsets.only(right: 8),
+        child: Material(
+          color: selected ? AdminColors.headerTitle : Colors.white,
+          borderRadius: BorderRadius.circular(10),
+          child: InkWell(
+            key: ValueKey(visits ? 'records-tab-visits' : 'records-tab-submissions'),
+            borderRadius: BorderRadius.circular(10),
+            onTap: selected ? null : () => setState(() => _visitsTab = visits),
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Icon(icon,
+                      size: 18,
+                      color: selected ? Colors.white : AdminColors.muted),
+                  const SizedBox(width: 8),
+                  Text(label,
+                      style: TextStyle(
+                          fontSize: 13.5,
+                          fontWeight: FontWeight.w700,
+                          color: selected
+                              ? Colors.white
+                              : AdminColors.headerTitle)),
+                ],
+              ),
+            ),
+          ),
+        ),
+      );
+    }
+
+    return Wrap(
+      runSpacing: 8,
+      children: [
+        tab('Submissions', Icons.description_outlined, false),
+        tab('Monthly Visits', Icons.event_repeat_outlined, true),
+      ],
     );
   }
 
@@ -420,11 +493,8 @@ class _AdminRecordsSubmissionsScreenState
         final total = rows.length;
         final (nAccepted, nReview, nRejected) = _statusCounts(rows);
         double rowPct(int count) => total == 0 ? 0.0 : (100 * count / total);
-        final knownDensities =
-            rows.map((row) => row.density).whereType<double>().toList();
-        final avgDensity = knownDensities.isEmpty
-            ? null
-            : knownDensities.reduce((a, b) => a + b) / knownDensities.length;
+        final confirmedCots =
+            rows.fold<int>(0, (total, row) => total + row.cotsTally.confirmed);
 
         final cards = <Widget>[
           AdminStatCard(
@@ -432,7 +502,7 @@ class _AdminRecordsSubmissionsScreenState
             value: '$total',
             subtitle: total == 0
                 ? 'No submissions yet'
-                : 'GoPro & AI monitoring entries',
+                : 'Photo & AI monitoring entries',
             icon: Icons.inventory_2_outlined,
             accentColor: AdminColors.statBlue,
             selected: _status == 'All Status',
@@ -476,11 +546,11 @@ class _AdminRecordsSubmissionsScreenState
             }),
           ),
           AdminStatCard(
-            title: 'Average Density',
-            value: avgDensity?.toStringAsFixed(2) ?? 'Not available',
-            subtitle: 'COTS/ha (this list)',
-            icon: Icons.query_stats_rounded,
-            accentColor: AdminColors.statPurple,
+            title: 'Confirmed COTS',
+            value: '$confirmedCots',
+            subtitle: 'Confirmed individuals in loaded records',
+            icon: Icons.verified_outlined,
+            accentColor: AdminColors.statGreen,
           ),
         ];
 
@@ -732,7 +802,7 @@ class _AdminRecordsSubmissionsScreenState
       AdminDataTableCells.text('${r.displayAiCount}', align: TextAlign.right),
       AdminDataTableCells.text(removed, align: TextAlign.right),
       AdminDataTableCells.text(avgSize, align: TextAlign.right),
-      AdminDataTableCells.text(r.captureSource),
+      AdminDataTableCells.text(CaptureSource.displayLabel(r.captureSource)),
       AdminDataTableCells.text(r.zone, align: TextAlign.center),
       AdminDataTableCells.text(r.dateCaptured,
           style: AdminDateTimeTokens.inlineDateTimeTextStyle()),
@@ -834,7 +904,7 @@ class _AdminRecordsSubmissionsScreenState
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               const Text(
-                'Top Sites by Average Density',
+                'Top Sites by Confirmed COTS',
                 style: TextStyle(
                   fontSize: 20,
                   fontWeight: FontWeight.w800,
@@ -884,18 +954,19 @@ class _AdminRecordsSubmissionsScreenState
   }
 
   List<(String, double)> _topZonesByDensity(List<AdminRecordTableRow> rows) {
-    final totals = <String, (double sum, int count)>{};
+    final totals = <String, int>{};
     for (final r in rows) {
-      final density = r.density;
-      if (density == null) continue;
-      final current = totals[r.zone] ?? (0, 0);
-      totals[r.zone] = (current.$1 + density, current.$2 + 1);
+      final zone = r.zone.trim();
+      if (zone.isEmpty || zone.startsWith('Practice')) continue;
+      final confirmed = r.cotsTally.confirmed;
+      totals[zone] = (totals[zone] ?? 0) + confirmed;
     }
-    final averages = totals.entries
-        .map((e) => (e.key, e.value.$1 / e.value.$2))
+    final sorted = totals.entries
+        .where((e) => e.value > 0)
+        .map((e) => (e.key, e.value.toDouble()))
         .toList()
       ..sort((a, b) => b.$2.compareTo(a.$2));
-    return averages.take(5).toList();
+    return sorted.take(5).toList();
   }
 
   /// Pie is inset so fl_chart does not clip the ring; legend is spaced to the right.
@@ -1127,12 +1198,12 @@ class _Bar extends StatelessWidget {
           ),
           const SizedBox(width: 10),
           SizedBox(
-            width: 56,
+            width: 72,
             child: FittedBox(
               fit: BoxFit.scaleDown,
               alignment: Alignment.centerRight,
               child: Text(
-                value.toStringAsFixed(2),
+                '${value.toStringAsFixed(0)} COTS',
                 textAlign: TextAlign.right,
                 maxLines: 1,
                 style:

@@ -497,6 +497,19 @@ abstract final class SupabaseRecordService {
 
   static Future<Map<String, String>> _profileNames(Set<String> ids) async {
     if (ids.isEmpty) return const {};
+    // 2026-11-08: Experts cannot read other people's profiles, so the names
+    // come from person_names_json (full names only). Fall back to the
+    // profiles table for databases without it.
+    try {
+      final rows = await _client.rpc<dynamic>('person_names_json',
+          params: {'ids': ids.toList()});
+      return {
+        for (final row in (rows as List?) ?? const [])
+          (row as Map)['id'].toString(): row['full_name']?.toString() ?? '',
+      };
+    } on PostgrestException {
+      // Older database: read the profiles directly below.
+    }
     try {
       final rows = await _client
           .from('profiles')

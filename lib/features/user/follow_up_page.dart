@@ -115,8 +115,8 @@ class _FollowUpPageState extends State<FollowUpPage> {
         // The monthly follow-up is the "Monthly visits" tab of Records.
         bottom: RecordsSectionTabs(
           active: RecordsSection.visits,
-          onOpen: (context, _) => Navigator.of(context).pushReplacement(
-              recordsSectionRoute((_) => const RecordsPage())),
+          onOpen: (context, _) => Navigator.of(context)
+              .pushReplacement(recordsSectionRoute((_) => const RecordsPage())),
         ),
       ),
       bottomNavigationBar: UserBottomNavBar(
@@ -378,108 +378,124 @@ class _FollowUpPageState extends State<FollowUpPage> {
       color: Colors.white,
       elevation: 0,
       shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(16),
-        side: const BorderSide(color: kBorderGray),
-      ),
-      child: Padding(
-        padding: const EdgeInsets.all(16),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
+          borderRadius: BorderRadius.circular(16),
+          side: const BorderSide(color: kBorderGray)),
+      child: ExpansionTile(
+        key: PageStorageKey('monthly-site-${assignment.areaId}'),
+        maintainState: true,
+        tilePadding: const EdgeInsets.all(16),
+        childrenPadding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+        shape: const Border(),
+        collapsedShape: const Border(),
+        title: Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Row(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                const Icon(Icons.coronavirus_outlined,
-                    color: kPrimaryTeal, size: 24),
-                const SizedBox(width: 10),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        assignment.areaName,
-                        style: const TextStyle(
-                          color: kTextNavy,
-                          fontSize: 17,
-                          fontWeight: FontWeight.w800,
-                        ),
-                      ),
-                      const SizedBox(height: 3),
-                      Text(
-                        '${assignment.barangay}, ${assignment.municipality}',
-                        style: const TextStyle(
-                          color: kMutedGray,
-                          fontSize: 13,
-                        ),
-                      ),
-                    ],
+            const Icon(Icons.coronavirus_outlined,
+                color: kPrimaryTeal, size: 24),
+            const SizedBox(width: 10),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    assignment.areaName,
+                    style: const TextStyle(
+                      color: kTextNavy,
+                      fontSize: 16,
+                      fontWeight: FontWeight.w800,
+                    ),
                   ),
-                ),
-              ],
-            ),
-            const SizedBox(height: 8),
-            Align(alignment: Alignment.centerLeft, child: _statusChip(status)),
-            const Divider(height: 24),
-            _infoRow('Initial detection',
-                _dateFormat.format(assignment.initialDate)),
-            _infoRow(
-                'Initial detected COTS', '${assignment.initialDetectedCount}'),
-            _infoRow('Initially reported eliminated',
-                initialEliminated?.toString() ?? 'Not recorded'),
-            _infoRow('Last monitoring date', _dateFormat.format(lastDate)),
-            _infoRow('Current target month',
-                _monthFormat.format(followUpTargetMonth(now, status))),
-            FollowUpAssessmentLabel(areaId: assignment.areaId),
-            _infoRow('Primary assigned diver', assignment.primaryDiverName),
-            // Stage 10: both main Divers, and "Add site partner".
-            if (SupabaseConfig.isConfigured) ...[
-              const SizedBox(height: 6),
-              SiteTeamPanel(areaCode: assignment.areaId),
-            ],
-            const SizedBox(height: 10),
-            FollowUpReassignmentActions(
-              assignment: assignment,
-              onStart: () => _openSurvey(
-                  assignment: assignment, previousSurvey: latestSurvey),
-            ),
-            // Stage 4: only the main Diver can hand over the area.
-            if (SupabaseConfig.isConfigured &&
-                assignment.primaryDiverUid ==
-                    context.read<AuthProvider>().userModel?.uid) ...[
-              const SizedBox(height: 8),
-              AreaHandoverButton(assignment: assignment),
-            ],
-            const SizedBox(height: 8),
-            ExpansionTile(
-              tilePadding: EdgeInsets.zero,
-              childrenPadding: EdgeInsets.zero,
-              title: const Text(
-                'Monitoring history',
-                style: TextStyle(
-                  color: kTextNavy,
-                  fontWeight: FontWeight.w700,
-                ),
-              ),
-              subtitle: Text(
-                '${areaSurveys.length} saved visit(s)',
-                style: const TextStyle(color: kMutedGray, fontSize: 12),
-              ),
-              children: [
-                for (final entry in history)
-                  _monthHistoryRow(
-                    entry,
-                    captures: captures,
-                    baseline:
-                        '${assignment.primaryDiverName} · AI detections ${assignment.initialDetectedCount}, reported eliminated ${initialEliminated ?? 'Not recorded'}',
-                    isInitialMonth: entry.month.year ==
-                            assignment.initialDate.toLocal().year &&
-                        entry.month.month ==
-                            assignment.initialDate.toLocal().month,
+                  const SizedBox(height: 3),
+                  Text(
+                    assignment.municipality,
+                    style: const TextStyle(
+                      color: kMutedGray,
+                      fontSize: 13,
+                    ),
                   ),
-              ],
+                ],
+              ),
             ),
           ],
         ),
+        subtitle: Padding(
+            padding: const EdgeInsets.only(top: 8),
+            child: Align(
+                alignment: Alignment.centerLeft, child: _statusChip(status))),
+        children: [
+          DefaultTextStyle.merge(
+            style: const TextStyle(fontSize: 13, color: kTextNavy, height: 1.4),
+            child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  const Divider(height: 16),
+                  _infoRow('First detection date',
+                      _dateFormat.format(assignment.initialDate)),
+                  _infoRow('Initial COTS detected',
+                      '${assignment.initialDetectedCount}'),
+                  _infoRow('Initially reported removals',
+                      initialEliminated?.toString() ?? 'Not recorded'),
+                  _infoRow(
+                      'Last monitoring date', _dateFormat.format(lastDate)),
+                  _infoRow('Current target month',
+                      _monthFormat.format(followUpTargetMonth(now, status))),
+                  FollowUpAssessmentLabel(
+                      areaId: assignment.areaId,
+                      valueBuilder: (value) => _infoRow('Site level', value)),
+                  if (!SupabaseConfig.isConfigured)
+                    _infoRow('Assigned diver', assignment.primaryDiverName),
+                  // Stage 10: both main Divers, and "Add site partner".
+                  if (SupabaseConfig.isConfigured) ...[
+                    const SizedBox(height: 6),
+                    SiteTeamPanel(
+                        areaCode: assignment.areaId,
+                        fallbackDiverName: assignment.primaryDiverName),
+                  ],
+                  const SizedBox(height: 10),
+                  FollowUpReassignmentActions(
+                    assignment: assignment,
+                    onStart: () => _openSurvey(
+                        assignment: assignment, previousSurvey: latestSurvey),
+                  ),
+                  // Stage 4: only the main Diver can hand over the area.
+                  if (SupabaseConfig.isConfigured &&
+                      assignment.primaryDiverUid ==
+                          context.read<AuthProvider>().userModel?.uid) ...[
+                    const SizedBox(height: 8),
+                    AreaHandoverButton(assignment: assignment),
+                  ],
+                  const SizedBox(height: 8),
+                  ExpansionTile(
+                    tilePadding: EdgeInsets.zero,
+                    childrenPadding: EdgeInsets.zero,
+                    title: const Text(
+                      'Monitoring history',
+                      style: TextStyle(
+                        color: kTextNavy,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                    subtitle: Text(
+                      '${areaSurveys.length} saved visit(s)',
+                      style: const TextStyle(color: kMutedGray, fontSize: 12),
+                    ),
+                    children: [
+                      for (final entry in history)
+                        _monthHistoryRow(
+                          entry,
+                          captures: captures,
+                          baseline:
+                              '${assignment.primaryDiverName} · AI detections ${assignment.initialDetectedCount}, reported eliminated ${initialEliminated ?? 'Not recorded'}',
+                          isInitialMonth: entry.month.year ==
+                                  assignment.initialDate.toLocal().year &&
+                              entry.month.month ==
+                                  assignment.initialDate.toLocal().month,
+                        ),
+                    ],
+                  ),
+                ]),
+          )
+        ],
       ),
     );
   }
@@ -577,10 +593,10 @@ class _FollowUpPageState extends State<FollowUpPage> {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             SizedBox(
-              width: 168,
+              width: MediaQuery.sizeOf(context).width < 400 ? 132 : 168,
               child: Text(
                 label,
-                style: const TextStyle(color: kMutedGray, fontSize: 12),
+                style: const TextStyle(color: kMutedGray, fontSize: 13),
               ),
             ),
             Expanded(
@@ -588,7 +604,7 @@ class _FollowUpPageState extends State<FollowUpPage> {
                 value,
                 style: const TextStyle(
                   color: kTextNavy,
-                  fontSize: 12,
+                  fontSize: 13,
                   fontWeight: FontWeight.w700,
                 ),
               ),

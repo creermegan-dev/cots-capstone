@@ -1,6 +1,8 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:intl/intl.dart';
 
+import '../utils/staff_record_time.dart';
+
 import '../features/admin/models/admin_record_table_row.dart';
 import 'activity_type.dart';
 import 'record_collection.dart';
@@ -166,7 +168,7 @@ class RemovalRecordModel {
       index,
       displayRecordId,
       zone,
-      fmt.format(when),
+      fmt.format(StaffRecordTime.inManila(when)),
       removedQuantity ?? aiCount,
       removedQuantity == null ? null : _densityEstimate(removedQuantity!),
       _riskFromCount(removedQuantity ?? aiCount),
@@ -180,9 +182,12 @@ class RemovalRecordModel {
       imageName: imageName,
       storageObjectPath: storageObjectPath,
       notes: notes,
-      dateCaptured: dateTaken != null ? fmt.format(dateTaken!) : 'Unknown',
-      dateUploaded:
-          submittedAt != null ? fmt.format(submittedAt!) : fmt.format(when),
+      dateCaptured: dateTaken != null
+          ? fmt.format(StaffRecordTime.inManila(dateTaken!))
+          : 'Unknown',
+      dateUploaded: submittedAt != null
+          ? fmt.format(StaffRecordTime.inManila(submittedAt!))
+          : fmt.format(StaffRecordTime.inManila(when)),
       latitude: latitude,
       longitude: longitude,
       recordCollection: RecordCollection.removalRecords,

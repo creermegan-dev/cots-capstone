@@ -79,13 +79,15 @@ class SubmissionGroup {
 
   SubmissionReviewStatus get reviewStatus {
     if (photoCount == 0) return SubmissionReviewStatus.notApplicable;
+    // 2026-11-08: COTS waiting for the Expert make the submission "Under
+    // Review" even while the server record is still pending; otherwise the
+    // Expert was never asked and the record stayed "Processing evidence".
     if (records.where(_isPhoto).any((record) =>
-        record.sourceCapture?.serverStatus != 'pending' &&
-        (record.cotsTally.waiting > 0 ||
-            ZoneReview.isWaiting(
-                assignedTo: record.zoneAssignedTo,
-                confirmed: record.adminConfirmed,
-                rejected: record.adminRejected)))) {
+        record.cotsTally.waiting > 0 ||
+        ZoneReview.isWaiting(
+            assignedTo: record.zoneAssignedTo,
+            confirmed: record.adminConfirmed,
+            rejected: record.adminRejected))) {
       return SubmissionReviewStatus.pendingReview;
     }
     if (records

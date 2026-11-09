@@ -2,6 +2,7 @@ import 'package:cots_monitor/widgets/app_back_icon_button.dart';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 
+import '../../core/cots_colors.dart' as colors;
 import '../../models/activity_type.dart';
 import '../../models/cots_confidence_policy.dart';
 import '../../models/follow_up_monitoring_model.dart';
@@ -20,10 +21,20 @@ class UserRecordDetailsPage extends StatelessWidget {
       {super.key,
       required this.record,
       this.watchSurvey = true,
+      this.displayId,
+      this.statusLabel,
+      this.statusDescription,
+      this.photoSelector,
+      this.reviewPanel,
+      this.pendingSync = false,
       this.linkedCaptures = const []});
 
   final ScanRecordModel record;
   final bool watchSurvey;
+  final String? displayId, statusLabel, statusDescription;
+  final Widget? photoSelector;
+  final Widget? reviewPanel;
+  final bool pendingSync;
   final List<CaptureModel> linkedCaptures;
 
   static final _dateFmt = DateFormat('MMM d, yyyy h:mm a');
@@ -59,6 +70,9 @@ class UserRecordDetailsPage extends StatelessWidget {
       case 'Under Review':
       case 'Requires Expert Validation':
       case 'Pending Verification':
+      case 'Partially accepted':
+      case 'Pending synchronization':
+      case 'Processing evidence':
         return kModerate;
       case 'Retake Photo':
       case 'Rejected':
@@ -68,7 +82,8 @@ class UserRecordDetailsPage extends StatelessWidget {
     }
   }
 
-  String get _statusDescription => record.userStatusDescription;
+  String get _statusDescription =>
+      statusDescription ?? record.userStatusDescription;
 
   List<CotsDetectionReviewItem> get _detectionItems =>
       CotsConfidencePolicy.buildDetectionItems(
@@ -107,7 +122,7 @@ class UserRecordDetailsPage extends StatelessWidget {
         },
       );
     }
-    final status = record.userStatusLabel;
+    final status = statusLabel ?? record.userStatusLabel;
     final statusColor = _statusColor(status);
     final confidencePct = (record.confidence.clamp(0.0, 1.0) * 100).round();
 
@@ -132,7 +147,7 @@ class UserRecordDetailsPage extends StatelessWidget {
               ),
             ),
             Text(
-              record.displayRecordId,
+              displayId ?? record.displayRecordId,
               style: TextStyle(
                 color: Colors.grey.shade600,
                 fontWeight: FontWeight.w600,
@@ -149,26 +164,34 @@ class UserRecordDetailsPage extends StatelessWidget {
           final leftCol = [
             if (record.shouldRetakePhoto) ...[
               _retakePhotoBanner(),
-              const SizedBox(height: 14),
+              const SizedBox(height: 12)
             ],
             _summaryHeader(status, statusColor),
-            const SizedBox(height: 14),
-            if (record.followUpSurvey case final survey?) ...[
-              _followUpSurveyCard(survey),
-            ] else ...[
-              _detectionResultsCard(record.aiDetectedCount, confidencePct),
-              const SizedBox(height: 14),
-              _confidencePolicyCard(),
+            const SizedBox(height: 12),
+            if (photoSelector != null) ...[
+              photoSelector!,
+              const SizedBox(height: 12)
             ],
-            const SizedBox(height: 14),
-            _informationCard(),
-            const SizedBox(height: 14),
-          ];
-          final rightCol = [
             if (record.followUpSurvey case final survey?)
               _followUpCaptureReferences(context, survey)
             else
               _imageCard(),
+          ];
+          final rightCol = [
+            if (record.followUpSurvey case final survey?)
+              _followUpSurveyCard(survey)
+            else
+              _detectionResultsCard(record.aiDetectedCount, confidencePct),
+            const SizedBox(height: 12),
+            _informationCard(),
+            if (reviewPanel != null) ...[
+              const SizedBox(height: 12),
+              reviewPanel!,
+            ],
+            if (record.followUpSurvey == null) ...[
+              const SizedBox(height: 12),
+              _confidencePolicyCard()
+            ],
           ];
 
           return SingleChildScrollView(
@@ -267,7 +290,7 @@ class UserRecordDetailsPage extends StatelessWidget {
       BuildContext context, FollowUpSurveyModel survey) {
     return _titledCard(
       icon: Icons.photo_library_outlined,
-      title: 'GoPro Image Records',
+      title: 'Photo Records',
       child: survey.captureIds.isEmpty
           ? const Text('No linked image records.')
           : Column(
@@ -323,78 +346,56 @@ class UserRecordDetailsPage extends StatelessWidget {
     );
   }
 
-  Widget _summaryHeader(String status, Color statusColor) {
-    return _card(
-      child: Row(
-        children: [
+  Widget _summaryHeader(String status, Color statusColor) => _card(
+          child:
+              Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+        Row(children: [
           Container(
-            width: 44,
-            height: 44,
-            alignment: Alignment.center,
-            decoration: BoxDecoration(
-              color: kGreen,
-              borderRadius: BorderRadius.circular(10),
-            ),
-            child: const Icon(
-              Icons.description_outlined,
-              color: Colors.white,
-              size: 22,
-            ),
-          ),
-          const SizedBox(width: 12),
+              width: 40,
+              height: 40,
+              alignment: Alignment.center,
+              decoration: BoxDecoration(
+                  color: kGreen, borderRadius: BorderRadius.circular(11)),
+              child: const Icon(Icons.description_outlined,
+                  color: Colors.white, size: 22)),
+          const SizedBox(width: 10),
           Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
+              child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                Text(displayId ?? record.displayRecordId,
+                    style: const TextStyle(
+                        fontSize: 14,
+                        fontWeight: FontWeight.w800,
+                        color: kNavy)),
+                const SizedBox(height: 3),
                 Text(
-                  record.displayRecordId,
-                  style: const TextStyle(
-                    fontWeight: FontWeight.w800,
-                    fontSize: 16,
-                    color: kNavy,
-                    letterSpacing: 0.2,
-                  ),
-                ),
-                const SizedBox(height: 2),
-                Text(
-                  'Submitted by ${record.submittedBy}',
-                  style: TextStyle(fontSize: 12, color: Colors.grey.shade600),
-                ),
-                const SizedBox(height: 2),
-                Text(
-                  CotsActivityType.label(record.activityType),
-                  style: TextStyle(fontSize: 11, color: Colors.grey.shade500),
-                ),
-                if (record.linkedCaptureDisplayId != null &&
-                    record.linkedCaptureDisplayId!.isNotEmpty) ...[
-                  const SizedBox(height: 2),
-                  Text(
-                    'Detection Record ID / Linked Detection: ${record.linkedCaptureDisplayId}',
-                    style: TextStyle(fontSize: 11, color: Colors.grey.shade500),
-                  ),
-                ],
-              ],
-            ),
-          ),
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                    'Submitted by ${record.submittedBy} · ${CotsActivityType.label(record.activityType)}',
+                    style: const TextStyle(
+                        fontSize: 12, color: Color(0xFF607D8B), height: 1.4)),
+              ])),
+        ]),
+        const SizedBox(height: 12),
+        Container(
+            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 9),
             decoration: BoxDecoration(
-              color: statusColor.withValues(alpha: 0.12),
-              borderRadius: BorderRadius.circular(20),
-            ),
-            child: Text(
-              status,
-              style: TextStyle(
-                color: statusColor,
-                fontWeight: FontWeight.w800,
-                fontSize: 12,
-              ),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
+                color: statusColor.withValues(alpha: .10),
+                borderRadius: BorderRadius.circular(9)),
+            child: Row(children: [
+              Icon(Icons.verified_rounded, color: statusColor, size: 19),
+              const SizedBox(width: 7),
+              Expanded(
+                  child: Text(status,
+                      style: TextStyle(
+                          fontSize: 12,
+                          fontWeight: FontWeight.w700,
+                          color: statusColor)))
+            ])),
+        const SizedBox(height: 6),
+        Text(_statusDescription,
+            style: const TextStyle(
+                fontSize: 11, color: Color(0xFF607D8B), height: 1.4)),
+      ]));
 
   Widget _detectionResultsCard(int count, int confidencePct) {
     return _titledCard(
@@ -421,18 +422,6 @@ class UserRecordDetailsPage extends StatelessWidget {
                 ),
               ),
             ],
-          ),
-          const SizedBox(height: 10),
-          Text(
-            'Each COTS is evaluated individually: '
-            '${CotsConfidencePolicy.autoApproveMin}–100% = AI auto-approved · '
-            'any COTS ${CotsConfidencePolicy.adminReviewMin}–${CotsConfidencePolicy.autoApproveMin - 1}% = expert review · '
-            '0–${CotsConfidencePolicy.adminReviewMin - 1} = retake photo.',
-            style: TextStyle(
-              fontSize: 11.5,
-              color: Colors.grey.shade700,
-              height: 1.45,
-            ),
           ),
         ],
       ),
@@ -501,7 +490,7 @@ class UserRecordDetailsPage extends StatelessWidget {
           _policyLine(
               kHigh,
               'Retake Photo (0–${CotsConfidencePolicy.adminReviewMin - 1})',
-              'Too low confidence — upload a clearer GoPro shot.'),
+              'Too low confidence — upload a clearer photo.'),
         ],
       ),
     );
@@ -552,16 +541,29 @@ class UserRecordDetailsPage extends StatelessWidget {
           _kv('Location from',
               PhotoSource.locationLabel(record.locationSource)),
           _kv('Upload method', 'Gallery upload'),
+          if (displayId != null) _kv('Photo record ID', record.displayRecordId),
+          _kv('Capture type', CaptureSource.displayLabel(record.captureSource)),
+          if (record.imageName.isNotEmpty) _kv('Photo file', record.imageName),
+          if (record.linkedCaptureDisplayId?.isNotEmpty == true)
+            _kv('Linked detection', record.linkedCaptureDisplayId!),
+          if (record.removedQuantity != null)
+            _kv('Reported removals', '${record.removedQuantity}'),
+          if (record.averageSizeCm != null)
+            _kv('Estimated average size',
+                '${record.averageSizeCm!.toStringAsFixed(1)} cm'),
           _kv('Date taken', _dateTaken),
-          _kv('Date uploaded', _dateUploaded),
+          _kv(pendingSync ? 'Saved on device' : 'Date uploaded', _dateUploaded),
           _kv('User remarks', _userRemarks),
           const SizedBox(height: 6),
-          Row(
+          Wrap(
+            spacing: 8,
+            runSpacing: 6,
+            crossAxisAlignment: WrapCrossAlignment.center,
             children: [
               Text(
-                'Auto Zone Assignment',
+                'Site assignment',
                 style: TextStyle(
-                  fontSize: 12.5,
+                  fontSize: 12,
                   fontWeight: FontWeight.w700,
                   color: Colors.grey.shade700,
                 ),
@@ -593,9 +595,6 @@ class UserRecordDetailsPage extends StatelessWidget {
   Widget _imageCard() {
     final imgW = record.imageWidth > 0 ? record.imageWidth : 1920;
     final imgH = record.imageHeight > 0 ? record.imageHeight : 1080;
-    final status = record.userStatusLabel;
-    final statusColor = _statusColor(status);
-
     return _titledCard(
       icon: Icons.image_outlined,
       title: 'Detection Image',
@@ -606,6 +605,15 @@ class UserRecordDetailsPage extends StatelessWidget {
             imageWidth: imgW,
             imageHeight: imgH,
             items: _detectionItems,
+            decisions: List.generate(_detectionItems.length, (index) {
+              if (record.adminRejected) return PerCotsAdminDecision.rejected;
+              if (index < record.adminCotsDecisions.length) {
+                return record.adminCotsDecisions[index];
+              }
+              return record.adminConfirmed
+                  ? PerCotsAdminDecision.confirmed
+                  : PerCotsAdminDecision.pending;
+            }),
             recordId: record.id,
             recordCollection: record.recordCollection,
             imageUrl: record.imageUrl.isNotEmpty
@@ -615,95 +623,24 @@ class UserRecordDetailsPage extends StatelessWidget {
             storageObjectPath: record.storageObjectPath,
             placeholderMessage: 'Submitted photo unavailable for this record.',
           ),
-          const SizedBox(height: 10),
-          Wrap(
-            spacing: 12,
-            runSpacing: 6,
-            children: const [
-              _LegendDot(
-                  color: Color(0xFF1565C0),
-                  label:
-                      'AI auto-approved (${CotsConfidencePolicy.autoApproveMin}%+)'),
-              _LegendDot(
-                  color: kModerate,
-                  label:
-                      'Needs review (${CotsConfidencePolicy.adminReviewMin}–${CotsConfidencePolicy.autoApproveMin - 1}%)'),
-              _LegendDot(color: kHigh, label: 'Low confidence / retake'),
-            ],
-          ),
-          const SizedBox(height: 8),
-          Text(
-            'Each labeled box shows a detected COTS (e.g. COTS 1 — 43%). '
-            '${record.aiDetectedCount} total detections in this image.',
-            style: TextStyle(
-              fontSize: 11.5,
-              color: Colors.grey.shade700,
-              height: 1.4,
-            ),
-          ),
-          const SizedBox(height: 16),
-          Divider(color: Colors.grey.shade300),
-          const SizedBox(height: 14),
-          _statusSection(status, statusColor),
+          const SizedBox(height: 12),
+          Wrap(spacing: 12, runSpacing: 6, children: [
+            for (final entry in const [
+              (colors.kInfoBlue, 'AI automatically accepted'),
+              (colors.kSuccessGreen, 'Expert accepted'),
+              (colors.kWarningOrange, 'Awaiting review'),
+              (colors.kDangerRed, 'Expert rejected / retake'),
+            ])
+              Text.rich(
+                  TextSpan(children: [
+                    WidgetSpan(
+                        child: Icon(Icons.circle, size: 7, color: entry.$1)),
+                    TextSpan(text: '  ${entry.$2}'),
+                  ]),
+                  style: const TextStyle(fontSize: 10, color: Colors.grey)),
+          ]),
         ],
       ),
-    );
-  }
-
-  Widget _statusSection(String status, Color statusColor) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: [
-        Row(
-          children: [
-            Icon(Icons.flag_outlined, size: 18, color: Colors.grey.shade700),
-            const SizedBox(width: 8),
-            const Text(
-              'Status Information',
-              style: TextStyle(
-                fontWeight: FontWeight.w800,
-                fontSize: 14,
-                color: kNavy,
-              ),
-            ),
-          ],
-        ),
-        const SizedBox(height: 10),
-        Container(
-          width: double.infinity,
-          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-          decoration: BoxDecoration(
-            color: statusColor.withValues(alpha: 0.1),
-            borderRadius: BorderRadius.circular(12),
-            border: Border.all(color: statusColor.withValues(alpha: 0.25)),
-          ),
-          child: Row(
-            children: [
-              Icon(Icons.check_circle_rounded, color: statusColor, size: 22),
-              const SizedBox(width: 10),
-              Expanded(
-                child: Text(
-                  status,
-                  style: const TextStyle(
-                    fontWeight: FontWeight.w900,
-                    fontSize: 16,
-                    color: kNavy,
-                  ),
-                ),
-              ),
-            ],
-          ),
-        ),
-        const SizedBox(height: 10),
-        Text(
-          _statusDescription,
-          style: TextStyle(
-            fontSize: 13,
-            color: Colors.grey.shade700,
-            height: 1.4,
-          ),
-        ),
-      ],
     );
   }
 
@@ -731,7 +668,7 @@ class UserRecordDetailsPage extends StatelessWidget {
             value,
             style: const TextStyle(
               fontSize: 16,
-              fontWeight: FontWeight.w900,
+              fontWeight: FontWeight.w700,
               color: kNavy,
             ),
           ),
@@ -751,7 +688,7 @@ class UserRecordDetailsPage extends StatelessWidget {
             child: Text(
               k,
               style: TextStyle(
-                fontSize: 12.5,
+                fontSize: 12,
                 fontWeight: FontWeight.w700,
                 color: Colors.grey.shade700,
               ),
@@ -781,8 +718,8 @@ class UserRecordDetailsPage extends StatelessWidget {
         borderRadius: BorderRadius.circular(14),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withValues(alpha: 0.05),
-            blurRadius: 14,
+            color: Colors.black.withValues(alpha: 0.03),
+            blurRadius: 8,
             offset: const Offset(0, 4),
           ),
         ],
@@ -804,46 +741,21 @@ class UserRecordDetailsPage extends StatelessWidget {
             children: [
               Icon(icon, size: 20, color: kGreen),
               const SizedBox(width: 8),
-              Text(
+              Expanded(
+                  child: Text(
                 title,
                 style: const TextStyle(
                   fontSize: 16,
                   fontWeight: FontWeight.w800,
                   color: kNavy,
                 ),
-              ),
+              )),
             ],
           ),
           const SizedBox(height: 14),
           child,
         ],
       ),
-    );
-  }
-}
-
-class _LegendDot extends StatelessWidget {
-  const _LegendDot({required this.color, required this.label});
-
-  final Color color;
-  final String label;
-
-  @override
-  Widget build(BuildContext context) {
-    return Row(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        Container(
-          width: 8,
-          height: 8,
-          decoration: BoxDecoration(color: color, shape: BoxShape.circle),
-        ),
-        const SizedBox(width: 6),
-        Text(
-          label,
-          style: TextStyle(fontSize: 11, color: Colors.grey.shade700),
-        ),
-      ],
     );
   }
 }

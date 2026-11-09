@@ -1,6 +1,8 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:intl/intl.dart';
 
+import '../utils/staff_record_time.dart';
+
 import '../features/admin/models/admin_record_table_row.dart';
 import 'activity_type.dart';
 import 'capture_model.dart';
@@ -236,7 +238,7 @@ class ScanRecordModel {
       id: survey.id,
       uid: survey.uid,
       submittedBy: survey.submittedBy,
-      imageName: '${survey.captureIds.length} GoPro image(s)',
+      imageName: '${survey.captureIds.length} photo(s)',
       imagePath: '',
       activityType: CotsActivityType.followUpSurvey,
       aiDetectedCount: survey.aiDetectedCount,
@@ -319,7 +321,7 @@ class ScanRecordModel {
       index,
       displayRecordId,
       zone,
-      fmt.format(when),
+      fmt.format(StaffRecordTime.inManila(when)),
       count,
       followUpSurvey != null ||
               sourceCapture?.followUpSurveyId.isNotEmpty == true
@@ -341,10 +343,13 @@ class ScanRecordModel {
       notes: notes,
       dateCaptured: dateTaken == null
           ? 'Unknown'
-          : (timeSource == 'manual' ? DateFormat('MMM d, yyyy') : fmt)
-              .format(dateTaken!),
-      dateUploaded:
-          submittedAt != null ? fmt.format(submittedAt!) : fmt.format(when),
+          : (timeSource == 'manual' ? DateFormat('MMM d, yyyy') : fmt).format(
+              timeSource == 'manual'
+                  ? dateTaken!
+                  : StaffRecordTime.inManila(dateTaken!)),
+      dateUploaded: submittedAt != null
+          ? fmt.format(StaffRecordTime.inManila(submittedAt!))
+          : fmt.format(StaffRecordTime.inManila(when)),
       latitude: latitude,
       longitude: longitude,
       imagePath: imagePath,

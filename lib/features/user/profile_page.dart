@@ -1,7 +1,10 @@
 import 'package:cots_monitor/widgets/app_back_icon_button.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import 'package:image_picker/image_picker.dart';
 import 'package:provider/provider.dart';
 
+import '../../core/supabase_config.dart';
 import '../../models/user_model.dart';
 import '../../providers/auth_provider.dart';
 import '../../services/auth_service.dart';
@@ -10,6 +13,8 @@ import 'cots_map_page.dart';
 import 'records_page.dart';
 import 'user_bottom_nav.dart';
 import '../../widgets/cots_loading_skeleton.dart';
+import '../../services/profile_photo_service.dart';
+import '../../widgets/profile_avatar.dart';
 
 const String _appVersion = '1.0.2+3';
 
@@ -159,16 +164,7 @@ class _ProfileHeaderCard extends StatelessWidget {
       ),
       child: Row(
         children: [
-          Container(
-            width: 64,
-            height: 64,
-            decoration: const BoxDecoration(
-              color: kGreen,
-              shape: BoxShape.circle,
-            ),
-            alignment: Alignment.center,
-            child: const Icon(Icons.person, color: Colors.white, size: 36),
-          ),
+          ProfileAvatar(path: user?.profileImage),
           const SizedBox(width: 14),
           Expanded(
             child: Column(
@@ -342,6 +338,86 @@ class _PersonalInformationPageState extends State<PersonalInformationPage> {
   String? _organization;
   bool _saving = false;
   bool _initialized = false;
+  bool _photoBusy = false;
+
+  Future<void> _changePhoto() async {
+    final auth = context.read<AuthProvider>();
+    final oldPath = auth.userModel?.profileImage.trim() ?? '';
+    final canUseCamera = !kIsWeb &&
+        (defaultTargetPlatform == TargetPlatform.android ||
+            defaultTargetPlatform == TargetPlatform.iOS);
+    final choice = await showModalBottomSheet<String>(
+      context: context,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
+      ),
+      builder: (ctx) => SafeArea(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const SizedBox(height: 8),
+            if (canUseCamera)
+              ListTile(
+                key: const ValueKey('profile-photo-camera'),
+                leading: const Icon(Icons.photo_camera_outlined),
+                title: const Text('Take a photo'),
+                onTap: () => Navigator.of(ctx).pop('camera'),
+              ),
+            ListTile(
+              key: const ValueKey('profile-photo-gallery'),
+              leading: const Icon(Icons.photo_library_outlined),
+              title: const Text('Choose from gallery'),
+              onTap: () => Navigator.of(ctx).pop('gallery'),
+            ),
+            if (oldPath.isNotEmpty)
+              ListTile(
+                key: const ValueKey('profile-photo-remove'),
+                leading: const Icon(Icons.delete_outline, color: kHigh),
+                title: const Text('Remove photo',
+                    style: TextStyle(color: kHigh)),
+                onTap: () => Navigator.of(ctx).pop('remove'),
+              ),
+            const SizedBox(height: 8),
+          ],
+        ),
+      ),
+    );
+    if (choice == null || !mounted) return;
+    final messenger = ScaffoldMessenger.of(context);
+    setState(() => _photoBusy = true);
+    try {
+      final service = ProfilePhotoService();
+      if (choice == 'remove') {
+        await service.remove(oldPath);
+      } else {
+        final picked = await ImagePicker().pickImage(
+          source:
+              choice == 'camera' ? ImageSource.camera : ImageSource.gallery,
+          maxWidth: 1024,
+          maxHeight: 1024,
+          imageQuality: 90,
+        );
+        if (picked == null) return;
+        final bytes = await picked.readAsBytes();
+        await service.upload(bytes, oldPath: oldPath);
+      }
+      await auth.refreshProfile();
+      messenger.showSnackBar(SnackBar(
+        content: Text(choice == 'remove'
+            ? 'Profile photo removed.'
+            : 'Profile photo updated.'),
+      ));
+    } on FormatException catch (e) {
+      messenger.showSnackBar(SnackBar(content: Text(e.message)));
+    } catch (_) {
+      messenger.showSnackBar(const SnackBar(
+        content: Text(
+            'Could not update the photo. Check your internet and try again.'),
+      ));
+    } finally {
+      if (mounted) setState(() => _photoBusy = false);
+    }
+  }
 
   @override
   void didChangeDependencies() {
@@ -407,8 +483,11 @@ class _PersonalInformationPageState extends State<PersonalInformationPage> {
         email: _email.text.trim(),
         phone: _phone.text.trim(),
         organization: _organization ?? '—',
-        assignedArea:
-            _assignedArea.text.trim().isEmpty ? '—' : _assignedArea.text.trim(),
+        assignedArea: SupabaseConfig.isConfigured
+            ? null
+            : _assignedArea.text.trim().isEmpty
+                ? '—'
+                : _assignedArea.text.trim(),
       ),
     );
 
@@ -455,7 +534,12 @@ class _PersonalInformationPageState extends State<PersonalInformationPage> {
             padding: const EdgeInsets.fromLTRB(16, 12, 16, 110),
             children: [
               _PersonalHeaderCard(
-                  user: context.watch<AuthProvider>().userModel),
+                user: context.watch<AuthProvider>().userModel,
+                busy: _photoBusy,
+                onPhotoTap: SupabaseConfig.isConfigured && !_photoBusy
+                    ? _changePhoto
+                    : null,
+              ),
               const SizedBox(height: 14),
               _PersonalFormCard(
                 children: [
@@ -515,14 +599,15 @@ class _PersonalInformationPageState extends State<PersonalInformationPage> {
                       onChanged: (v) => setState(() => _organization = v),
                     ),
                   ),
-                  _LabeledField(
-                    label: 'Assigned Area',
-                    child: _TextInput(
-                      controller: _assignedArea,
-                      icon: Icons.location_on_outlined,
-                      hintText: 'e.g. Panabo Reef',
+                  if (!SupabaseConfig.isConfigured)
+                    _LabeledField(
+                      label: 'Assigned Area',
+                      child: _TextInput(
+                        controller: _assignedArea,
+                        icon: Icons.location_on_outlined,
+                        hintText: 'e.g. Panabo Reef',
+                      ),
                     ),
-                  ),
                   const SizedBox(height: 6),
                   Row(
                     children: [
@@ -592,8 +677,14 @@ class _PersonalInformationPageState extends State<PersonalInformationPage> {
 }
 
 class _PersonalHeaderCard extends StatelessWidget {
-  const _PersonalHeaderCard({required this.user});
+  const _PersonalHeaderCard({
+    required this.user,
+    this.onPhotoTap,
+    this.busy = false,
+  });
   final UserModel? user;
+  final VoidCallback? onPhotoTap;
+  final bool busy;
 
   @override
   Widget build(BuildContext context) {
@@ -621,15 +712,10 @@ class _PersonalHeaderCard extends StatelessWidget {
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.center,
         children: [
-          Container(
-            width: 64,
-            height: 64,
-            decoration: const BoxDecoration(
-              color: kGreen,
-              shape: BoxShape.circle,
-            ),
-            alignment: Alignment.center,
-            child: const Icon(Icons.person, color: Colors.white, size: 36),
+          _EditablePhoto(
+            path: user?.profileImage,
+            busy: busy,
+            onTap: onPhotoTap,
           ),
           const SizedBox(width: 12),
           Expanded(
@@ -909,7 +995,7 @@ class _ChangesSavedDialog extends StatelessWidget {
   final String email;
   final String phone;
   final String organization;
-  final String assignedArea;
+  final String? assignedArea;
 
   @override
   Widget build(BuildContext context) {
@@ -992,13 +1078,15 @@ class _ChangesSavedDialog extends StatelessWidget {
                       icon: Icons.apartment_outlined,
                       label: 'Organization:',
                       value: organization,
+                      isLast: assignedArea == null,
                     ),
-                    _SummaryDialogRow(
-                      icon: Icons.location_on_outlined,
-                      label: 'Assigned Area:',
-                      value: assignedArea,
-                      isLast: true,
-                    ),
+                    if (assignedArea != null)
+                      _SummaryDialogRow(
+                        icon: Icons.location_on_outlined,
+                        label: 'Assigned Area:',
+                        value: assignedArea!,
+                        isLast: true,
+                      ),
                   ],
                 ),
               ),
@@ -1322,7 +1410,7 @@ class AboutPage extends StatelessWidget {
                   emojiIcon: Icons.visibility_rounded,
                   title: 'Hard to spot underwater',
                   body:
-                      'COTS blend into reef textures. Divers and GoPro footage help '
+                      'COTS blend into reef textures. Divers and underwater photos help '
                       'catch infestations earlier than patrols alone.',
                 ),
                 _FactTile(
@@ -1353,7 +1441,7 @@ class AboutPage extends StatelessWidget {
                 _SystemBullet(
                   title: 'Machine Learning Detection',
                   body:
-                      'Upload GoPro images to detect COTS with confidence scores.',
+                      'Upload underwater photos to detect COTS with confidence scores.',
                 ),
                 _SystemBullet(
                   title: 'GIS Mapping',
@@ -1682,4 +1770,62 @@ class _AboutDivider extends StatelessWidget {
         thickness: 1,
         color: Color(0xFFEEEEEE),
       );
+}
+
+class _EditablePhoto extends StatelessWidget {
+  const _EditablePhoto({
+    required this.path,
+    required this.busy,
+    required this.onTap,
+  });
+
+  final String? path;
+  final bool busy;
+  final VoidCallback? onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final avatar = Stack(
+      clipBehavior: Clip.none,
+      children: [
+        ProfileAvatar(path: path),
+        if (busy)
+          const Positioned.fill(
+            child: Padding(
+              padding: EdgeInsets.all(18),
+              child: CircularProgressIndicator(
+                  strokeWidth: 2.5, color: Colors.white),
+            ),
+          ),
+        if (onTap != null || busy)
+          Positioned(
+            right: -2,
+            bottom: -2,
+            child: Container(
+              width: 24,
+              height: 24,
+              decoration: BoxDecoration(
+                color: Colors.white,
+                shape: BoxShape.circle,
+                border: Border.all(color: Colors.grey.shade300),
+              ),
+              alignment: Alignment.center,
+              child: const Icon(Icons.photo_camera_outlined,
+                  size: 14, color: kNavy),
+            ),
+          ),
+      ],
+    );
+    if (onTap == null) return avatar;
+    return Semantics(
+      button: true,
+      label: 'Change profile photo',
+      child: InkWell(
+        key: const ValueKey('profile-photo-change'),
+        customBorder: const CircleBorder(),
+        onTap: onTap,
+        child: avatar,
+      ),
+    );
+  }
 }

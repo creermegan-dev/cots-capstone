@@ -89,8 +89,11 @@ class _AreaHandoverButtonState extends State<AreaHandoverButton> {
   }
 
   Future<void> _cancel(AreaHandover handover) async {
-    if (!await _confirm(context, 'Cancel handover?',
-        'You will stay the main Diver for ${handover.areaName}.', 'Cancel handover')) {
+    if (!await _confirm(
+        context,
+        'Cancel handover?',
+        'You will stay the main Diver for ${handover.areaName}.',
+        'Cancel handover')) {
       return;
     }
     setState(() => _busy = true);
@@ -117,8 +120,8 @@ class _AreaHandoverButtonState extends State<AreaHandoverButton> {
                 child: const Text('Could not load handover. Retry'));
           }
           if (!snapshot.hasData) return const SizedBox.shrink();
-          final open = snapshot.data!.where(
-              (h) => h.areaCode == widget.assignment.areaId && h.isOpen);
+          final open = snapshot.data!
+              .where((h) => h.areaCode == widget.assignment.areaId && h.isOpen);
           if (open.isNotEmpty) {
             final handover = open.first;
             return Container(
@@ -440,15 +443,11 @@ class _ExpertHandoversSectionState extends State<ExpertHandoversSection> {
       ),
     );
     if (selected == null || !mounted) return;
-    if (!await _confirm(
-        context,
-        'Send the handover offer?',
-        'Offer ${handover.areaName} to ${selected['name']}?',
-        'Send offer')) {
+    if (!await _confirm(context, 'Send the handover offer?',
+        'Offer ${handover.areaName} to ${selected['name']}?', 'Send offer')) {
       return;
     }
-    await _run(
-        () => widget.api.offer(handover.id, selected['uid'] as String),
+    await _run(() => widget.api.offer(handover.id, selected['uid'] as String),
         'Offer sent to ${selected['name']}.');
   }
 
@@ -462,18 +461,17 @@ class _ExpertHandoversSectionState extends State<ExpertHandoversSection> {
                 onPressed: () => setState(() {
                       _data = _load();
                     }),
-                child: const Text('Could not load area handovers. Retry'));
+                child: const Text('Could not load site handovers. Retry'));
           }
           if (!snapshot.hasData) return const LinearProgressIndicator();
-          final open =
-              snapshot.data!.$1.where((h) => h.isOpen).toList();
+          final open = snapshot.data!.$1.where((h) => h.isOpen).toList();
           final missed =
               snapshot.data!.$2.where((a) => a.canStartHandover).toList();
           return Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
               const SizedBox(height: 8),
-              const Text('Area handovers',
+              const Text('Site handovers',
                   style: TextStyle(
                       fontSize: 18,
                       fontWeight: FontWeight.w800,
@@ -481,7 +479,7 @@ class _ExpertHandoversSectionState extends State<ExpertHandoversSection> {
               if (open.isEmpty && missed.isEmpty)
                 const Padding(
                     padding: EdgeInsets.symmetric(vertical: 8),
-                    child: Text('No area handovers need attention.')),
+                    child: Text('No site handovers need attention.')),
               for (final handover in open)
                 Card(
                   child: Padding(
@@ -539,7 +537,7 @@ class _ExpertHandoversSectionState extends State<ExpertHandoversSection> {
                 ),
               if (missed.isNotEmpty) ...[
                 const SizedBox(height: 8),
-                const Text('Areas with 5 or more missed months',
+                const Text('Sites with 5 or more missed months',
                     style: TextStyle(fontWeight: FontWeight.w700)),
                 for (final area in missed)
                   ListTile(
@@ -557,7 +555,8 @@ class _ExpertHandoversSectionState extends State<ExpertHandoversSection> {
                                   '${area.areaName} has had no monthly visit for '
                                       '${area.missedMonths} months in a row. You will then choose a new Diver.',
                                   'Start handover')) {
-                                await _run(() => widget.api.start(area.areaCode),
+                                await _run(
+                                    () => widget.api.start(area.areaCode),
                                     'Handover started. Choose a new Diver.');
                               }
                             },

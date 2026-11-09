@@ -7,6 +7,7 @@ import '../../../models/scan_record_model.dart';
 import '../../../models/zone_directory_summary.dart';
 import '../../../services/scan_record_repository.dart';
 import '../layout/admin_breakpoints.dart';
+import 'admin_site_details_screen.dart';
 import '../theme/admin_theme.dart';
 import '../widgets/admin_dashboard_header.dart';
 import '../widgets/admin_data_table.dart';
@@ -344,8 +345,8 @@ class _AdminZonesScreenState extends State<AdminZonesScreen> {
                                                                 .toLocal())),
                                             TableCell(
                                                 child: TextButton(
-                                                    onPressed: () =>
-                                                        _showSite(row.site),
+                                                    onPressed: () => _showSite(
+                                                        row.site, records),
                                                     child: const Text(
                                                         'View site'))),
                                           ]),
@@ -390,28 +391,12 @@ class _AdminZonesScreenState extends State<AdminZonesScreen> {
           padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 16),
           child: Text(value, style: AdminDataTableTokens.bodyTextStyle())));
 
-  void _showSite(GulfCoastalBarangay site) {
-    showDialog<void>(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: Text(site.displayName),
-        scrollable: true,
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(site.municipalityName),
-            const SizedBox(height: 12),
-            Text(
-                'Barangay ${site.name} · ${site.reefHectares.toStringAsFixed(0)} ha'),
-          ],
-        ),
-        actions: [
-          TextButton(
-              onPressed: () => Navigator.pop(context),
-              child: const Text('Close'))
-        ],
-      ),
-    );
+  void _showSite(GulfCoastalBarangay site, List<ScanRecordModel> records) {
+    Navigator.of(context).push<void>(MaterialPageRoute(
+      builder: (_) => AdminSiteDetailsScreen(
+          site: site,
+          recordsStream:
+              widget.recordsStream == null ? null : Stream.value(records)),
+    ));
   }
 }

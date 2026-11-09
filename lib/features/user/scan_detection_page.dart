@@ -45,6 +45,7 @@ import 'user_bottom_nav.dart';
 import 'widgets/batch_detection_gallery.dart';
 
 const _maxImageBytes = 20 * 1024 * 1024;
+
 /// Photo limits (agreed): 15 per first encounter, 10 per monthly visit.
 const scanMaxEncounterPhotos = 15;
 const scanMaxFollowUpPhotos = 10;
@@ -72,6 +73,7 @@ bool scanPhotoNeedsAttention({
 
 /// Phone location status on the record page (Stage 7).
 enum ScanLocationAccess { checking, ready, serviceOff, denied, deniedForever }
+
 const _allowedExtensions = {'.jpg', '.jpeg', '.png'};
 
 const _scanBoxPurple = Color(0xFFAB47BC);
@@ -175,8 +177,8 @@ class _ScanDetectionPageState extends State<ScanDetectionPage>
             isFollowUp: _isFollowUp,
             analysisFailed: img.detectionError != null,
             detectedCount: img.detection?.count,
-            locationProblem: img.metadata.locationProblem !=
-                PhotoLocationProblem.none,
+            locationProblem:
+                img.metadata.locationProblem != PhotoLocationProblem.none,
           ))
             img,
       ];
@@ -193,8 +195,7 @@ class _ScanDetectionPageState extends State<ScanDetectionPage>
 
   String get _locationSourceLabel {
     if (_latitude == null || _longitude == null) return 'Unavailable';
-    return PhotoSource.locationLabel(
-        _gpsFromExif ? 'exif' : 'device_surface');
+    return PhotoSource.locationLabel(_gpsFromExif ? 'exif' : 'device_surface');
   }
 
   String get _activityTypeLabel => _isFollowUp
@@ -537,10 +538,10 @@ class _ScanDetectionPageState extends State<ScanDetectionPage>
       children: [
         _sectionHeader(
           _isFollowUp
-              ? 'Upload GoPro Monitoring Images'
+              ? 'Upload Monitoring Photos'
               : isRemoval
                   ? 'Upload COTS Image'
-                  : 'Upload GoPro Image',
+                  : 'Upload Photo',
           _isFollowUp
               ? 'Add photos from this visit. Each image will use the existing AI detection workflow.'
               : isRemoval
@@ -1716,10 +1717,10 @@ class _ScanDetectionPageState extends State<ScanDetectionPage>
         height: 52,
         width: double.infinity,
         child: FilledButton(
-          onPressed: _isBusy ||
-                  (_step == _DetectionStep.review && !_removalConfirmed)
-              ? null
-              : _onPrimaryAction,
+          onPressed:
+              _isBusy || (_step == _DetectionStep.review && !_removalConfirmed)
+                  ? null
+                  : _onPrimaryAction,
           style: FilledButton.styleFrom(
             backgroundColor: kPrimaryTeal,
             disabledBackgroundColor: kPrimaryTeal.withValues(alpha: 0.35),
@@ -1766,8 +1767,7 @@ class _ScanDetectionPageState extends State<ScanDetectionPage>
   Future<void> _goToDetails() async {
     if (!_hasImages) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-            content: Text('Please upload at least one GoPro image.')),
+        const SnackBar(content: Text('Please upload at least one photo.')),
       );
       return;
     }
@@ -1814,10 +1814,10 @@ class _ScanDetectionPageState extends State<ScanDetectionPage>
               locationCount > 0
                   ? '$locationCount photo(s) need a location. See the notes below the photos.'
                   : failedCount == 0
-                  ? scanNoCotsMessage
-                  : noCotsCount == 0
-                      ? 'The AI could not process $failedCount photo(s). Retry or replace them.'
-                      : 'Some photos need attention. Fix them before continuing.',
+                      ? scanNoCotsMessage
+                      : noCotsCount == 0
+                          ? 'The AI could not process $failedCount photo(s). Retry or replace them.'
+                          : 'Some photos need attention. Fix them before continuing.',
             ),
           ),
         );
@@ -1906,7 +1906,7 @@ class _ScanDetectionPageState extends State<ScanDetectionPage>
       if (conflict || ready.length > scanMaxFollowUpPhotos) {
         ScaffoldMessenger.of(context).showSnackBar(SnackBar(
             content: Text(conflict
-                ? AreaMessages.otherPart(otherPart!)
+                ? AreaMessages.otherPart(otherPart)
                 : 'Submit at most $scanMaxFollowUpPhotos images per visit.')));
         return;
       }
@@ -1990,9 +1990,8 @@ class _ScanDetectionPageState extends State<ScanDetectionPage>
           sizeEstimate: null,
           linkedCaptureId:
               _isLinkedRemoval ? widget.initialLinkedCaptureId : null,
-          encounterId: _isFollowUp || _isLinkedRemoval
-              ? null
-              : _encounterSubmissionId,
+          encounterId:
+              _isFollowUp || _isLinkedRemoval ? null : _encounterSubmissionId,
           isFollowUp: _isFollowUp,
         );
         final captureId = result.recordId;
@@ -2128,7 +2127,8 @@ class _ScanDetectionPageState extends State<ScanDetectionPage>
     } on PlatformException {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('The photos could not be opened. Try again.')),
+        const SnackBar(
+            content: Text('The photos could not be opened. Try again.')),
       );
       return;
     }
@@ -2307,7 +2307,8 @@ class _ScanDetectionPageState extends State<ScanDetectionPage>
             Expanded(
               child: Text(
                 scanPhotoRuleNote,
-                style: TextStyle(color: kTextNavy, fontSize: 12.5, height: 1.35),
+                style:
+                    TextStyle(color: kTextNavy, fontSize: 12.5, height: 1.35),
               ),
             ),
           ],
@@ -2380,15 +2381,17 @@ class _ScanDetectionPageState extends State<ScanDetectionPage>
                           if (img.metadata.locationProblem ==
                               PhotoLocationProblem.noLocation)
                             OutlinedButton.icon(
-                              onPressed:
-                                  _isBusy ? null : _retryPhotoLocations,
+                              onPressed: _isBusy ? null : _retryPhotoLocations,
                               icon: const Icon(Icons.my_location_rounded,
                                   size: 16),
                               label: const Text('Try again'),
                             ),
-                          if (img.metadata.locationProblem != PhotoLocationProblem.none)
+                          if (img.metadata.locationProblem !=
+                              PhotoLocationProblem.none)
                             OutlinedButton.icon(
-                              onPressed: _isBusy ? null : () => _reviewPhotoLocation(img),
+                              onPressed: _isBusy
+                                  ? null
+                                  : () => _reviewPhotoLocation(img),
                               icon: const Icon(Icons.map_outlined, size: 16),
                               label: const Text('Review photo location'),
                             ),
@@ -2421,12 +2424,19 @@ class _ScanDetectionPageState extends State<ScanDetectionPage>
   Future<void> _reviewPhotoLocation(_PendingScanImage image) async {
     final metadata = image.metadata;
     final original = metadata.latitude == null || metadata.longitude == null
-        ? null : LatLng(metadata.latitude!, metadata.longitude!);
-    await Navigator.of(context).push<void>(MaterialPageRoute(builder: (_) => PhotoLocationReviewPage(
-      fileName: image.fileName, original: original,
-      originalSource: original == null ? 'unavailable' : metadata.gpsFromExif ? 'exif' : 'device_surface',
-      capturedAt: metadata.dateTaken,
-    )));
+        ? null
+        : LatLng(metadata.latitude!, metadata.longitude!);
+    await Navigator.of(context).push<void>(MaterialPageRoute(
+        builder: (_) => PhotoLocationReviewPage(
+              fileName: image.fileName,
+              original: original,
+              originalSource: original == null
+                  ? 'unavailable'
+                  : metadata.gpsFromExif
+                      ? 'exif'
+                      : 'device_surface',
+              capturedAt: metadata.dateTaken,
+            )));
     // This view never replaces metadata or clears the location problem.
   }
 

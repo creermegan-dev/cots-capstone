@@ -28,7 +28,8 @@ class MonitoringAnalyticsPanel extends StatefulWidget {
       this.trailingBuilder,
       this.removalMethodLoader,
       this.useSiteTerminology = false,
-      this.showHeaderFilters = true});
+      this.showHeaderFilters = true,
+      this.dashboardLayout = false});
   final Stream<List<ScanRecordModel>>? recordsStream;
   final DateTime? now;
   final Widget Function(BuildContext, List<ScanRecordModel>)? trailingBuilder;
@@ -39,6 +40,7 @@ class MonitoringAnalyticsPanel extends StatefulWidget {
   /// When false, the date picker and zone dropdown at the top of the panel are hidden.
   final bool showHeaderFilters;
   final bool useSiteTerminology;
+  final bool dashboardLayout;
 
   @override
   State<MonitoringAnalyticsPanel> createState() =>
@@ -139,7 +141,7 @@ class _MonitoringAnalyticsPanelState extends State<MonitoringAnalyticsPanel> {
                                     color: Color(0xFF1E293B)))),
                         SizedBox(
                             width: 220,
-                            height: 44,
+                            height: widget.dashboardLayout ? null : 44,
                             child: DropdownButtonFormField<String>(
                               key: ValueKey(selectedZone),
                               initialValue: selectedZone ?? '',
@@ -243,7 +245,9 @@ class _MonitoringAnalyticsPanelState extends State<MonitoringAnalyticsPanel> {
                       '${data.accepted}',
                       'Every COTS found is removed. COTS the Expert rejected are not counted.',
                       Icons.verified_outlined,
-                      const Color(0xFF008D94),
+                      widget.dashboardLayout
+                          ? kSuccessGreen
+                          : const Color(0xFF008D94),
                     ),
                     (
                       HonestReport.waitingLabel,
@@ -289,7 +293,7 @@ class _MonitoringAnalyticsPanelState extends State<MonitoringAnalyticsPanel> {
                       const Color(0xFF0D9488),
                     ),
                   ];
-                  return Wrap(spacing: 12, runSpacing: 12, children: [
+                  final cards = <Widget>[
                     for (final m in metrics)
                       SizedBox(
                           width: width,
@@ -299,72 +303,91 @@ class _MonitoringAnalyticsPanelState extends State<MonitoringAnalyticsPanel> {
                             description: m.$3,
                             icon: m.$4,
                             accentColor: m.$5,
+                            compact: widget.dashboardLayout,
                           )),
-                  ]);
+                  ];
+                  if (widget.dashboardLayout) {
+                    return Column(children: [
+                      for (var i = 0; i < cards.length; i += columns) ...[
+                        if (i > 0) const SizedBox(height: 12),
+                        IntrinsicHeight(
+                            child: Row(
+                                crossAxisAlignment: CrossAxisAlignment.stretch,
+                                children: [
+                              for (var j = i;
+                                  j < math.min(i + columns, cards.length);
+                                  j++) ...[
+                                if (j > i) const SizedBox(width: 12),
+                                Expanded(child: cards[j]),
+                              ],
+                            ])),
+                      ],
+                    ]);
+                  }
+                  return Wrap(spacing: 12, runSpacing: 12, children: cards);
                 }),
                 const SizedBox(height: 16),
-                _card(
-                    'Confirmed COTS trend',
-                    Column(
-                        crossAxisAlignment: CrossAxisAlignment.stretch,
-                        children: [
-                          Align(
-                              alignment: Alignment.centerRight,
-                              child: DropdownButton<String>(
-                                value: _granularity,
-                                items: [
-                                  for (final v in [
-                                    'Daily',
-                                    'Weekly',
-                                    'Monthly'
-                                  ])
-                                    DropdownMenuItem(value: v, child: Text(v))
-                                ],
-                                onChanged: (v) =>
-                                    setState(() => _granularity = v ?? 'Daily'),
-                              )),
-                          if (points.isNotEmpty) _trendChart(points),
-                        ])),
-                const SizedBox(height: 16),
-                _card(
-                    widget.useSiteTerminology
-                        ? 'Confirmed COTS by site'
-                        : 'Confirmed COTS by zone',
-                    _zoneChart(data)),
-                const SizedBox(height: 16),
-                _card(
-                    'Verification status',
-                    Column(children: [
-                      _countRow('Confirmed', data.accepted, data.totalCots,
-                          kSuccessGreen),
-                      _countRow(HonestReport.waitingLabel, data.pending,
-                          data.totalCots, kWarningOrange),
-                      _countRow(HonestReport.notAcceptedLabel, data.rejected,
-                          data.totalCots, kDangerRed),
-                    ])),
-                const SizedBox(height: 16),
-                _card(
-                    'AI confidence levels',
-                    Column(children: [
-                      _countRow(
-                          '80–100%',
-                          data.confidenceBands[
-                              CotsVerificationBand.aiAutoApproved.index],
-                          data.totalCots,
-                          kSuccessGreen),
-                      _countRow(
-                          '20–79%',
-                          data.confidenceBands[
-                              CotsVerificationBand.adminReview.index],
-                          data.totalCots,
-                          kWarningOrange),
-                      _countRow(
-                          'Below 20%',
-                          data.confidenceBands[
-                              CotsVerificationBand.retakeRequired.index],
-                          data.totalCots,
-                          kDangerRed),
-                    ])),
+                _chartGrid([
+                  _card(
+                      'Confirmed COTS trend',
+                      Column(
+                          crossAxisAlignment: CrossAxisAlignment.stretch,
+                          children: [
+                            Align(
+                                alignment: Alignment.centerRight,
+                                child: DropdownButton<String>(
+                                  value: _granularity,
+                                  items: [
+                                    for (final v in [
+                                      'Daily',
+                                      'Weekly',
+                                      'Monthly'
+                                    ])
+                                      DropdownMenuItem(value: v, child: Text(v))
+                                  ],
+                                  onChanged: (v) => setState(
+                                      () => _granularity = v ?? 'Daily'),
+                                )),
+                            if (points.isNotEmpty) _trendChart(points),
+                          ])),
+                  _card(
+                      widget.useSiteTerminology
+                          ? 'Confirmed COTS by site'
+                          : 'Confirmed COTS by zone',
+                      _zoneChart(data)),
+                  _card(
+                      'Verification status',
+                      Column(children: [
+                        _countRow('Confirmed', data.accepted, data.totalCots,
+                            kSuccessGreen),
+                        _countRow(HonestReport.waitingLabel, data.pending,
+                            data.totalCots, kWarningOrange),
+                        _countRow(HonestReport.notAcceptedLabel, data.rejected,
+                            data.totalCots, kDangerRed),
+                      ])),
+                  _card(
+                      'AI confidence levels',
+                      Column(children: [
+                        _countRow(
+                            '80–100%',
+                            data.confidenceBands[
+                                CotsVerificationBand.aiAutoApproved.index],
+                            data.totalCots,
+                            kSuccessGreen),
+                        _countRow(
+                            '20–79%',
+                            data.confidenceBands[
+                                CotsVerificationBand.adminReview.index],
+                            data.totalCots,
+                            kWarningOrange),
+                        _countRow(
+                            'Below 20%',
+                            data.confidenceBands[
+                                CotsVerificationBand.retakeRequired.index],
+                            data.totalCots,
+                            kDangerRed),
+                      ])),
+                ]),
                 const SizedBox(height: 16),
                 _card(
                     'Removal methods',
@@ -385,6 +408,33 @@ class _MonitoringAnalyticsPanelState extends State<MonitoringAnalyticsPanel> {
               ]);
         },
       );
+
+  Widget _chartGrid(List<Widget> cards) =>
+      LayoutBuilder(builder: (context, constraints) {
+        if (!widget.dashboardLayout || constraints.maxWidth < 900) {
+          return Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                for (var i = 0; i < cards.length; i++) ...[
+                  if (i > 0) const SizedBox(height: 16),
+                  cards[i],
+                ],
+              ]);
+        }
+        return Column(children: [
+          for (var i = 0; i < cards.length; i += 2) ...[
+            if (i > 0) const SizedBox(height: 16),
+            Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+              Expanded(child: cards[i]),
+              const SizedBox(width: 16),
+              Expanded(
+                  child: i + 1 < cards.length
+                      ? cards[i + 1]
+                      : const SizedBox.shrink()),
+            ]),
+          ],
+        ]);
+      });
 
   Widget _trendChart(List<MonitoringTrendPoint> points) {
     final maxY =
@@ -449,29 +499,70 @@ class _MonitoringAnalyticsPanelState extends State<MonitoringAnalyticsPanel> {
       kWarningOrange,
       kSuccessGreen
     ];
-    return Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
-      SizedBox(
-          height: 220,
-          child: PieChart(PieChartData(centerSpaceRadius: 45, sections: [
-            for (var i = 0; i < entries.length; i++)
-              PieChartSectionData(
-                  value: entries[i].value.toDouble(),
-                  color: colors[i % colors.length],
-                  radius: 45,
-                  title: '')
-          ]))),
+    final chart = SizedBox(
+        height: 220,
+        child: Stack(alignment: Alignment.center, children: [
+          PieChart(PieChartData(
+              centerSpaceRadius: widget.dashboardLayout ? 48 : 45,
+              sections: [
+                for (var i = 0; i < entries.length; i++)
+                  PieChartSectionData(
+                      value: entries[i].value.toDouble(),
+                      color: colors[i % colors.length],
+                      radius: widget.dashboardLayout ? 40 : 45,
+                      title: ''),
+              ])),
+          if (widget.dashboardLayout)
+            Text('${data.accepted}\nconfirmed',
+                textAlign: TextAlign.center,
+                style: const TextStyle(
+                    fontSize: 14,
+                    fontWeight: FontWeight.w700,
+                    color: kTextNavy)),
+        ]));
+    final legend =
+        Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
       for (var i = 0; i < entries.length; i++)
         _countRow(entries[i].key, entries[i].value, data.accepted,
             colors[i % colors.length]),
     ]);
+    return LayoutBuilder(builder: (context, constraints) {
+      if (widget.dashboardLayout && constraints.maxWidth >= 400) {
+        return Row(children: [
+          SizedBox(width: 180, child: chart),
+          const SizedBox(width: 16),
+          Expanded(child: legend)
+        ]);
+      }
+      return Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [chart, legend]);
+    });
   }
 
   Widget _countRow(String label, int count, int total, Color color) => Padding(
         padding: const EdgeInsets.symmetric(vertical: 6),
         child:
             Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
-          Text(
-              '$label: $count (${total == 0 ? '0' : (count * 100 / total).toStringAsFixed(1)}%)'),
+          if (widget.dashboardLayout)
+            Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+              Expanded(
+                  child: Text(label,
+                      style: const TextStyle(fontSize: 12, color: kTextNavy))),
+              const SizedBox(width: 8),
+              Text('$count',
+                  style: const TextStyle(
+                      fontSize: 12,
+                      fontWeight: FontWeight.w700,
+                      color: kTextNavy)),
+              const SizedBox(width: 6),
+              Text(
+                  '${total == 0 ? '0' : (count * 100 / total).toStringAsFixed(1)}%',
+                  style: const TextStyle(fontSize: 11, color: kMutedGray)),
+            ])
+          else
+            Text(
+                '$label: $count (${total == 0 ? '0' : (count * 100 / total).toStringAsFixed(1)}%)'),
           const SizedBox(height: 4),
           LinearProgressIndicator(
               value: total == 0 ? 0 : count / total,
@@ -511,6 +602,7 @@ class _MetricStatCard extends StatelessWidget {
     required this.description,
     required this.icon,
     required this.accentColor,
+    this.compact = false,
   });
 
   final String title;
@@ -518,11 +610,12 @@ class _MetricStatCard extends StatelessWidget {
   final String description;
   final IconData icon;
   final Color accentColor;
+  final bool compact;
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.all(18),
+    final card = Container(
+      padding: EdgeInsets.all(compact ? 14 : 18),
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.circular(14),
@@ -544,18 +637,18 @@ class _MetricStatCard extends StatelessWidget {
               Expanded(
                 child: Text(
                   title,
-                  style: const TextStyle(
+                  style: TextStyle(
                     fontWeight: FontWeight.w700,
-                    color: Color(0xFF1E293B),
-                    fontSize: 13.5,
+                    color: const Color(0xFF1E293B),
+                    fontSize: compact ? 12.5 : 13.5,
                     height: 1.25,
                   ),
                 ),
               ),
               const SizedBox(width: 8),
               Container(
-                width: 32,
-                height: 32,
+                width: compact ? 28 : 32,
+                height: compact ? 28 : 32,
                 decoration: BoxDecoration(
                   color: accentColor.withValues(alpha: 0.10),
                   borderRadius: BorderRadius.circular(8),
@@ -565,30 +658,55 @@ class _MetricStatCard extends StatelessWidget {
               ),
             ],
           ),
-          const SizedBox(height: 10),
+          SizedBox(height: compact ? 6 : 10),
           Text(
             value,
             key: ValueKey('metric-$title'),
             style: TextStyle(
-              fontSize: 28,
+              fontSize: compact ? 26 : 28,
               fontWeight: FontWeight.w800,
               color: accentColor,
               height: 1.0,
               letterSpacing: -0.5,
             ),
           ),
-          const SizedBox(height: 8),
-          Text(
-            description,
-            style: const TextStyle(
-              color: Color(0xFF64748B),
-              fontSize: 11.5,
-              height: 1.35,
+          if (!compact) ...[
+            const SizedBox(height: 8),
+            Text(
+              description,
+              style: const TextStyle(
+                color: Color(0xFF64748B),
+                fontSize: 11.5,
+                height: 1.35,
+              ),
             ),
-          ),
+          ],
         ],
       ),
     );
+    if (!compact) return card;
+    return Material(
+        color: Colors.transparent,
+        child: InkWell(
+          key: ValueKey('analytics-info-$title'),
+          borderRadius: BorderRadius.circular(14),
+          onTap: () => showDialog<void>(
+              context: context,
+              builder: (dialogContext) => AlertDialog(
+                    title: Text(title,
+                        style: const TextStyle(
+                            fontSize: 17, fontWeight: FontWeight.w700)),
+                    scrollable: true,
+                    content: Text(description,
+                        style: const TextStyle(fontSize: 13, height: 1.4)),
+                    actions: [
+                      TextButton(
+                          onPressed: () => Navigator.pop(dialogContext),
+                          child: const Text('Close'))
+                    ],
+                  )),
+          child: card,
+        ));
   }
 }
 

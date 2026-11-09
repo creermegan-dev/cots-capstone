@@ -280,8 +280,6 @@ class _AdminReportsScreenState extends State<AdminReportsScreen> {
                     _confidenceGuide(),
                     const SizedBox(height: 14),
                     _statusGuide(),
-                    const SizedBox(height: 14),
-                    _systemNotice(),
                   ],
                 );
               }
@@ -291,8 +289,6 @@ class _AdminReportsScreenState extends State<AdminReportsScreen> {
                   Expanded(child: _confidenceGuide()),
                   const SizedBox(width: 14),
                   Expanded(child: _statusGuide()),
-                  const SizedBox(width: 14),
-                  Expanded(child: _systemNotice()),
                 ],
               );
             },
@@ -579,14 +575,6 @@ class _AdminReportsScreenState extends State<AdminReportsScreen> {
               ),
             ),
             OutlinedButton.icon(
-              onPressed: () {},
-              icon: AdminDateTimeTokens.dateChipIcon(
-                  icon: Icons.date_range_outlined),
-              label: const Text('Select date range',
-                  style: AdminDateTimeTokens.dateRangeChipTextStyle),
-              style: AdminDateTimeTokens.refreshOutlinedButtonStyle(),
-            ),
-            OutlinedButton.icon(
               onPressed: () => setState(() => _page = 0),
               icon: const Icon(Icons.filter_list_rounded, size: 18),
               label: const Text('Filter'),
@@ -706,71 +694,6 @@ class _AdminReportsScreenState extends State<AdminReportsScreen> {
     );
   }
 
-  Widget _systemNotice() {
-    return Container(
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: const Color(0xFFE3F2FD),
-        borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: AdminColors.statBlue.withValues(alpha: 0.2)),
-        boxShadow: [
-          BoxShadow(
-              color: Colors.black.withValues(alpha: 0.04),
-              blurRadius: 12,
-              offset: const Offset(0, 4)),
-        ],
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              Icon(Icons.info_outline_rounded,
-                  color: AdminColors.statBlue.withValues(alpha: 0.9)),
-              const SizedBox(width: 8),
-              const Text('System Notice',
-                  style: TextStyle(
-                      fontWeight: FontWeight.w900,
-                      fontSize: 14,
-                      color: AdminColors.headerTitle)),
-            ],
-          ),
-          const SizedBox(height: 10),
-          Text(
-            'All types of reports are listed here. Only detection reports go through admin review based on confidence level.',
-            style: TextStyle(
-                fontSize: 13,
-                height: 1.45,
-                color: AdminColors.headerTitle.withValues(alpha: 0.88)),
-          ),
-          const SizedBox(height: 12),
-          _bullet('High (80–100%) → Accepted'),
-          _bullet('Medium (20–79%) → Expert verification'),
-          _bullet('Low (<20%) → Retake or rejected'),
-        ],
-      ),
-    );
-  }
-
-  Widget _bullet(String t) {
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 6),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text('• ',
-              style: TextStyle(
-                  fontWeight: FontWeight.w800,
-                  color: AdminColors.statBlue.withValues(alpha: 0.8))),
-          Expanded(
-              child: Text(t,
-                  style: const TextStyle(
-                      fontSize: 13, fontWeight: FontWeight.w600))),
-        ],
-      ),
-    );
-  }
-
   Widget _guideLine(Color dot, String title, String text) {
     return Row(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -846,6 +769,7 @@ class _AdminReportsScreenState extends State<AdminReportsScreen> {
           builder: (_) => UserSubmissionDetailsPage(
               initialGroup: StaffSubmissionRows.groupFor(report.source),
               includePendingPhotos: false,
+              useReadOnlyLayout: true,
               photoPageBuilder: (record) => AdminRecordDetailsScreen(
                   row: record.toAdminTableRow(1), viewOnly: true))));
       return;
@@ -1115,7 +1039,6 @@ abstract final class _ReportTableDim {
   static const double status = 124;
   static const double reviewDetails = 292;
   static const double actions = 136;
-  static const double menu = 44;
 
   static double get totalWidth =>
       reportId +
@@ -1126,8 +1049,7 @@ abstract final class _ReportTableDim {
       confidence +
       status +
       reviewDetails +
-      actions +
-      menu;
+      actions;
 
   static Map<int, TableColumnWidth> get columnWidths => {
         0: const FixedColumnWidth(reportId),
@@ -1139,7 +1061,6 @@ abstract final class _ReportTableDim {
         6: const FixedColumnWidth(status),
         7: const FixedColumnWidth(reviewDetails),
         8: const FixedColumnWidth(actions),
-        9: const FixedColumnWidth(menu),
       };
 
   static TextStyle get headerTextStyle => AdminDataTableTokens.headerTextStyle;
@@ -1173,7 +1094,6 @@ class _TableHeader extends StatelessWidget {
                 _headerCell('Status', TextAlign.left),
                 _headerCell('Review Details', TextAlign.left),
                 _headerCell('Actions', TextAlign.right),
-                _headerCell('', TextAlign.center),
               ],
             ),
           ],
@@ -1418,19 +1338,6 @@ class _ReportTableRowState extends State<_ReportTableRow> {
                             ],
                           ),
                           align: Alignment.centerRight,
-                        ),
-                        _bodyCell(
-                          IconButton(
-                            padding: EdgeInsets.zero,
-                            constraints: const BoxConstraints(
-                                minWidth: 36, minHeight: 36),
-                            onPressed: () {},
-                            icon: Icon(Icons.more_vert_rounded,
-                                size: 20,
-                                color:
-                                    AdminColors.muted.withValues(alpha: 0.85)),
-                          ),
-                          align: Alignment.center,
                         ),
                       ],
                     ),

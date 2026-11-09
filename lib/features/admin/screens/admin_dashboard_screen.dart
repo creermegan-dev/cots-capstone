@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 
+import '../../../core/supabase_config.dart';
+import '../../../widgets/site_levels_row.dart';
 import '../../../widgets/monitoring_analytics_panel.dart';
 import '../../../widgets/monitoring_record_map.dart';
 import '../layout/admin_breakpoints.dart';
@@ -38,7 +40,13 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
               onRefreshTap: _onRefresh,
             ),
             const SizedBox(height: 18),
+            // 2026-11-08: each site's level this month, High first.
+            if (SupabaseConfig.isConfigured) ...[
+              const SiteLevelsRow(),
+              const SizedBox(height: 18),
+            ],
             MonitoringAnalyticsPanel(
+                dashboardLayout: true,
                 useSiteTerminology: true,
                 showHeaderFilters: false,
                 trailingBuilder: (context, records) => Column(children: [

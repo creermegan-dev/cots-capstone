@@ -42,10 +42,12 @@ class SiteTeamPanel extends StatefulWidget {
     super.key,
     required this.areaCode,
     this.api = const SitePartnerApi(),
+    this.fallbackDiverName = '',
   });
 
   final String areaCode;
   final SitePartnerApi api;
+  final String fallbackDiverName;
 
   @override
   State<SiteTeamPanel> createState() => _SiteTeamPanelState();
@@ -71,31 +73,57 @@ class _SiteTeamPanelState extends State<SiteTeamPanel> {
       return;
     }
     if (!mounted) return;
+    var query = '';
     final selected = await showDialog<Map<String, dynamic>>(
       context: context,
-      builder: (dialogContext) => SimpleDialog(
-        title: const Text('Add site partner'),
-        children: [
-          Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 8),
-              child: Text(
-                  'Choose a verified Diver to share ${team.areaName} with you. '
-                  'They must accept, and then the Expert approves.')),
-          if (choices.isEmpty)
-            const Padding(
-                padding: EdgeInsets.all(24),
-                child: Text('No other verified Divers have an account yet.')),
-          for (final person in choices)
-            SimpleDialogOption(
+      builder: (dialogContext) =>
+          StatefulBuilder(builder: (context, updateSearch) {
+        final filtered = choices
+            .where((person) => (person['name']?.toString() ?? '')
+                .toLowerCase()
+                .contains(query.trim().toLowerCase()))
+            .toList();
+        return SimpleDialog(
+          title: const Text('Add site partner'),
+          children: [
+            Padding(
                 padding:
-                    const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
-                onPressed: () => Navigator.pop(dialogContext, person),
-                child: Text(person['name']?.toString() ?? '')),
-          TextButton(
-              onPressed: () => Navigator.pop(dialogContext),
-              child: const Text('Back')),
-        ],
-      ),
+                    const EdgeInsets.symmetric(horizontal: 24, vertical: 8),
+                child: Text(
+                    'Choose a verified Diver to share ${team.areaName} with you. '
+                    'They must accept, and then the Expert approves.')),
+            Padding(
+              padding: const EdgeInsets.fromLTRB(24, 8, 24, 12),
+              child: TextField(
+                onChanged: (value) => updateSearch(() => query = value),
+                decoration: const InputDecoration(
+                  hintText: 'Search diver by name',
+                  prefixIcon: Icon(Icons.search),
+                  border: OutlineInputBorder(),
+                  isDense: true,
+                ),
+              ),
+            ),
+            if (choices.isEmpty)
+              const Padding(
+                  padding: EdgeInsets.all(24),
+                  child: Text('No other verified Divers have an account yet.')),
+            if (choices.isNotEmpty && filtered.isEmpty)
+              const Padding(
+                  padding: EdgeInsets.all(24),
+                  child: Text('No divers match your search.')),
+            for (final person in filtered)
+              SimpleDialogOption(
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
+                  onPressed: () => Navigator.pop(dialogContext, person),
+                  child: Text(person['name']?.toString() ?? '')),
+            TextButton(
+                onPressed: () => Navigator.pop(dialogContext),
+                child: const Text('Back')),
+          ],
+        );
+      }),
     );
     if (selected == null || !mounted) return;
     final name = selected['name']?.toString() ?? '';
@@ -151,15 +179,30 @@ class _SiteTeamPanelState extends State<SiteTeamPanel> {
         future: _data,
         builder: (context, snapshot) {
           if (snapshot.hasError) {
-            return TextButton(
-                onPressed: _reload,
-                child: const Text('Could not load the site\'s Divers. Retry'));
+            return Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  if (widget.fallbackDiverName.isNotEmpty)
+                    Text('Assigned diver: ${widget.fallbackDiverName}'),
+                  TextButton(
+                      onPressed: _reload,
+                      child: const Text(
+                          'Could not load the site\'s Divers. Retry')),
+                ]);
           }
-          if (!snapshot.hasData) return const SizedBox.shrink();
+          if (!snapshot.hasData) {
+            return widget.fallbackDiverName.isEmpty
+                ? const SizedBox.shrink()
+                : Text('Assigned diver: ${widget.fallbackDiverName}');
+          }
           final team = snapshot.data!.$1
               .where((t) => t.areaCode == widget.areaCode)
               .firstOrNull;
-          if (team == null) return const SizedBox.shrink();
+          if (team == null) {
+            return widget.fallbackDiverName.isEmpty
+                ? const SizedBox.shrink()
+                : Text('Assigned diver: ${widget.fallbackDiverName}');
+          }
           final open = snapshot.data!.$2
               .where((r) =>
                   r.areaCode == widget.areaCode &&
@@ -235,8 +278,11 @@ class _SitePartnerInvitesCardState extends State<SitePartnerInvitesCard> {
                 '${invite.areaName} together with ${invite.invitedByName ?? invite.mainDiverName}. '
                 'Your records there will no longer wait for the Expert.',
             'Accept')
-        : await _confirm(context, 'Decline the invitation?',
-            '${invite.invitedByName ?? invite.mainDiverName} will be told.', 'Decline');
+        : await _confirm(
+            context,
+            'Decline the invitation?',
+            '${invite.invitedByName ?? invite.mainDiverName} will be told.',
+            'Decline');
     if (!ok || !mounted) return;
     setState(() => _busy = true);
     try {

@@ -127,7 +127,7 @@ class _AdminSettingsScreenState extends State<AdminSettingsScreen> {
       if (!mounted) return;
       setState(() {
         _preferencesError =
-            'Could not load saved preferences. Check your connection and Firestore rules.';
+            'Could not load saved preferences. Check your connection and account access.';
       });
     } finally {
       if (mounted) setState(() => _loadingPreferences = false);
@@ -290,7 +290,7 @@ class _AdminSettingsScreenState extends State<AdminSettingsScreen> {
       if (!mounted) return;
       setState(() {
         _preferencesError =
-            'Could not save preferences. Check your connection and Firestore rules.';
+            'Could not save preferences. Check your connection and account access.';
       });
       _snack(_preferencesError!);
     } finally {
@@ -391,8 +391,6 @@ class _AdminSettingsScreenState extends State<AdminSettingsScreen> {
     );
   }
 
-
-
   Widget _twoByTwoGrid(double maxWidth) {
     final twoCol = maxWidth >= 900;
     const gap = 18.0;
@@ -418,12 +416,31 @@ class _AdminSettingsScreenState extends State<AdminSettingsScreen> {
       );
     }
 
+    if (!twoCol) {
+      return Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          _profileCard(),
+          const SizedBox(height: gap),
+          _changePasswordCard(),
+          const SizedBox(height: gap),
+          _securitySettingsCard(),
+        ],
+      );
+    }
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
         pair(_profileCard(), _changePasswordCard()),
         const SizedBox(height: gap),
-        pair(_notificationsCard(), _securitySettingsCard()),
+        Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Expanded(child: _securitySettingsCard()),
+            const SizedBox(width: gap),
+            const Expanded(child: SizedBox.shrink()),
+          ],
+        ),
       ],
     );
   }
@@ -564,90 +581,6 @@ class _AdminSettingsScreenState extends State<AdminSettingsScreen> {
             subtitle: 'Require a second step when signing in',
             value: _twoFactorAuth,
             onChanged: _savingPreferences ? null : _changeTwoFactor,
-          ),
-          const Divider(height: 22),
-          _toggleTile(
-            title: 'Login Alerts',
-            subtitle: 'Notify me of new device sign-ins',
-            value: _loginAlerts,
-            onChanged: _savingPreferences
-                ? null
-                : (v) => setState(() => _loginAlerts = v),
-          ),
-          const Divider(height: 22),
-          _toggleTile(
-            title: 'Auto Session Timeout',
-            subtitle: 'Sign out after inactivity',
-            value: _sessionTimeout,
-            onChanged: _savingPreferences
-                ? null
-                : (v) => setState(() => _sessionTimeout = v),
-          ),
-          const SizedBox(height: 22),
-          Align(
-            alignment: Alignment.centerLeft,
-            child: _saveButton(
-              onPressed: _savingPreferences ? null : _savePreferences,
-              label: _savingPreferences ? 'Saving...' : 'Save Preferences',
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _notificationsCard() {
-    return _settingsCard(
-      icon: Icons.notifications_active_outlined,
-      iconBg: AdminColors.statGreen.withValues(alpha: 0.14),
-      iconColor: AdminColors.statGreen,
-      title: 'Notification Settings',
-      subtitle: 'Manage your notification settings.',
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          _toggleTile(
-            title: 'Email Notifications',
-            subtitle: 'Receive email alerts and updates',
-            value: _emailNotifications,
-            onChanged: _savingPreferences
-                ? null
-                : (v) => setState(() => _emailNotifications = v),
-          ),
-          const Divider(height: 22),
-          _toggleTile(
-            title: 'High Risk Alerts',
-            subtitle: 'Get notified for high risk sites',
-            value: _highRiskAlerts,
-            onChanged: _savingPreferences
-                ? null
-                : (v) => setState(() => _highRiskAlerts = v),
-          ),
-          const Divider(height: 22),
-          _toggleTile(
-            title: 'System Updates',
-            subtitle: 'Receive system update notifications',
-            value: _systemUpdates,
-            onChanged: _savingPreferences
-                ? null
-                : (v) => setState(() => _systemUpdates = v),
-          ),
-          const Divider(height: 22),
-          _toggleTile(
-            title: 'Weekly Reports',
-            subtitle: 'Receive weekly summary reports',
-            value: _weeklyReports,
-            onChanged: _savingPreferences
-                ? null
-                : (v) => setState(() => _weeklyReports = v),
-          ),
-          const SizedBox(height: 22),
-          Align(
-            alignment: Alignment.centerLeft,
-            child: _saveButton(
-              onPressed: _savingPreferences ? null : _savePreferences,
-              label: _savingPreferences ? 'Saving...' : 'Save Preferences',
-            ),
           ),
         ],
       ),

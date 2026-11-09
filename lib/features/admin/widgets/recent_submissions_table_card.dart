@@ -3,6 +3,9 @@ import 'package:intl/intl.dart';
 
 import '../../../models/scan_record_model.dart';
 import '../../../models/monitoring_analytics.dart';
+import '../../../models/submission_group.dart';
+import '../../user/user_submission_details_page.dart';
+import '../screens/admin_record_details_screen.dart';
 import '../../../services/scan_record_repository.dart';
 import '../../../widgets/cots_loading_skeleton.dart';
 import '../theme/admin_theme.dart';
@@ -40,8 +43,8 @@ class _RecentSubmissionsTableCardState
   void initState() {
     super.initState();
     _records = widget.recordsStream ??
-        ScanRecordRepository.watchAll().map((records) =>
-            records.where(MonitoringAnalytics.isCapture).take(5).toList());
+        ScanRecordRepository.watchAll().map(
+            (records) => records.where(MonitoringAnalytics.isCapture).toList());
   }
 
   @override
@@ -50,7 +53,7 @@ class _RecentSubmissionsTableCardState
     if (oldWidget.recordsStream != widget.recordsStream) {
       _records = widget.recordsStream ??
           ScanRecordRepository.watchAll().map((records) =>
-              records.where(MonitoringAnalytics.isCapture).take(5).toList());
+              records.where(MonitoringAnalytics.isCapture).toList());
     }
   }
 
@@ -153,19 +156,20 @@ class _RecentSubmissionsTableCardState
                           width: c.maxWidth < tableW + 40
                               ? tableW + 40
                               : c.maxWidth - 40,
-                          child: Column(
+                          child: SingleChildScrollView(
+                              child: Column(
                             crossAxisAlignment: CrossAxisAlignment.stretch,
                             children: [
                               const AdminDataTableHeader(
                                 columns: RecentSubmissionsTableCard._columns,
                               ),
-                              for (var i = 0; i < records.length; i++)
+                              for (var i = 0; i < records.length && i < 5; i++)
                                 AdminDataTableStaticRow(
                                   columnWidths: colMap,
-                                  cells: _rowCells(records[i], i + 1),
+                                  cells: _rowCells(records[i], i + 1, records),
                                 ),
                             ],
-                          ),
+                          )),
                         ),
                       ),
                     ),
@@ -179,7 +183,30 @@ class _RecentSubmissionsTableCardState
     );
   }
 
-  List<TableCell> _rowCells(ScanRecordModel record, int index) {
+  void _openRecord(ScanRecordModel record, List<ScanRecordModel> records) {
+    final group = SubmissionGroup.fromRecords(records).firstWhere((group) =>
+        group.records.any((photo) =>
+            photo.id == record.id &&
+            photo.uid == record.uid &&
+            photo.recordCollection == record.recordCollection));
+    Navigator.of(context).push<void>(MaterialPageRoute(
+      builder: (_) => group.hasBatch
+          ? UserSubmissionDetailsPage(
+              initialGroup: group,
+              includePendingPhotos: false,
+              useReadOnlyLayout: true,
+              recordsStream:
+                  widget.recordsStream == null ? null : Stream.value(records),
+              photoPageBuilder: (photo) => AdminRecordDetailsScreen(
+                  row: photo.toAdminTableRow(1), viewOnly: true),
+            )
+          : AdminRecordDetailsScreen(
+              row: record.toAdminTableRow(1), viewOnly: true),
+    ));
+  }
+
+  List<TableCell> _rowCells(
+      ScanRecordModel record, int index, List<ScanRecordModel> records) {
     final when = record.submittedAt ?? record.dateTaken;
     final dt = when == null
         ? 'Unknown'
@@ -212,7 +239,7 @@ class _RecentSubmissionsTableCardState
               constraints: const BoxConstraints(minWidth: 36, minHeight: 36),
               icon: const Icon(Icons.visibility_outlined, size: 20),
               color: AdminColors.statBlue,
-              onPressed: () {},
+              onPressed: () => _openRecord(record, records),
             ),
           ],
         ),

@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../../../widgets/monitoring_analytics_panel.dart';
+import '../../../widgets/monthly_site_levels_card.dart';
 import '../layout/admin_breakpoints.dart';
 import '../widgets/admin_dashboard_header.dart';
 
@@ -31,12 +32,15 @@ class _AdminAnalyticsScreenState extends State<AdminAnalyticsScreen> {
               AdminDashboardHeader(
                 title: 'Analytics',
                 subtitle:
-                    'Live monitoring records, AI detections, and Expert decisions.',
+                    'Confirmed COTS, review results and monthly site levels.',
                 showRefreshButton: true,
                 onRefreshTap: _onRefresh,
               ),
               const SizedBox(height: 18),
-              const MonitoringAnalyticsPanel(useSiteTerminology: true),
+              const MonitoringAnalyticsPanel(
+                  useSiteTerminology: true, dashboardLayout: true),
+              const SizedBox(height: 18),
+              const MonthlySiteLevelsCard(),
             ],
           ),
         );

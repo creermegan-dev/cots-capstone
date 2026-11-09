@@ -16,10 +16,10 @@ final List<AdminNavEntry> kAdminNavEntries = [
     label: 'Records / Submissions',
     index: 3,
   ),
+  // 2026-11-08: the record-list Alerts tab was removed; High site levels
+  // arrive as notifications and on the Dashboard.
   const AdminNavItemData(
-      icon: Icons.warning_amber_rounded,
-      label: 'Alerts & Notifications',
-      index: 4),
+      icon: Icons.notifications_outlined, label: 'Notifications', index: 4),
   const AdminNavItemData(
       icon: Icons.analytics_outlined, label: 'Analytics', index: 5),
   const AdminNavItemData(
@@ -36,7 +36,7 @@ const List<String> kAdminShellPageTitles = [
   'Map Monitoring',
   'Sites',
   'Records / Submissions',
-  'Alerts & Notifications',
+  'Notifications',
   'Analytics',
   'Reports',
   'Users',
@@ -55,11 +55,8 @@ final List<AdminNavEntry> kExpertNavEntries = [
       label: 'Personnel Verification',
       index: 2),
   const AdminNavItemData(
-      icon: Icons.swap_horiz_rounded,
-      label: 'Assignments & Reassignments',
-      index: 3),
-  const AdminNavItemData(
-      icon: Icons.rate_review_outlined, label: 'Assessments', index: 4),
+      icon: Icons.swap_horiz_rounded, label: 'Site Coverage', index: 3),
+  // Index 4 (Assessments) removed 2026-11-08: site levels are automatic.
   const AdminNavItemData(
       icon: Icons.map_outlined, label: 'Map Monitoring', index: 5),
   const AdminNavItemData(

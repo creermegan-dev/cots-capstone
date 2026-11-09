@@ -1,6 +1,8 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:intl/intl.dart';
 
+import '../utils/staff_record_time.dart';
+
 import '../features/admin/models/admin_record_table_row.dart';
 import 'activity_type.dart';
 import 'cots_confidence_policy.dart';
@@ -239,7 +241,7 @@ class CaptureModel {
       index,
       displayRecordId,
       zone,
-      fmt.format(when),
+      fmt.format(StaffRecordTime.inManila(when)),
       count,
       followUpSurveyId.isNotEmpty ? null : _densityEstimate(count),
       followUpSurveyId.isNotEmpty ? 'Not validated' : _riskFromCount(count),
@@ -252,9 +254,12 @@ class CaptureModel {
       imageName: imageName,
       storageObjectPath: storageObjectPath,
       notes: notes,
-      dateCaptured: dateTaken != null ? fmt.format(dateTaken!) : 'Unknown',
-      dateUploaded:
-          submittedAt != null ? fmt.format(submittedAt!) : fmt.format(when),
+      dateCaptured: dateTaken != null
+          ? fmt.format(StaffRecordTime.inManila(dateTaken!))
+          : 'Unknown',
+      dateUploaded: submittedAt != null
+          ? fmt.format(StaffRecordTime.inManila(submittedAt!))
+          : fmt.format(StaffRecordTime.inManila(when)),
       latitude: latitude,
       longitude: longitude,
       detectionBoxes: detectionBoxes,

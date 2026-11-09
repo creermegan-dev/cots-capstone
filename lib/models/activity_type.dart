@@ -17,12 +17,35 @@ abstract final class CotsActivityType {
 
 abstract final class CaptureSource {
   static const goProUnderwaterImage = 'GoPro Underwater Image';
+
+  /// Legacy source values were defaults, not camera metadata. Never present
+  /// those defaults as evidence of which camera took the photo.
+  static String displayLabel(String source) {
+    final value = source.trim();
+    return switch (value.toLowerCase()) {
+      'per photo' => 'Per photo',
+      '' ||
+      'unknown' ||
+      'unknown device' ||
+      'not recorded' ||
+      'gopro underwater image' ||
+      'gopro image' ||
+      'gopro' ||
+      'camera' ||
+      'photo' ||
+      'image' =>
+        'Photo — camera not recorded',
+      'gallery' || 'gallery upload' => 'Photo from gallery',
+      _ => value,
+    };
+  }
 }
 
 abstract final class RemovalMethod {
   static const manual = 'Manual Removal';
   static const vinegar = 'Vinegar Injection';
   static const oxBile = 'Ox Bile / Bile Salts Injection';
+
   /// Older records only; no longer offered (Stage 5). Old records keep them.
   static const communityCleanup = 'Community Cleanup';
   static const researchCollection = 'Research Collection';
