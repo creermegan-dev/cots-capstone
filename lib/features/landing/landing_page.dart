@@ -1,6 +1,6 @@
 import 'dart:math' as math;
 import 'package:flutter/material.dart';
-import 'package:google_fonts/google_fonts.dart';
+import '../../widgets/cots_logo.dart';
 
 import '../auth/auth_routes.dart';
 import '../auth/login_screen.dart';
@@ -45,9 +45,11 @@ class _DesktopLanding extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final isCompactDesktop = width < 1100;
-    final horizontalPadding =
-        width > 1200 ? 56.0 : (isCompactDesktop ? 32.0 : 44.0);
-    final mistHeight = math.max(260.0, height * 0.44);
+    final horizontalPadding = isCompactDesktop ? 40.0 : 64.0;
+    final contentWidth = math.min(1060.0, width - horizontalPadding * 2);
+    final imageWidth = math.min(440.0, contentWidth * 0.43);
+    final heroHeight = (height - 104).clamp(460.0, 760.0);
+    final mistHeight = math.max(260.0, height * 0.42);
 
     return Stack(
       fit: StackFit.expand,
@@ -59,7 +61,7 @@ class _DesktopLanding extends StatelessWidget {
           ),
         ),
 
-        // 2. Decorative ocean orbs, arc contour, and coral line art (from Login photo)
+        // 2. Decorative ocean orbs, arc contour, and coral line art
         const CustomPaint(
           painter: _LandingOceanDecorPainter(isDesktop: true),
           size: Size.infinite,
@@ -92,7 +94,7 @@ class _DesktopLanding extends StatelessWidget {
                   vertical: 24,
                 ),
                 child: Column(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  mainAxisAlignment: MainAxisAlignment.start,
                   crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
                     // Header
@@ -100,49 +102,39 @@ class _DesktopLanding extends StatelessWidget {
 
                     // Centered hero split content
                     Padding(
-                      padding: const EdgeInsets.symmetric(vertical: 20),
+                      padding: const EdgeInsets.only(top: 20),
                       child: Center(
                         child: ConstrainedBox(
-                          constraints: const BoxConstraints(maxWidth: 1140),
+                          constraints: BoxConstraints(maxWidth: contentWidth),
                           child: Row(
                             crossAxisAlignment: CrossAxisAlignment.center,
                             children: [
                               // Left column: Headline, Subtitle, CTA
                               Expanded(
-                                flex: isCompactDesktop ? 52 : 55,
                                 child: Align(
                                   alignment: Alignment.centerLeft,
                                   child: ConstrainedBox(
-                                    constraints: BoxConstraints(
-                                      maxWidth: isCompactDesktop ? 440 : 500,
+                                    constraints: const BoxConstraints(
+                                      maxWidth: 440,
                                     ),
                                     child: _HeroCopy(
                                       isMobile: false,
-                                      fontSize: isCompactDesktop ? 40.0 : 48.0,
+                                      fontSize: isCompactDesktop ? 44.0 : 52.0,
                                     ),
                                   ),
                                 ),
                               ),
 
-                              SizedBox(width: isCompactDesktop ? 24 : 40),
+                              SizedBox(width: isCompactDesktop ? 48 : 96),
 
-                              // Right column: Coral image card
-                              Expanded(
-                                flex: isCompactDesktop ? 48 : 45,
-                                child: Align(
-                                  alignment: Alignment.centerRight,
-                                  child: ConstrainedBox(
-                                    constraints: BoxConstraints(
-                                      maxWidth: isCompactDesktop ? 320 : 380,
-                                      maxHeight: math.min(
-                                        480.0,
-                                        math.max(280.0, height * 0.65),
-                                      ),
-                                    ),
-                                    child: const AspectRatio(
-                                      aspectRatio: 0.72,
-                                      child: LandingHeroImage(),
-                                    ),
+                              // Right column: COTS image card
+                              SizedBox(
+                                width: imageWidth,
+                                height: heroHeight,
+                                child: const LandingHeroImage(
+                                  fullBleed: true,
+                                  borderRadius: BorderRadius.vertical(
+                                    top: Radius.circular(36),
                                   ),
                                 ),
                               ),
@@ -151,8 +143,6 @@ class _DesktopLanding extends StatelessWidget {
                         ),
                       ),
                     ),
-
-                    const SizedBox(height: 8),
                   ],
                 ),
               ),
@@ -179,7 +169,7 @@ class _MobileLanding extends StatelessWidget {
     final horizontalPadding =
         isVerySmall ? 16.0 : (isTabletPortrait ? 36.0 : 24.0);
     final mistHeight = math.max(280.0, height * 0.40);
-    final headlineSize = isTabletPortrait ? 40.0 : (isVerySmall ? 28.0 : 34.0);
+    final headlineSize = isTabletPortrait ? 38.0 : (isVerySmall ? 28.0 : 32.0);
 
     final availableWidth = width - (horizontalPadding * 2);
     final cardWidth =
@@ -196,7 +186,7 @@ class _MobileLanding extends StatelessWidget {
           ),
         ),
 
-        // 2. Decorative ocean orbs, arc contour, and coral line art (from Login photo)
+        // 2. Decorative ocean orbs, arc contour, and coral line art
         const CustomPaint(
           painter: _LandingOceanDecorPainter(isDesktop: false),
           size: Size.infinite,
@@ -295,24 +285,16 @@ class _BrandLogo extends StatelessWidget {
             color: LandingColors.logoCircleBg,
           ),
           alignment: Alignment.center,
-          child: Text(
-            '✱',
-            style: TextStyle(
-              color: LandingColors.buttonTeal,
-              fontSize: compact ? 14 : 16,
-              fontWeight: FontWeight.w700,
-              height: 1.0,
-            ),
-          ),
+          child: CotsLogo(size: compact ? 32 : 36),
         ),
         SizedBox(width: compact ? 8 : 12),
         Flexible(
           child: Text(
             'COTS Monitor',
             overflow: TextOverflow.ellipsis,
-            style: GoogleFonts.inter(
+            style: TextStyle(
               fontSize: compact ? 16 : 19,
-              fontWeight: FontWeight.w800,
+              fontWeight: FontWeight.w600,
               color: LandingColors.textPrimary,
               letterSpacing: -0.3,
             ),
@@ -398,10 +380,10 @@ class _HeroCopy extends StatelessWidget {
         // Headline
         Text.rich(
           TextSpan(
-            style: GoogleFonts.inter(
+            style: TextStyle(
               fontSize: fontSize,
-              fontWeight: FontWeight.w800,
-              height: 1.10,
+              fontWeight: FontWeight.w700,
+              height: isMobile ? 1.10 : 1.02,
               letterSpacing: fontSize >= 40 ? -1.0 : -0.5,
             ),
             children: const [
@@ -421,19 +403,19 @@ class _HeroCopy extends StatelessWidget {
 
         // Subtitle
         ConstrainedBox(
-          constraints: const BoxConstraints(maxWidth: 440),
+          constraints: BoxConstraints(maxWidth: isMobile ? 440 : 360),
           child: Text(
             'Detect crown-of-thorns starfish, map reef activity, and verify removals with expert support.',
-            style: GoogleFonts.inter(
+            style: TextStyle(
               color: LandingColors.textMuted,
-              fontSize: isMobile ? 13.5 : 15.0,
-              height: 1.5,
+              fontSize: isMobile ? 13.5 : 17.0,
+              height: isMobile ? 1.5 : 1.35,
               fontWeight: FontWeight.w400,
             ),
           ),
         ),
 
-        SizedBox(height: isMobile ? 22 : 28),
+        SizedBox(height: isMobile ? 22 : 36),
 
         // "Start monitoring" Button
         _StartMonitoringButton(onPressed: () => _onStartMonitoring(context)),
@@ -462,16 +444,10 @@ class _StartMonitoringButtonState extends State<_StartMonitoringButton> {
       child: AnimatedContainer(
         duration: const Duration(milliseconds: 160),
         decoration: BoxDecoration(
-          color: LandingColors.buttonTeal,
+          color: _hover
+              ? LandingColors.buttonTeal.withValues(alpha: 0.92)
+              : LandingColors.buttonTeal,
           borderRadius: BorderRadius.circular(12),
-          boxShadow: [
-            BoxShadow(
-              color: LandingColors.buttonTeal
-                  .withValues(alpha: _hover ? 0.44 : 0.30),
-              blurRadius: _hover ? 20 : 14,
-              offset: Offset(0, _hover ? 8 : 5),
-            ),
-          ],
         ),
         child: Material(
           color: Colors.transparent,
@@ -483,20 +459,20 @@ class _StartMonitoringButtonState extends State<_StartMonitoringButton> {
                 horizontal: MediaQuery.sizeOf(context).width < 360 ? 14 : 22,
                 vertical: 14,
               ),
-              child: Row(
+              child: const Row(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  const Icon(
+                  Icon(
                     Icons.filter_center_focus_rounded,
                     color: Colors.white,
                     size: 20,
                   ),
-                  const SizedBox(width: 8),
+                  SizedBox(width: 8),
                   Flexible(
                     child: Text(
                       'Start monitoring',
                       overflow: TextOverflow.ellipsis,
-                      style: GoogleFonts.inter(
+                      style: TextStyle(
                         color: Colors.white,
                         fontWeight: FontWeight.w700,
                         fontSize: 15.0,

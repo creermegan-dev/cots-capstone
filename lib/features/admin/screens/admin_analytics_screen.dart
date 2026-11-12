@@ -4,6 +4,7 @@ import '../../../widgets/monitoring_analytics_panel.dart';
 import '../../../widgets/monthly_site_levels_card.dart';
 import '../layout/admin_breakpoints.dart';
 import '../widgets/admin_dashboard_header.dart';
+import '../widgets/admin_model_comparison_card.dart';
 
 class AdminAnalyticsScreen extends StatefulWidget {
   const AdminAnalyticsScreen({super.key});
@@ -37,8 +38,11 @@ class _AdminAnalyticsScreenState extends State<AdminAnalyticsScreen> {
                 onRefreshTap: _onRefresh,
               ),
               const SizedBox(height: 18),
-              const MonitoringAnalyticsPanel(
-                  useSiteTerminology: true, dashboardLayout: true),
+              MonitoringAnalyticsPanel(
+                  useSiteTerminology: true,
+                  dashboardLayout: true,
+                  trailingBuilder: (context, records) =>
+                      AdminModelComparisonCard(records: records)),
               const SizedBox(height: 18),
               const MonthlySiteLevelsCard(),
             ],

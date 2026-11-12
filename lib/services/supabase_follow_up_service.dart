@@ -1,3 +1,4 @@
+import 'no_cots_survey_service.dart';
 import 'dart:async';
 import 'dart:math' as math;
 
@@ -43,7 +44,13 @@ abstract final class SupabaseFollowUpService {
       'follow_up_surveys_json',
       params: {'area_code': areaCode, 'mine_only': mineOnly},
     );
-    return [for (final row in _rows(rows)) surveyFromRow(row)];
+    final absence = await NoCotsSurveyService.load(mineOnly: mineOnly);
+    return [
+      for (final row in _rows(rows)) surveyFromRow(row),
+      for (final row in absence)
+        if (areaCode == null || row['area_code'] == areaCode)
+          noCotsSurveyFromRow(row),
+    ];
   }
 
   static Future<bool> canSubmit(String areaCode, DateTime visitDate) async {
@@ -92,7 +99,9 @@ abstract final class SupabaseFollowUpService {
       'latest_area_assessment',
       params: {'area_code': areaCode},
     );
-    return row is Map ? assessmentFromRow(Map<String, dynamic>.from(row)) : null;
+    return row is Map
+        ? assessmentFromRow(Map<String, dynamic>.from(row))
+        : null;
   }
 
   /// Expert: completed visits that still need a confirmed level.
@@ -131,21 +140,21 @@ abstract final class SupabaseFollowUpService {
     final dynamic status;
     try {
       status = await _client.rpc<dynamic>(
-      'submit_follow_up_survey',
-      params: {
-        'sid': surveyId,
-        'area_code': areaCode,
-        'visit_date': dateOnly(visitDate),
-        'observed': observed,
-        'eliminated': eliminated,
-        'method': method,
-        'surveyed_m2': surveyedSquareMeters,
-        'capture_ids': captureIds,
-        'lat': latitude,
-        'lng': longitude,
-        'notes_text': notes,
-      },
-    );
+        'submit_follow_up_survey',
+        params: {
+          'sid': surveyId,
+          'area_code': areaCode,
+          'visit_date': dateOnly(visitDate),
+          'observed': observed,
+          'eliminated': eliminated,
+          'method': method,
+          'surveyed_m2': surveyedSquareMeters,
+          'capture_ids': captureIds,
+          'lat': latitude,
+          'lng': longitude,
+          'notes_text': notes,
+        },
+      );
     } on PostgrestException catch (error) {
       final areaMessage = AreaMessages.forError(error);
       if (areaMessage != null) throw StateError(areaMessage);
@@ -242,6 +251,18 @@ abstract final class SupabaseFollowUpService {
     );
   }
 
+  static FollowUpSurveyModel noCotsSurveyFromRow(Map<String, dynamic> row) =>
+      surveyFromRow({
+        ...row,
+        'area_id': row['area_code'],
+        'uid': row['owner_id'],
+        'survey_date': row['surveyed_at'],
+        'status': 'completed',
+        'surveyed_area_square_meters': row['surveyed_area_m2'],
+        'gps': {'latitude': row['latitude'], 'longitude': row['longitude']},
+        'no_cots_observed': true,
+      });
+
   static FollowUpSurveyModel surveyFromRow(Map<String, dynamic> row) {
     final named = withAreaNames(row);
     return FollowUpSurveyModel.fromMap(
@@ -266,8 +287,8 @@ abstract final class SupabaseFollowUpService {
       return int.tryParse(value?.toString() ?? '') ?? 0;
     }
 
-    final requestedAt =
-        DateTime.tryParse(text('requested_at'))?.toUtc() ?? DateTime.now().toUtc();
+    final requestedAt = DateTime.tryParse(text('requested_at'))?.toUtc() ??
+        DateTime.now().toUtc();
     final data = <String, dynamic>{
       ...named,
       'primary_uid': text('primary_uid'),

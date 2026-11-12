@@ -37,6 +37,7 @@ FollowUpSurveyStatus followUpSurveyStatus(
     final items = CotsConfidencePolicy.buildDetectionItems(
       count: capture.aiDetectedCount,
       averagePercent: capture.confidencePercent,
+      autoApproveThreshold: capture.autoApproveMin,
       boxes: capture.detectionBoxes.isEmpty ? null : capture.detectionBoxes,
       imageWidth: capture.imageWidth,
       imageHeight: capture.imageHeight,
@@ -52,7 +53,7 @@ FollowUpSurveyStatus followUpSurveyStatus(
       if (items[i].confidencePercent < CotsConfidencePolicy.adminReviewMin) {
         return FollowUpSurveyStatus.needsCorrection;
       }
-      if (items[i].confidencePercent < CotsConfidencePolicy.autoApproveMin) {
+      if (items[i].confidencePercent < capture.autoApproveMin) {
         pending = true;
       }
     }
@@ -202,8 +203,14 @@ class FollowUpSurveyModel {
     this.confirmedCount,
     this.waitingCount,
     this.earlyVisitNote,
+    this.noCotsObserved = false,
+    this.cotsReportedLater = false,
   });
 
+  final bool noCotsObserved;
+
+  /// Derived from site reports; not a change to the original observation.
+  final bool cotsReportedLater;
   final String id;
   final String areaId;
   final String uid;
@@ -258,6 +265,8 @@ class FollowUpSurveyModel {
     final captureIdsValue = map['capture_ids'];
     return FollowUpSurveyModel(
       id: id,
+      noCotsObserved: map['no_cots_observed'] == true,
+      cotsReportedLater: map['cots_reported_later'] == true,
       areaId: map['area_id'] as String? ?? '',
       uid: map['uid'] as String? ?? '',
       submittedBy: map['submitted_by'] as String? ?? '',
@@ -286,9 +295,10 @@ class FollowUpSurveyModel {
       assessedLevel: map['assessed_level'] as String?,
       confirmedCount: _nullableIntFromDynamic(map['confirmed_count']),
       waitingCount: _nullableIntFromDynamic(map['waiting_count']),
-      earlyVisitNote: (map['early_visit_note'] as String?)?.trim().isEmpty ?? true
-          ? null
-          : (map['early_visit_note'] as String).trim(),
+      earlyVisitNote:
+          (map['early_visit_note'] as String?)?.trim().isEmpty ?? true
+              ? null
+              : (map['early_visit_note'] as String).trim(),
     );
   }
 

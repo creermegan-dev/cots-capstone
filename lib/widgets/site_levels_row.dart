@@ -62,7 +62,7 @@ class _SiteLevelsRowState extends State<SiteLevelsRow> {
                 Text('Site levels · ${DateFormat('MMMM yyyy').format(_month)}',
                     style: const TextStyle(
                         fontSize: 15,
-                        fontWeight: FontWeight.w800,
+                        fontWeight: FontWeight.w600,
                         color: kTextNavy)),
                 const Text('confirmed COTS this month',
                     style: TextStyle(fontSize: 12, color: kMutedGray)),
@@ -124,42 +124,46 @@ class _SiteLevelsRowState extends State<SiteLevelsRow> {
           Expanded(
             child: Padding(
               padding: const EdgeInsets.fromLTRB(10, 10, 10, 10),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(s.areaName,
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-              style: const TextStyle(
-                  fontWeight: FontWeight.w700, color: kTextNavy, fontSize: 13)),
-          const SizedBox(height: 4),
-          s.level == null
-              ? const Text('No records',
-                  style: TextStyle(
-                      fontWeight: FontWeight.w800,
-                      color: kMutedGray,
-                      fontSize: 13))
-              : Text.rich(
-                  TextSpan(children: [
-                    TextSpan(
-                        text: '${s.confirmedCots}',
-                        style: const TextStyle(
-                            fontWeight: FontWeight.w800,
-                            fontSize: 15,
-                            color: kTextNavy)),
-                    const TextSpan(text: ' COTS · '),
-                    TextSpan(
-                        text: s.level,
-                        style: TextStyle(
-                            fontWeight: FontWeight.w800,
-                            color: Color.lerp(color, Colors.black, 0.25))),
-                  ]),
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: const TextStyle(fontSize: 13, color: Color(0xFF374151)),
-                ),
-        ],
-      ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(s.areaName,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(
+                          fontWeight: FontWeight.w700,
+                          color: kTextNavy,
+                          fontSize: 13)),
+                  const SizedBox(height: 4),
+                  s.level == null
+                      ? const Text('No records',
+                          style: TextStyle(
+                              fontWeight: FontWeight.w600,
+                              color: kMutedGray,
+                              fontSize: 13))
+                      : Text.rich(
+                          TextSpan(children: [
+                            TextSpan(
+                                text: '${s.confirmedCots}',
+                                style: const TextStyle(
+                                    fontWeight: FontWeight.w600,
+                                    fontSize: 15,
+                                    color: kTextNavy)),
+                            const TextSpan(text: ' COTS · '),
+                            TextSpan(
+                                text: s.level,
+                                style: TextStyle(
+                                    fontWeight: FontWeight.w600,
+                                    color:
+                                        Color.lerp(color, Colors.black, 0.25))),
+                          ]),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: const TextStyle(
+                              fontSize: 13, color: Color(0xFF374151)),
+                        ),
+                ],
+              ),
             ),
           ),
         ]),

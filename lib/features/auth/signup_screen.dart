@@ -4,6 +4,7 @@ import 'package:provider/provider.dart';
 
 import '../../core/cots_colors.dart';
 import '../../core/root_scaffold_messenger.dart';
+import '../../models/user_model.dart';
 import '../../providers/auth_provider.dart';
 import '../../services/auth_service.dart';
 import 'auth_navigation.dart';
@@ -35,16 +36,7 @@ class _SignupScreenState extends State<SignupScreen> {
   String _role = '';
   String? _organization;
 
-  static const _roles = <String>[
-    'Citizen Scientist',
-    'Researcher',
-    'Marine Biologist',
-    'Volunteer Diver',
-    'Conservation Staff',
-    'Student Researcher',
-    'LGU Personnel',
-    'BFAR Personnel',
-  ];
+  static const _roles = UserModel.positionOptions;
 
   static const _organizations = <String>[
     'Great Barrier Reef Marine Park',
@@ -381,6 +373,7 @@ class _SignupScreenState extends State<SignupScreen> {
       onBackToLanding: auth.isBusy ? null : _goLanding,
       mobileHeader: const AuthMobileHeader(),
       desktopHeader: const AuthCardHeader(
+        showLogo: false,
         title: 'Create Account',
         subtitle: 'Join COTS Monitor to help protect coral reefs.',
       ),

@@ -55,6 +55,7 @@ class ScanRecordModel {
     this.sourceCapture,
     this.locationSource = '',
     this.timeSource = '',
+    this.confidenceAutoApproveMin = CotsConfidencePolicy.autoApproveMin,
   });
 
   final String id;
@@ -67,6 +68,9 @@ class ScanRecordModel {
   final String activityType;
   final int aiDetectedCount;
   final double confidence;
+  final int confidenceAutoApproveMin;
+  int get autoApproveMin =>
+      sourceCapture?.autoApproveMin ?? confidenceAutoApproveMin;
   final String captureSource;
   final String zone;
   final String notes;
@@ -130,6 +134,8 @@ class ScanRecordModel {
           ? _readInt(fields, 'ai_detected_count')
           : _readInt(fields, 'cots_count'),
       confidence: _readDouble(fields, 'confidence') ?? 0,
+      confidenceAutoApproveMin: CotsConfidencePolicy.storedAutoApproveMin(
+          _readInt(fields, 'auto_approve_min')),
       captureSource: _readString(
         fields,
         'capture_source',
@@ -287,6 +293,8 @@ class ScanRecordModel {
           data['activity_type'] as String? ?? CotsActivityType.detectionOnly,
       aiDetectedCount: _asInt(data['ai_detected_count'] ?? data['cots_count']),
       confidence: _asDouble(data['confidence']) ?? 0,
+      confidenceAutoApproveMin:
+          CotsConfidencePolicy.storedAutoApproveMin(data['auto_approve_min']),
       captureSource: data['capture_source'] as String? ??
           CaptureSource.goProUnderwaterImage,
       zone: data['zone'] as String? ?? 'Unassigned',
@@ -338,6 +346,8 @@ class ScanRecordModel {
       removedQuantity: removedQuantity,
       averageSizeCm: averageSizeCm,
       captureSource: captureSource,
+      modelName: sourceCapture?.modelName ?? '',
+      expertConfirmedCount: sourceCapture?.expertConfirmedCount ?? 0,
       documentId: id,
       imageName: imageName,
       notes: notes,
@@ -361,6 +371,7 @@ class ScanRecordModel {
       adminConfirmed: adminConfirmed,
       adminRejected: adminRejected,
       adminCotsDecisions: adminCotsDecisions,
+      autoApproveMin: autoApproveMin,
       recordCollection: recordCollection,
       linkedCaptureId: linkedCaptureId,
       linkedCaptureDisplayId: linkedCaptureDisplayId,
@@ -409,6 +420,7 @@ class ScanRecordModel {
       CotsConfidencePolicy.buildDetectionItems(
         count: aiDetectedCount,
         averagePercent: confidencePercent,
+        autoApproveThreshold: autoApproveMin,
         boxes: detectionBoxes.isNotEmpty ? detectionBoxes : null,
         imageWidth: imageWidth > 0 ? imageWidth : 1920,
         imageHeight: imageHeight > 0 ? imageHeight : 1080,
@@ -443,7 +455,8 @@ class ScanRecordModel {
               : adminConfirmed
                   ? PerCotsAdminDecision.confirmed
                   : CotsConfidencePolicy.initialDecisionForPercent(
-                      items[i].confidencePercent);
+                      items[i].confidencePercent,
+                      autoApproveThreshold: autoApproveMin);
       switch (decision) {
         case PerCotsAdminDecision.confirmed:
           accepted++;

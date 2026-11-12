@@ -93,7 +93,7 @@ class _RecentSubmissionsTableCardState
                   'Recent Monitoring Captures',
                   style: TextStyle(
                     fontSize: 17,
-                    fontWeight: FontWeight.w800,
+                    fontWeight: FontWeight.w600,
                     color: AdminColors.headerTitle,
                   ),
                 ),

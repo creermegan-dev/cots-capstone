@@ -65,7 +65,7 @@ class AdminDashboardHeader extends StatelessWidget {
               title,
               style: const TextStyle(
                 fontSize: 24,
-                fontWeight: FontWeight.w800,
+                fontWeight: FontWeight.w600,
                 color: AdminColors.headerTitle,
                 letterSpacing: -0.4,
                 decoration: TextDecoration.none,

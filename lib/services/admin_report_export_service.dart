@@ -7,6 +7,7 @@ import 'package:pdf/widgets.dart' as pw;
 
 import '../features/admin/models/admin_record_table_row.dart';
 import '../models/staff_submission_rows.dart';
+import 'report_file_saver.dart';
 
 /// Builds and saves filtered administrator report exports.
 class AdminReportExportService {
@@ -90,7 +91,7 @@ class AdminReportExportService {
   }
 
   Future<String?> saveCsv(List<AdminRecordTableRow> rows) {
-    return FileSaver.instance.saveAs(
+    return ReportFileSaver.save(
       name: _fileName(),
       bytes: buildCsv(rows),
       fileExtension: 'csv',
@@ -99,7 +100,7 @@ class AdminReportExportService {
   }
 
   Future<String?> savePdf(List<AdminRecordTableRow> rows) async {
-    return FileSaver.instance.saveAs(
+    return ReportFileSaver.save(
       name: _fileName(),
       bytes: await buildPdf(rows),
       fileExtension: 'pdf',

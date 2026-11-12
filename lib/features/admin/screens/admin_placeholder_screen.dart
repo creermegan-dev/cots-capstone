@@ -35,14 +35,15 @@ class _AdminPlaceholderScreenState extends State<AdminPlaceholderScreen> {
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            Icon(Icons.construction_rounded, size: 56, color: AdminColors.muted.withValues(alpha: 0.5)),
+            Icon(Icons.construction_rounded,
+                size: 56, color: AdminColors.muted.withValues(alpha: 0.5)),
             const SizedBox(height: 16),
             Text(
               widget.title,
               textAlign: TextAlign.center,
               style: const TextStyle(
                 fontSize: 22,
-                fontWeight: FontWeight.w800,
+                fontWeight: FontWeight.w600,
                 color: AdminColors.headerTitle,
               ),
             ),
@@ -56,7 +57,8 @@ class _AdminPlaceholderScreenState extends State<AdminPlaceholderScreen> {
             OutlinedButton.icon(
               onPressed: _onRefresh,
               icon: AdminDateTimeTokens.refreshIcon,
-              label: const Text('Refresh', style: AdminDateTimeTokens.refreshChipTextStyle),
+              label: const Text('Refresh',
+                  style: AdminDateTimeTokens.refreshChipTextStyle),
               style: AdminDateTimeTokens.refreshOutlinedButtonStyle(),
             ),
           ],

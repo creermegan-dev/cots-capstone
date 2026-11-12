@@ -1,0 +1,1901 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://example.invalid/cots-monitor/database.schema.json",
+  "title": "COTS Monitor database (public schema)",
+  "description": "JSON Schema for the rows of each table. x-primaryKey and x-foreignKey are custom keywords naming keys. Generated from the database structure of 10 November 2026.",
+  "$defs": {
+    "admin_preferences": {
+      "type": "object",
+      "title": "admin_preferences",
+      "properties": {
+        "uid": {
+          "type": "string",
+          "format": "uuid",
+          "x-primaryKey": true,
+          "x-foreignKey": "public.profiles(id)"
+        },
+        "email_notifications": {
+          "type": "boolean"
+        },
+        "high_risk_alerts": {
+          "type": "boolean"
+        },
+        "system_updates": {
+          "type": "boolean"
+        },
+        "weekly_reports": {
+          "type": "boolean"
+        },
+        "two_factor_auth": {
+          "type": "boolean"
+        },
+        "login_alerts": {
+          "type": "boolean"
+        },
+        "session_timeout": {
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "uid",
+        "email_notifications",
+        "high_risk_alerts",
+        "system_updates",
+        "weekly_reports",
+        "two_factor_auth",
+        "login_alerts",
+        "session_timeout"
+      ],
+      "additionalProperties": false,
+      "x-primaryKey": [
+        "uid"
+      ]
+    },
+    "area_handovers": {
+      "type": "object",
+      "title": "area_handovers",
+      "properties": {
+        "id": {
+          "type": "string",
+          "format": "uuid",
+          "x-primaryKey": true
+        },
+        "assignment_id": {
+          "type": "string",
+          "format": "uuid",
+          "x-foreignKey": "public.follow_up_assignments(id)"
+        },
+        "from_diver_id": {
+          "type": "string",
+          "format": "uuid",
+          "x-foreignKey": "public.profiles(id)"
+        },
+        "started_by": {
+          "type": "string",
+          "format": "uuid",
+          "x-foreignKey": "public.profiles(id)"
+        },
+        "started_reason": {
+          "type": "string",
+          "enum": [
+            "diver_request",
+            "missed_months"
+          ]
+        },
+        "reason": {
+          "type": "string"
+        },
+        "handover_note": {
+          "type": "string"
+        },
+        "status": {
+          "type": "string",
+          "enum": [
+            "requested",
+            "offered",
+            "accepted",
+            "cancelled"
+          ]
+        },
+        "requested_at": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "closed_at": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "format": "date-time"
+        }
+      },
+      "required": [
+        "id",
+        "assignment_id",
+        "from_diver_id",
+        "started_by",
+        "started_reason",
+        "reason",
+        "handover_note",
+        "status",
+        "requested_at"
+      ],
+      "additionalProperties": false,
+      "x-primaryKey": [
+        "id"
+      ]
+    },
+    "audit_events": {
+      "type": "object",
+      "title": "audit_events",
+      "properties": {
+        "id": {
+          "type": "string",
+          "format": "uuid",
+          "x-primaryKey": true
+        },
+        "actor_id": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "format": "uuid",
+          "x-foreignKey": "public.profiles(id)"
+        },
+        "action": {
+          "type": "string"
+        },
+        "target_id": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "format": "uuid"
+        },
+        "details": {},
+        "created_at": {
+          "type": "string",
+          "format": "date-time"
+        }
+      },
+      "required": [
+        "id",
+        "action",
+        "details",
+        "created_at"
+      ],
+      "additionalProperties": false,
+      "x-primaryKey": [
+        "id"
+      ]
+    },
+    "capture_evidence": {
+      "type": "object",
+      "title": "capture_evidence",
+      "properties": {
+        "capture_id": {
+          "type": "string",
+          "format": "uuid",
+          "x-primaryKey": true,
+          "x-foreignKey": "public.captures(id)"
+        },
+        "variant_id": {
+          "type": "string",
+          "format": "uuid",
+          "x-primaryKey": true,
+          "x-foreignKey": "public.media_variants(id)"
+        }
+      },
+      "required": [
+        "capture_id",
+        "variant_id"
+      ],
+      "additionalProperties": false,
+      "x-primaryKey": [
+        "capture_id",
+        "variant_id"
+      ]
+    },
+    "captures": {
+      "type": "object",
+      "title": "captures",
+      "properties": {
+        "id": {
+          "type": "string",
+          "format": "uuid",
+          "x-primaryKey": true
+        },
+        "owner_id": {
+          "type": "string",
+          "format": "uuid",
+          "x-foreignKey": "public.profiles(id)"
+        },
+        "idempotency_key": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "area_id": {
+          "type": "string",
+          "format": "uuid",
+          "x-foreignKey": "public.monitoring_areas(id)"
+        },
+        "captured_at": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "capture_time_source": {
+          "type": "string",
+          "enum": [
+            "exif",
+            "device",
+            "manual"
+          ]
+        },
+        "original_time_text": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "timezone_assumed": {
+          "type": "boolean"
+        },
+        "submitted_at": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "model_name": {
+          "type": "string"
+        },
+        "model_sha256": {
+          "type": "string"
+        },
+        "source_width": {
+          "type": "integer"
+        },
+        "source_height": {
+          "type": "integer"
+        },
+        "coordinate_space": {
+          "type": "string"
+        },
+        "latitude": {
+          "type": [
+            "number",
+            "null"
+          ]
+        },
+        "longitude": {
+          "type": [
+            "number",
+            "null"
+          ]
+        },
+        "gps_source": {
+          "type": "string",
+          "enum": [
+            "exif",
+            "device_surface",
+            "manual_surface",
+            "unavailable"
+          ]
+        },
+        "gps_accuracy_m": {
+          "type": [
+            "number",
+            "null"
+          ]
+        },
+        "gps_captured_at": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "format": "date-time"
+        },
+        "surface_reference": {
+          "type": "boolean"
+        },
+        "notes": {
+          "type": "string"
+        },
+        "status": {
+          "type": "string",
+          "enum": [
+            "pending",
+            "finalized",
+            "rejected"
+          ]
+        },
+        "finalized_at": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "format": "date-time"
+        },
+        "origin_review_required": {
+          "type": "boolean"
+        },
+        "encounter_id": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "format": "uuid",
+          "x-foreignKey": "public.encounters(id)"
+        },
+        "auto_approve_min": {
+          "type": "integer",
+          "enum": [
+            80,
+            85
+          ]
+        }
+      },
+      "required": [
+        "id",
+        "owner_id",
+        "idempotency_key",
+        "area_id",
+        "captured_at",
+        "capture_time_source",
+        "timezone_assumed",
+        "submitted_at",
+        "model_name",
+        "model_sha256",
+        "source_width",
+        "source_height",
+        "coordinate_space",
+        "gps_source",
+        "surface_reference",
+        "notes",
+        "status",
+        "origin_review_required",
+        "auto_approve_min"
+      ],
+      "additionalProperties": false,
+      "x-primaryKey": [
+        "id"
+      ]
+    },
+    "detection_items": {
+      "type": "object",
+      "title": "detection_items",
+      "properties": {
+        "id": {
+          "type": "string",
+          "format": "uuid",
+          "x-primaryKey": true
+        },
+        "capture_id": {
+          "type": "string",
+          "format": "uuid",
+          "x-foreignKey": "public.captures(id)"
+        },
+        "item_index": {
+          "type": "integer"
+        },
+        "confidence": {
+          "type": "number"
+        },
+        "x1": {
+          "type": "number"
+        },
+        "y1": {
+          "type": "number"
+        },
+        "x2": {
+          "type": "number"
+        },
+        "y2": {
+          "type": "number"
+        },
+        "estimated_size_cm": {
+          "type": [
+            "number",
+            "null"
+          ]
+        }
+      },
+      "required": [
+        "id",
+        "capture_id",
+        "item_index",
+        "confidence",
+        "x1",
+        "y1",
+        "x2",
+        "y2"
+      ],
+      "additionalProperties": false,
+      "x-primaryKey": [
+        "id"
+      ]
+    },
+    "elimination_evidence": {
+      "type": "object",
+      "title": "elimination_evidence",
+      "properties": {
+        "elimination_id": {
+          "type": "string",
+          "format": "uuid",
+          "x-primaryKey": true,
+          "x-foreignKey": "public.eliminations(id)"
+        },
+        "variant_id": {
+          "type": "string",
+          "format": "uuid",
+          "x-primaryKey": true,
+          "x-foreignKey": "public.media_variants(id)"
+        }
+      },
+      "required": [
+        "elimination_id",
+        "variant_id"
+      ],
+      "additionalProperties": false,
+      "x-primaryKey": [
+        "elimination_id",
+        "variant_id"
+      ]
+    },
+    "eliminations": {
+      "type": "object",
+      "title": "eliminations",
+      "properties": {
+        "id": {
+          "type": "string",
+          "format": "uuid",
+          "x-primaryKey": true
+        },
+        "owner_id": {
+          "type": "string",
+          "format": "uuid",
+          "x-foreignKey": "public.profiles(id)"
+        },
+        "idempotency_key": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "capture_id": {
+          "type": "string",
+          "format": "uuid",
+          "x-foreignKey": "public.captures(id)"
+        },
+        "survey_id": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "format": "uuid",
+          "x-foreignKey": "public.follow_up_surveys(id)"
+        },
+        "captured_at": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "submitted_at": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "removed_count": {
+          "type": [
+            "integer",
+            "null"
+          ]
+        },
+        "method": {
+          "type": "string"
+        },
+        "notes": {
+          "type": "string"
+        },
+        "latitude": {
+          "type": [
+            "number",
+            "null"
+          ]
+        },
+        "longitude": {
+          "type": [
+            "number",
+            "null"
+          ]
+        },
+        "gps_source": {
+          "type": "string",
+          "enum": [
+            "exif",
+            "device_surface",
+            "manual_surface",
+            "unavailable"
+          ]
+        },
+        "gps_accuracy_m": {
+          "type": [
+            "number",
+            "null"
+          ]
+        },
+        "gps_captured_at": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "format": "date-time"
+        },
+        "surface_reference": {
+          "type": "boolean"
+        },
+        "status": {
+          "type": "string",
+          "enum": [
+            "pending",
+            "finalized"
+          ]
+        },
+        "encounter_id": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "format": "uuid",
+          "x-foreignKey": "public.encounters(id)"
+        }
+      },
+      "required": [
+        "id",
+        "owner_id",
+        "idempotency_key",
+        "capture_id",
+        "captured_at",
+        "submitted_at",
+        "method",
+        "notes",
+        "gps_source",
+        "surface_reference",
+        "status"
+      ],
+      "additionalProperties": false,
+      "x-primaryKey": [
+        "id"
+      ]
+    },
+    "encounters": {
+      "type": "object",
+      "title": "encounters",
+      "properties": {
+        "id": {
+          "type": "string",
+          "format": "uuid",
+          "x-primaryKey": true
+        },
+        "owner_id": {
+          "type": "string",
+          "format": "uuid",
+          "x-foreignKey": "public.profiles(id)"
+        },
+        "idempotency_key": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "created_at": {
+          "type": "string",
+          "format": "date-time"
+        }
+      },
+      "required": [
+        "id",
+        "owner_id",
+        "idempotency_key",
+        "created_at"
+      ],
+      "additionalProperties": false,
+      "x-primaryKey": [
+        "id"
+      ]
+    },
+    "expert_decisions": {
+      "type": "object",
+      "title": "expert_decisions",
+      "properties": {
+        "id": {
+          "type": "string",
+          "format": "uuid",
+          "x-primaryKey": true
+        },
+        "decision_sequence": {
+          "type": "integer"
+        },
+        "capture_id": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "format": "uuid",
+          "x-foreignKey": "public.captures(id)"
+        },
+        "survey_id": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "format": "uuid",
+          "x-foreignKey": "public.follow_up_surveys(id)"
+        },
+        "expert_id": {
+          "type": "string",
+          "format": "uuid",
+          "x-foreignKey": "public.profiles(id)"
+        },
+        "decision": {
+          "type": "string",
+          "enum": [
+            "approve",
+            "correct",
+            "reject",
+            "accept_late",
+            "historical_only"
+          ]
+        },
+        "reason": {
+          "type": "string"
+        },
+        "corrected_count": {
+          "type": [
+            "integer",
+            "null"
+          ]
+        },
+        "item_decisions": {},
+        "decided_at": {
+          "type": "string",
+          "format": "date-time"
+        }
+      },
+      "required": [
+        "id",
+        "decision_sequence",
+        "expert_id",
+        "decision",
+        "reason",
+        "item_decisions",
+        "decided_at"
+      ],
+      "additionalProperties": false,
+      "x-primaryKey": [
+        "id"
+      ]
+    },
+    "follow_up_assignments": {
+      "type": "object",
+      "title": "follow_up_assignments",
+      "properties": {
+        "id": {
+          "type": "string",
+          "format": "uuid",
+          "x-primaryKey": true
+        },
+        "area_id": {
+          "type": "string",
+          "format": "uuid",
+          "x-foreignKey": "public.monitoring_areas(id)"
+        },
+        "primary_diver_id": {
+          "type": "string",
+          "format": "uuid",
+          "x-foreignKey": "public.profiles(id)"
+        },
+        "originating_capture_id": {
+          "type": "string",
+          "format": "uuid",
+          "x-foreignKey": "public.captures(id)"
+        },
+        "established_at": {
+          "type": "string",
+          "format": "date-time"
+        }
+      },
+      "required": [
+        "id",
+        "area_id",
+        "primary_diver_id",
+        "originating_capture_id",
+        "established_at"
+      ],
+      "additionalProperties": false,
+      "x-primaryKey": [
+        "id"
+      ]
+    },
+    "follow_up_surveys": {
+      "type": "object",
+      "title": "follow_up_surveys",
+      "properties": {
+        "id": {
+          "type": "string",
+          "format": "uuid",
+          "x-primaryKey": true
+        },
+        "owner_id": {
+          "type": "string",
+          "format": "uuid",
+          "x-foreignKey": "public.profiles(id)"
+        },
+        "idempotency_key": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "assignment_id": {
+          "type": "string",
+          "format": "uuid",
+          "x-foreignKey": "public.follow_up_assignments(id)"
+        },
+        "captured_at": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "month": {
+          "type": "string",
+          "format": "date"
+        },
+        "submitted_at": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "authorization_revision": {
+          "type": "integer"
+        },
+        "latitude": {
+          "type": [
+            "number",
+            "null"
+          ]
+        },
+        "longitude": {
+          "type": [
+            "number",
+            "null"
+          ]
+        },
+        "gps_source": {
+          "type": "string",
+          "enum": [
+            "exif",
+            "device_surface",
+            "manual_surface",
+            "unavailable"
+          ]
+        },
+        "gps_accuracy_m": {
+          "type": [
+            "number",
+            "null"
+          ]
+        },
+        "gps_captured_at": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "format": "date-time"
+        },
+        "surface_reference": {
+          "type": "boolean"
+        },
+        "observed_count": {
+          "type": "integer"
+        },
+        "notes": {
+          "type": "string"
+        },
+        "status": {
+          "type": "string",
+          "enum": [
+            "pending",
+            "pending_late_review",
+            "pending_authorization_review",
+            "completed",
+            "historical_only"
+          ]
+        },
+        "completed_at": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "format": "date-time"
+        },
+        "eliminated_count": {
+          "type": "integer"
+        },
+        "elimination_method": {
+          "type": "string"
+        },
+        "surveyed_area_m2": {
+          "type": [
+            "number",
+            "null"
+          ]
+        },
+        "survey_date": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "format": "date"
+        }
+      },
+      "required": [
+        "id",
+        "owner_id",
+        "idempotency_key",
+        "assignment_id",
+        "captured_at",
+        "month",
+        "submitted_at",
+        "authorization_revision",
+        "gps_source",
+        "surface_reference",
+        "observed_count",
+        "notes",
+        "status",
+        "eliminated_count",
+        "elimination_method"
+      ],
+      "additionalProperties": false,
+      "x-primaryKey": [
+        "id"
+      ]
+    },
+    "handover_offers": {
+      "type": "object",
+      "title": "handover_offers",
+      "properties": {
+        "id": {
+          "type": "string",
+          "format": "uuid",
+          "x-primaryKey": true
+        },
+        "handover_id": {
+          "type": "string",
+          "format": "uuid",
+          "x-foreignKey": "public.area_handovers(id)"
+        },
+        "to_diver_id": {
+          "type": "string",
+          "format": "uuid",
+          "x-foreignKey": "public.profiles(id)"
+        },
+        "offered_by": {
+          "type": "string",
+          "format": "uuid",
+          "x-foreignKey": "public.profiles(id)"
+        },
+        "status": {
+          "type": "string",
+          "enum": [
+            "pending",
+            "accepted",
+            "declined",
+            "cancelled"
+          ]
+        },
+        "offered_at": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "responded_at": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "format": "date-time"
+        }
+      },
+      "required": [
+        "id",
+        "handover_id",
+        "to_diver_id",
+        "offered_by",
+        "status",
+        "offered_at"
+      ],
+      "additionalProperties": false,
+      "x-primaryKey": [
+        "id"
+      ]
+    },
+    "infestation_assessments": {
+      "type": "object",
+      "title": "infestation_assessments",
+      "properties": {
+        "id": {
+          "type": "string",
+          "format": "uuid",
+          "x-primaryKey": true
+        },
+        "survey_id": {
+          "type": "string",
+          "format": "uuid",
+          "x-foreignKey": "public.follow_up_surveys(id)"
+        },
+        "expert_id": {
+          "type": "string",
+          "format": "uuid",
+          "x-foreignKey": "public.profiles(id)"
+        },
+        "level": {
+          "type": "string",
+          "enum": [
+            "Low",
+            "Moderate",
+            "High"
+          ]
+        },
+        "method": {
+          "type": "string"
+        },
+        "rationale": {
+          "type": "string"
+        },
+        "assessed_at": {
+          "type": "string",
+          "format": "date-time"
+        }
+      },
+      "required": [
+        "id",
+        "survey_id",
+        "expert_id",
+        "level",
+        "method",
+        "rationale",
+        "assessed_at"
+      ],
+      "additionalProperties": false,
+      "x-primaryKey": [
+        "id"
+      ]
+    },
+    "media_assets": {
+      "type": "object",
+      "title": "media_assets",
+      "properties": {
+        "id": {
+          "type": "string",
+          "format": "uuid",
+          "x-primaryKey": true
+        },
+        "owner_id": {
+          "type": "string",
+          "format": "uuid",
+          "x-foreignKey": "public.profiles(id)"
+        },
+        "idempotency_key": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "original_name": {
+          "type": "string"
+        },
+        "original_sha256": {
+          "type": "string"
+        },
+        "original_bytes": {
+          "type": "integer"
+        },
+        "raw_width": {
+          "type": "integer"
+        },
+        "raw_height": {
+          "type": "integer"
+        },
+        "source_width": {
+          "type": "integer"
+        },
+        "source_height": {
+          "type": "integer"
+        },
+        "exif_orientation": {
+          "type": [
+            "integer",
+            "null"
+          ]
+        },
+        "captured_at": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "capture_time_source": {
+          "type": "string",
+          "enum": [
+            "exif",
+            "device",
+            "manual"
+          ]
+        },
+        "original_time_text": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "timezone_assumed": {
+          "type": "boolean"
+        },
+        "created_at": {
+          "type": "string",
+          "format": "date-time"
+        }
+      },
+      "required": [
+        "id",
+        "owner_id",
+        "idempotency_key",
+        "original_name",
+        "original_sha256",
+        "original_bytes",
+        "raw_width",
+        "raw_height",
+        "source_width",
+        "source_height",
+        "captured_at",
+        "capture_time_source",
+        "timezone_assumed",
+        "created_at"
+      ],
+      "additionalProperties": false,
+      "x-primaryKey": [
+        "id"
+      ]
+    },
+    "media_variants": {
+      "type": "object",
+      "title": "media_variants",
+      "properties": {
+        "id": {
+          "type": "string",
+          "format": "uuid",
+          "x-primaryKey": true
+        },
+        "asset_id": {
+          "type": "string",
+          "format": "uuid",
+          "x-foreignKey": "public.media_assets(id)"
+        },
+        "kind": {
+          "type": "string",
+          "enum": [
+            "evidence",
+            "thumbnail",
+            "supplement"
+          ]
+        },
+        "version": {
+          "type": "integer"
+        },
+        "bucket": {
+          "type": "string",
+          "enum": [
+            "detection-evidence",
+            "elimination-evidence"
+          ]
+        },
+        "object_path": {
+          "type": "string"
+        },
+        "format": {
+          "type": "string"
+        },
+        "mime_type": {
+          "type": "string"
+        },
+        "width": {
+          "type": "integer"
+        },
+        "height": {
+          "type": "integer"
+        },
+        "byte_size": {
+          "type": "integer"
+        },
+        "sha256": {
+          "type": "string"
+        },
+        "encoder": {
+          "type": "string"
+        },
+        "encoder_settings": {},
+        "upload_status": {
+          "type": "string",
+          "enum": [
+            "reserved",
+            "uploaded",
+            "verified",
+            "failed"
+          ]
+        },
+        "uploaded_at": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "format": "date-time"
+        },
+        "verified_at": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "format": "date-time"
+        },
+        "verification_receipt": {
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      },
+      "required": [
+        "id",
+        "asset_id",
+        "kind",
+        "version",
+        "bucket",
+        "object_path",
+        "format",
+        "mime_type",
+        "width",
+        "height",
+        "byte_size",
+        "sha256",
+        "encoder",
+        "encoder_settings",
+        "upload_status"
+      ],
+      "additionalProperties": false,
+      "x-primaryKey": [
+        "id"
+      ]
+    },
+    "monitoring_areas": {
+      "type": "object",
+      "title": "monitoring_areas",
+      "properties": {
+        "id": {
+          "type": "string",
+          "format": "uuid",
+          "x-primaryKey": true
+        },
+        "code": {
+          "type": "string"
+        },
+        "name": {
+          "type": "string"
+        },
+        "municipality": {
+          "type": "string"
+        },
+        "barangay": {
+          "type": "string"
+        },
+        "geography_version": {
+          "type": "string"
+        },
+        "geographic_reference": {},
+        "approximate_boundary": {
+          "type": "boolean"
+        },
+        "active": {
+          "type": "boolean"
+        },
+        "map_zone": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "map_area": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "map_part": {
+          "type": [
+            "integer",
+            "null"
+          ]
+        },
+        "map_reef_ha": {
+          "type": [
+            "number",
+            "null"
+          ]
+        },
+        "map_barangay_psgc": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "map_centre_lat": {
+          "type": [
+            "number",
+            "null"
+          ]
+        },
+        "map_centre_lon": {
+          "type": [
+            "number",
+            "null"
+          ]
+        }
+      },
+      "required": [
+        "id",
+        "code",
+        "name",
+        "municipality",
+        "barangay",
+        "geography_version",
+        "geographic_reference",
+        "approximate_boundary",
+        "active"
+      ],
+      "additionalProperties": false,
+      "x-primaryKey": [
+        "id"
+      ]
+    },
+    "monthly_authorizations": {
+      "type": "object",
+      "title": "monthly_authorizations",
+      "properties": {
+        "id": {
+          "type": "string",
+          "format": "uuid",
+          "x-primaryKey": true
+        },
+        "assignment_id": {
+          "type": "string",
+          "format": "uuid",
+          "x-foreignKey": "public.follow_up_assignments(id)"
+        },
+        "month": {
+          "type": "string",
+          "format": "date"
+        },
+        "responsible_diver_id": {
+          "type": "string",
+          "format": "uuid",
+          "x-foreignKey": "public.profiles(id)"
+        },
+        "revision": {
+          "type": "integer"
+        },
+        "updated_at": {
+          "type": "string",
+          "format": "date-time"
+        }
+      },
+      "required": [
+        "id",
+        "assignment_id",
+        "month",
+        "responsible_diver_id",
+        "revision",
+        "updated_at"
+      ],
+      "additionalProperties": false,
+      "x-primaryKey": [
+        "id"
+      ]
+    },
+    "notifications": {
+      "type": "object",
+      "title": "notifications",
+      "properties": {
+        "id": {
+          "type": "string",
+          "format": "uuid",
+          "x-primaryKey": true
+        },
+        "recipient_id": {
+          "type": "string",
+          "format": "uuid",
+          "x-foreignKey": "public.profiles(id)"
+        },
+        "event_id": {
+          "type": "string",
+          "format": "uuid",
+          "x-foreignKey": "public.workflow_events(id)"
+        },
+        "read_at": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "format": "date-time"
+        },
+        "created_at": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "dismissed_at": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "format": "date-time"
+        }
+      },
+      "required": [
+        "id",
+        "recipient_id",
+        "event_id",
+        "created_at"
+      ],
+      "additionalProperties": false,
+      "x-primaryKey": [
+        "id"
+      ]
+    },
+    "privileged_role_slots": {
+      "type": "object",
+      "title": "privileged_role_slots",
+      "properties": {
+        "role": {
+          "type": "string",
+          "x-primaryKey": true,
+          "enum": [
+            "administrator",
+            "expert"
+          ]
+        },
+        "user_id": {
+          "type": "string",
+          "format": "uuid",
+          "x-foreignKey": "public.profiles(id)"
+        },
+        "appointed_at": {
+          "type": "string",
+          "format": "date-time"
+        }
+      },
+      "required": [
+        "role",
+        "user_id",
+        "appointed_at"
+      ],
+      "additionalProperties": false,
+      "x-primaryKey": [
+        "role"
+      ]
+    },
+    "profiles": {
+      "type": "object",
+      "title": "profiles",
+      "properties": {
+        "id": {
+          "type": "string",
+          "format": "uuid",
+          "x-primaryKey": true,
+          "x-foreignKey": "auth.users(id)"
+        },
+        "full_name": {
+          "type": "string"
+        },
+        "organization": {
+          "type": "string"
+        },
+        "job_title": {
+          "type": "string"
+        },
+        "phone": {
+          "type": "string"
+        },
+        "active": {
+          "type": "boolean"
+        },
+        "field_verified": {
+          "type": "boolean"
+        },
+        "verified_by": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "format": "uuid",
+          "x-foreignKey": "public.profiles(id)"
+        },
+        "verified_at": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "format": "date-time"
+        },
+        "created_at": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "avatar_path": {
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      },
+      "required": [
+        "id",
+        "full_name",
+        "organization",
+        "job_title",
+        "phone",
+        "active",
+        "field_verified",
+        "created_at"
+      ],
+      "additionalProperties": false,
+      "x-primaryKey": [
+        "id"
+      ]
+    },
+    "reassignment_requests": {
+      "type": "object",
+      "title": "reassignment_requests",
+      "properties": {
+        "id": {
+          "type": "string",
+          "format": "uuid",
+          "x-primaryKey": true
+        },
+        "authorization_id": {
+          "type": "string",
+          "format": "uuid",
+          "x-foreignKey": "public.monthly_authorizations(id)"
+        },
+        "requester_id": {
+          "type": "string",
+          "format": "uuid",
+          "x-foreignKey": "public.profiles(id)"
+        },
+        "reason": {
+          "type": "string"
+        },
+        "status": {
+          "type": "string",
+          "enum": [
+            "requested",
+            "awaiting_acceptance",
+            "replacement_needed",
+            "accepted",
+            "cancelled"
+          ]
+        },
+        "revision": {
+          "type": "integer"
+        },
+        "requested_at": {
+          "type": "string",
+          "format": "date-time"
+        }
+      },
+      "required": [
+        "id",
+        "authorization_id",
+        "requester_id",
+        "reason",
+        "status",
+        "revision",
+        "requested_at"
+      ],
+      "additionalProperties": false,
+      "x-primaryKey": [
+        "id"
+      ]
+    },
+    "recovery_requests": {
+      "type": "object",
+      "title": "recovery_requests",
+      "properties": {
+        "id": {
+          "type": "string",
+          "format": "uuid",
+          "x-primaryKey": true
+        },
+        "subject_id": {
+          "type": "string",
+          "format": "uuid",
+          "x-foreignKey": "public.profiles(id)"
+        },
+        "approved_by": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "format": "uuid",
+          "x-foreignKey": "public.profiles(id)"
+        },
+        "status": {
+          "type": "string",
+          "enum": [
+            "requested",
+            "approved",
+            "consumed",
+            "denied",
+            "expired"
+          ]
+        },
+        "verification_reference": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "independent_owner_recovery": {
+          "type": "boolean"
+        },
+        "expires_at": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "format": "date-time"
+        },
+        "consumed_at": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "format": "date-time"
+        },
+        "created_at": {
+          "type": "string",
+          "format": "date-time"
+        }
+      },
+      "required": [
+        "id",
+        "subject_id",
+        "status",
+        "independent_owner_recovery",
+        "created_at"
+      ],
+      "additionalProperties": false,
+      "x-primaryKey": [
+        "id"
+      ]
+    },
+    "replacement_proposals": {
+      "type": "object",
+      "title": "replacement_proposals",
+      "properties": {
+        "id": {
+          "type": "string",
+          "format": "uuid",
+          "x-primaryKey": true
+        },
+        "request_id": {
+          "type": "string",
+          "format": "uuid",
+          "x-foreignKey": "public.reassignment_requests(id)"
+        },
+        "expert_id": {
+          "type": "string",
+          "format": "uuid",
+          "x-foreignKey": "public.profiles(id)"
+        },
+        "replacement_id": {
+          "type": "string",
+          "format": "uuid",
+          "x-foreignKey": "public.profiles(id)"
+        },
+        "status": {
+          "type": "string",
+          "enum": [
+            "pending",
+            "accepted",
+            "declined",
+            "expired",
+            "cancelled"
+          ]
+        },
+        "request_revision": {
+          "type": "integer"
+        },
+        "authorization_revision": {
+          "type": "integer"
+        },
+        "expires_at": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "proposed_at": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "responded_at": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "format": "date-time"
+        }
+      },
+      "required": [
+        "id",
+        "request_id",
+        "expert_id",
+        "replacement_id",
+        "status",
+        "request_revision",
+        "authorization_revision",
+        "expires_at",
+        "proposed_at"
+      ],
+      "additionalProperties": false,
+      "x-primaryKey": [
+        "id"
+      ]
+    },
+    "setup_state": {
+      "type": "object",
+      "title": "setup_state",
+      "properties": {
+        "singleton": {
+          "type": "boolean",
+          "x-primaryKey": true
+        },
+        "completed_at": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "format": "date-time"
+        }
+      },
+      "required": [
+        "singleton"
+      ],
+      "additionalProperties": false,
+      "x-primaryKey": [
+        "singleton"
+      ]
+    },
+    "site_partner_requests": {
+      "type": "object",
+      "title": "site_partner_requests",
+      "properties": {
+        "id": {
+          "type": "string",
+          "format": "uuid",
+          "x-primaryKey": true
+        },
+        "assignment_id": {
+          "type": "string",
+          "format": "uuid",
+          "x-foreignKey": "public.follow_up_assignments(id)"
+        },
+        "candidate_id": {
+          "type": "string",
+          "format": "uuid",
+          "x-foreignKey": "public.profiles(id)"
+        },
+        "source": {
+          "type": "string",
+          "enum": [
+            "invited",
+            "recorded"
+          ]
+        },
+        "invited_by": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "format": "uuid",
+          "x-foreignKey": "public.profiles(id)"
+        },
+        "capture_id": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "format": "uuid",
+          "x-foreignKey": "public.captures(id)"
+        },
+        "status": {
+          "type": "string",
+          "enum": [
+            "invited",
+            "invite_declined",
+            "waiting_expert",
+            "approved",
+            "declined",
+            "closed"
+          ]
+        },
+        "created_at": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "queued_at": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "format": "date-time"
+        },
+        "decided_at": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "format": "date-time"
+        },
+        "decided_by": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "format": "uuid",
+          "x-foreignKey": "public.profiles(id)"
+        },
+        "ended_at": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "format": "date-time"
+        }
+      },
+      "required": [
+        "id",
+        "assignment_id",
+        "candidate_id",
+        "source",
+        "status",
+        "created_at"
+      ],
+      "additionalProperties": false,
+      "x-primaryKey": [
+        "id"
+      ]
+    },
+    "survey_captures": {
+      "type": "object",
+      "title": "survey_captures",
+      "properties": {
+        "survey_id": {
+          "type": "string",
+          "format": "uuid",
+          "x-primaryKey": true,
+          "x-foreignKey": "public.follow_up_surveys(id)"
+        },
+        "capture_id": {
+          "type": "string",
+          "format": "uuid",
+          "x-primaryKey": true,
+          "x-foreignKey": "public.captures(id)"
+        }
+      },
+      "required": [
+        "survey_id",
+        "capture_id"
+      ],
+      "additionalProperties": false,
+      "x-primaryKey": [
+        "survey_id",
+        "capture_id"
+      ]
+    },
+    "survey_evidence": {
+      "type": "object",
+      "title": "survey_evidence",
+      "properties": {
+        "survey_id": {
+          "type": "string",
+          "format": "uuid",
+          "x-primaryKey": true,
+          "x-foreignKey": "public.follow_up_surveys(id)"
+        },
+        "variant_id": {
+          "type": "string",
+          "format": "uuid",
+          "x-primaryKey": true,
+          "x-foreignKey": "public.media_variants(id)"
+        }
+      },
+      "required": [
+        "survey_id",
+        "variant_id"
+      ],
+      "additionalProperties": false,
+      "x-primaryKey": [
+        "survey_id",
+        "variant_id"
+      ]
+    },
+    "workflow_events": {
+      "type": "object",
+      "title": "workflow_events",
+      "properties": {
+        "id": {
+          "type": "string",
+          "format": "uuid",
+          "x-primaryKey": true
+        },
+        "request_id": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "format": "uuid",
+          "x-foreignKey": "public.reassignment_requests(id)"
+        },
+        "survey_id": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "format": "uuid",
+          "x-foreignKey": "public.follow_up_surveys(id)"
+        },
+        "actor_id": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "format": "uuid",
+          "x-foreignKey": "public.profiles(id)"
+        },
+        "action": {
+          "type": "string"
+        },
+        "details": {},
+        "created_at": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "capture_id": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "format": "uuid",
+          "x-foreignKey": "public.captures(id)"
+        },
+        "handover_id": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "format": "uuid",
+          "x-foreignKey": "public.area_handovers(id)"
+        },
+        "partner_request_id": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "format": "uuid",
+          "x-foreignKey": "public.site_partner_requests(id)"
+        }
+      },
+      "required": [
+        "id",
+        "action",
+        "details",
+        "created_at"
+      ],
+      "additionalProperties": false,
+      "x-primaryKey": [
+        "id"
+      ]
+    }
+  }
+}

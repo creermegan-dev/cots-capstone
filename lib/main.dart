@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
 import 'core/firebase_bootstrap.dart';
+import 'core/cots_theme.dart';
 import 'core/supabase_config.dart';
 import 'features/admin/admin_routes.dart';
 import 'features/admin/screens/admin_shell_screen.dart';
@@ -64,14 +65,7 @@ class CotsMonitorApp extends StatelessWidget {
         scaffoldMessengerKey: kRootScaffoldMessengerKey,
         title: 'COTS Monitor',
         debugShowCheckedModeBanner: false,
-        theme: ThemeData(
-          useMaterial3: true,
-          colorScheme: ColorScheme.fromSeed(
-            seedColor: const Color(0xFF1F7A7A),
-            brightness: Brightness.light,
-          ),
-          scaffoldBackgroundColor: Colors.white,
-        ),
+        theme: cotsTheme(),
         home: const AuthWrapper(),
         routes: {
           AuthRoutes.signup: (_) => const SignupScreen(),

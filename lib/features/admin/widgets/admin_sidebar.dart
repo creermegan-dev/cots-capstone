@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../../../widgets/cots_logo.dart';
 
 import '../layout/admin_nav_entries.dart';
 import '../layout/admin_shell_search_bar.dart';
@@ -45,41 +46,11 @@ class AdminSidebar extends StatelessWidget {
         duration: const Duration(milliseconds: 220),
         curve: Curves.easeOutCubic,
         width: width,
-        decoration: BoxDecoration(
-          gradient: const LinearGradient(
-            begin: Alignment.topLeft,
-            end: Alignment.bottomRight,
-            colors: [
-              AdminColors.sidebarTop,
-              AdminColors.sidebarBottom,
-              Color(0xFF0D2238),
-            ],
-            stops: [0.0, 0.55, 1.0],
-          ),
-          boxShadow: [
-            BoxShadow(
-              color: Colors.black.withValues(alpha: 0.25),
-              blurRadius: 16,
-              offset: const Offset(4, 0),
-            ),
-          ],
+        decoration: const BoxDecoration(
+          color: AdminColors.sidebarTop,
         ),
         child: Stack(
           children: [
-            const Positioned.fill(
-              child: DecoratedBox(
-                decoration: BoxDecoration(
-                  gradient: RadialGradient(
-                    center: Alignment(-0.8, -0.9),
-                    radius: 1.2,
-                    colors: [
-                      AdminColors.sidebarAccentGlow,
-                      Colors.transparent,
-                    ],
-                  ),
-                ),
-              ),
-            ),
             Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
@@ -104,22 +75,9 @@ class AdminSidebar extends StatelessWidget {
                               decoration: BoxDecoration(
                                 shape: BoxShape.circle,
                                 border: Border.all(color: Colors.white24),
-                                gradient: const LinearGradient(
-                                  colors: [
-                                    Color(0xFF26A69A),
-                                    Color(0xFF00897B)
-                                  ],
-                                ),
+                                color: Colors.white,
                               ),
-                              child: const Stack(
-                                alignment: Alignment.center,
-                                children: [
-                                  Icon(Icons.waves_rounded,
-                                      color: Colors.white54, size: 22),
-                                  Icon(Icons.star_rounded,
-                                      color: Color(0xFFFF7043), size: 20),
-                                ],
-                              ),
+                              child: const CotsLogo(size: 44),
                             ),
                           ],
                         )
@@ -145,22 +103,9 @@ class AdminSidebar extends StatelessWidget {
                               decoration: BoxDecoration(
                                 shape: BoxShape.circle,
                                 border: Border.all(color: Colors.white24),
-                                gradient: const LinearGradient(
-                                  colors: [
-                                    Color(0xFF26A69A),
-                                    Color(0xFF00897B)
-                                  ],
-                                ),
+                                color: Colors.white,
                               ),
-                              child: const Stack(
-                                alignment: Alignment.center,
-                                children: [
-                                  Icon(Icons.waves_rounded,
-                                      color: Colors.white54, size: 22),
-                                  Icon(Icons.star_rounded,
-                                      color: Color(0xFFFF7043), size: 20),
-                                ],
-                              ),
+                              child: const CotsLogo(size: 44),
                             ),
                             const SizedBox(width: 12),
                             Expanded(
@@ -172,7 +117,7 @@ class AdminSidebar extends StatelessWidget {
                                     style: TextStyle(
                                       color:
                                           Colors.white.withValues(alpha: 0.95),
-                                      fontWeight: FontWeight.w800,
+                                      fontWeight: FontWeight.w600,
                                       fontSize: 11.5,
                                       letterSpacing: 0.6,
                                       height: 1.2,

@@ -43,7 +43,7 @@ class _AdminZonesScreenState extends State<AdminZonesScreen> {
   static const _columns = [
     AdminDataTableColumn('Site', 235),
     AdminDataTableColumn('Location', 200),
-    AdminDataTableColumn('Site group', 90),
+    AdminDataTableColumn('Site name', 150),
     AdminDataTableColumn('Reports', 75),
     AdminDataTableColumn('Confirmed COTS', 130),
     AdminDataTableColumn('Pending review', 120),
@@ -299,7 +299,7 @@ class _AdminZonesScreenState extends State<AdminZonesScreen> {
                               const Text('Site directory',
                                   style: TextStyle(
                                       fontSize: 19,
-                                      fontWeight: FontWeight.w800,
+                                      fontWeight: FontWeight.w600,
                                       color: AdminColors.headerTitle)),
                               const SizedBox(height: 6),
                               const Text(
@@ -322,7 +322,7 @@ class _AdminZonesScreenState extends State<AdminZonesScreen> {
                                           cells: [
                                             _cell(row.site.displayName),
                                             _cell(row.site.municipalityName),
-                                            _cell(row.site.zoneLabel),
+                                            _cell(row.site.name),
                                             _cell(available
                                                 ? '${row.reports}'
                                                 : '—'),

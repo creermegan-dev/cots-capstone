@@ -39,6 +39,7 @@ abstract final class RemovalRecordService {
     bool? gpsFromPhoto,
     EvidenceImagePayload? evidence,
     EvidenceProgressCallback? onEvidenceProgress,
+    String? samePhotoCaptureSubmissionId,
   }) async {
     if (captureId.trim().isEmpty) {
       throw ArgumentError('captureId is required for removal records.');
@@ -92,6 +93,7 @@ abstract final class RemovalRecordService {
         evidence: evidence,
         gpsFromPhoto: gpsFromPhoto,
         onEvidenceProgress: onEvidenceProgress,
+        samePhotoCaptureSubmissionId: samePhotoCaptureSubmissionId,
       );
     }
 

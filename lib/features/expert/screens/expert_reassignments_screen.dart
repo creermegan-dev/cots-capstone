@@ -130,7 +130,7 @@ class _ExpertReassignmentsScreenState extends State<ExpertReassignmentsScreen> {
                     children: [
                       Text(team.areaName,
                           style: const TextStyle(
-                              fontSize: 18, fontWeight: FontWeight.w800)),
+                              fontSize: 18, fontWeight: FontWeight.w600)),
                       const SizedBox(height: 16),
                       Wrap(spacing: 24, children: [
                         _field('Main diver', team.mainDiverName),
@@ -165,7 +165,7 @@ class _ExpertReassignmentsScreenState extends State<ExpertReassignmentsScreen> {
                     children: [
                       Text(request.areaName,
                           style: const TextStyle(
-                              fontSize: 18, fontWeight: FontWeight.w800)),
+                              fontSize: 18, fontWeight: FontWeight.w600)),
                       const SizedBox(height: 8),
                       Text(request.statusLabel,
                           style: const TextStyle(
@@ -243,7 +243,7 @@ class _ExpertReassignmentsScreenState extends State<ExpertReassignmentsScreen> {
               child: Text('Site Coverage',
                   style: TextStyle(
                       fontSize: 24,
-                      fontWeight: FontWeight.w800,
+                      fontWeight: FontWeight.w600,
                       color: AdminColors.headerTitle))),
           IconButton(
               onPressed: _busy ? null : _refresh,

@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../../../core/cots_theme.dart';
 
 /// Auth responsive breakpoints (per product spec).
 abstract final class AuthBreakpoints {
@@ -25,26 +26,26 @@ bool authUseDesktopFields(BuildContext context) =>
 abstract final class AuthTokens {
   static const bgTop = Color(0xFFF5FBFC);
   static const bgBottom = Color(0xFFEDF6F8);
-  static const inputFill = Color(0xFFF7FAFB);
-  static const inputBorder = Color(0xFFDCE7EC);
-  static const focusTeal = Color(0xFF00B8B0);
+  static const inputFill = CotsUi.secondarySurface;
+  static const inputBorder = CotsUi.divider;
+  static const focusTeal = CotsUi.primary;
   static const gradientStart = Color(0xFF00B8B0);
   static const gradientEnd = Color(0xFF007A87);
-  static const titleNavy = Color(0xFF0F2D3D);
-  static const subtitleGray = Color(0xFF5C7A89);
+  static const titleNavy = CotsUi.text;
+  static const subtitleGray = CotsUi.secondaryText;
 
-  static const double fieldHeight = 58;
-  static const double fieldRadius = 16;
-  static const double cardRadius = 28;
-  static const double cardPaddingDesktop = 40;
-  static const double buttonHeight = 56;
-  static const double buttonRadius = 18;
+  static const double fieldHeight = 52;
+  static const double fieldRadius = CotsUi.controlRadius;
+  static const double cardRadius = 20;
+  static const double cardPaddingDesktop = 32;
+  static const double buttonHeight = 52;
+  static const double buttonRadius = CotsUi.controlRadius;
 
   static List<BoxShadow> get cardShadow => [
         BoxShadow(
-          color: Colors.black.withValues(alpha: 0.08),
-          blurRadius: 30,
-          offset: const Offset(0, 12),
+          color: Colors.black.withValues(alpha: 0.025),
+          blurRadius: 12,
+          offset: const Offset(0, 3),
         ),
       ];
 }

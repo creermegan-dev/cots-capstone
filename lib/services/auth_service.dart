@@ -168,7 +168,7 @@ class AuthService {
         return 'Only the Expert account can record review decisions.';
       }
       if (error.message.contains('review-band COTS')) {
-        return 'Review every uncertain COTS (20–79%) first. COTS below 20% '
+        return 'Review every uncertain COTS (20–84%) first. COTS below 20% '
             'can only be rejected.';
       }
       if (error.message.contains('Invalid capture decision')) {

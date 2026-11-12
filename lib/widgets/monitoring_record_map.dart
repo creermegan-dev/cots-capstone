@@ -34,7 +34,7 @@ class MonitoringRecordMap extends StatelessWidget {
       child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
         const Text('Detection locations',
             style: TextStyle(
-                fontSize: 17, fontWeight: FontWeight.w800, color: kTextNavy)),
+                fontSize: 17, fontWeight: FontWeight.w600, color: kTextNavy)),
         const SizedBox(height: 8),
         if (located.isEmpty)
           const Text('No saved capture coordinates available.')

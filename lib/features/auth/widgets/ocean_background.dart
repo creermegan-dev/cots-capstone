@@ -73,15 +73,15 @@ class _OceanDecorPainter extends CustomPainter {
     }
 
     if (subtle) {
-      wave(AuthTokens.focusTeal.withValues(alpha: 0.04), h * 0.78, 10, 0.3);
-      wave(AuthTokens.focusTeal.withValues(alpha: 0.03), h * 0.88, 8, 1.4);
+      wave(const Color(0xFF00B8B0).withValues(alpha: 0.04), h * 0.78, 10, 0.3);
+      wave(const Color(0xFF00B8B0).withValues(alpha: 0.03), h * 0.88, 8, 1.4);
     } else {
       wave(const Color(0x331F7A7A), h * 0.62, 14, 0.2);
       wave(const Color(0x221F7A7A), h * 0.72, 18, 1.1);
     }
 
     final blobPaint = Paint()
-      ..color = AuthTokens.focusTeal.withValues(alpha: alpha);
+      ..color = const Color(0xFF00B8B0).withValues(alpha: alpha);
     canvas.drawCircle(Offset(w * 0.08, h * 0.18), w * 0.05, blobPaint);
     canvas.drawCircle(Offset(w * 0.92, h * 0.22), w * 0.04, blobPaint);
     canvas.drawCircle(Offset(w * 0.15, h * 0.75), w * 0.06, blobPaint);
@@ -99,7 +99,7 @@ class _OceanDecorPainter extends CustomPainter {
     }
 
     final arcPaint = Paint()
-      ..color = AuthTokens.focusTeal.withValues(alpha: subtle ? 0.05 : 0.08)
+      ..color = const Color(0xFF00B8B0).withValues(alpha: subtle ? 0.05 : 0.08)
       ..style = PaintingStyle.stroke
       ..strokeWidth = 1.5;
     canvas.drawArc(

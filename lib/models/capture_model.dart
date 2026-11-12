@@ -48,8 +48,16 @@ class CaptureModel {
     this.waitingCount,
     this.locationSource = '',
     this.timeSource = '',
+    this.modelName = '',
+    this.expertConfirmedCount = 0,
+    this.modelSha256 = '',
+    this.autoApproveMin = CotsConfidencePolicy.autoApproveMin,
   });
 
+  /// Empty for historical records without recorded detector provenance.
+  final String modelName;
+  final int expertConfirmedCount;
+  final String modelSha256;
   final String id;
   final String uid;
   final String submittedBy;
@@ -57,6 +65,9 @@ class CaptureModel {
   final String storageObjectPath;
   final int aiDetectedCount;
   final double confidence;
+
+  /// Policy fixed when this photo was submitted, preserving historical counts.
+  final int autoApproveMin;
   final String captureSource;
   final String zone;
   final String notes;
@@ -118,8 +129,12 @@ class CaptureModel {
       uid: data['uid'] as String? ?? '',
       submittedBy: data['submitted_by'] as String? ?? 'Unknown',
       imageName: data['image_name'] as String? ?? '',
+      modelName: data['model_name'] as String? ?? '',
+      modelSha256: data['model_sha256'] as String? ?? '',
       aiDetectedCount: _asInt(data['ai_detected_count'] ?? data['cots_count']),
       confidence: _asDouble(data['confidence']) ?? 0,
+      autoApproveMin:
+          CotsConfidencePolicy.storedAutoApproveMin(data['auto_approve_min']),
       captureSource: data['capture_source'] as String? ??
           CaptureSource.goProUnderwaterImage,
       zone: data['zone'] as String? ?? 'Unassigned',
@@ -166,10 +181,14 @@ class CaptureModel {
       uid: _readString(fields, 'uid'),
       submittedBy: _readString(fields, 'submitted_by', fallback: 'Unknown'),
       imageName: _readString(fields, 'image_name'),
+      modelName: _readString(fields, 'model_name'),
+      modelSha256: _readString(fields, 'model_sha256'),
       aiDetectedCount: _readInt(fields, 'ai_detected_count') != 0
           ? _readInt(fields, 'ai_detected_count')
           : _readInt(fields, 'cots_count'),
       confidence: _readDouble(fields, 'confidence') ?? 0,
+      autoApproveMin: CotsConfidencePolicy.storedAutoApproveMin(
+          _readInt(fields, 'auto_approve_min')),
       captureSource: _readString(
         fields,
         'capture_source',
@@ -220,6 +239,7 @@ class CaptureModel {
       CotsConfidencePolicy.buildDetectionItems(
         count: aiDetectedCount,
         averagePercent: confidencePercent,
+        autoApproveThreshold: autoApproveMin,
         boxes: detectionBoxes.isNotEmpty ? detectionBoxes : null,
         imageWidth: imageWidth > 0 ? imageWidth : 1920,
         imageHeight: imageHeight > 0 ? imageHeight : 1080,
@@ -250,6 +270,8 @@ class CaptureModel {
       activityType: CotsActivityType.label(CotsActivityType.detectionOnly),
       aiCount: count,
       captureSource: captureSource,
+      modelName: modelName,
+      expertConfirmedCount: expertConfirmedCount,
       documentId: id,
       imageName: imageName,
       storageObjectPath: storageObjectPath,
@@ -268,6 +290,7 @@ class CaptureModel {
       adminConfirmed: adminConfirmed,
       adminRejected: adminRejected,
       adminCotsDecisions: adminCotsDecisions,
+      autoApproveMin: autoApproveMin,
       recordCollection: RecordCollection.captures,
       ownerUid: uid,
     );

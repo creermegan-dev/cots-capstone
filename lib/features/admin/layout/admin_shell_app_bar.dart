@@ -45,7 +45,7 @@ class AdminShellAppBar extends StatelessWidget implements PreferredSizeWidget {
         title,
         maxLines: 1,
         overflow: TextOverflow.ellipsis,
-        style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 17),
+        style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 17),
       ),
     );
   }

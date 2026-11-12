@@ -61,7 +61,7 @@ class _MonthlySiteLevelsCardState extends State<MonthlySiteLevelsCard> {
             const Text('Monthly site levels',
                 style: TextStyle(
                     fontSize: 16,
-                    fontWeight: FontWeight.w800,
+                    fontWeight: FontWeight.w600,
                     color: kTextNavy)),
             const SizedBox(height: 4),
             const Text(
@@ -153,7 +153,7 @@ class _MonthlySiteLevelsCardState extends State<MonthlySiteLevelsCard> {
         children: [
           Text('${l.confirmedCots} COTS',
               style: const TextStyle(
-                  fontWeight: FontWeight.w800, color: kTextNavy, fontSize: 12)),
+                  fontWeight: FontWeight.w600, color: kTextNavy, fontSize: 12)),
           Text(
               l.waitingCots > 0
                   ? '${l.level} · ${l.waitingCots} waiting'

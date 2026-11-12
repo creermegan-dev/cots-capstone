@@ -103,8 +103,7 @@ class ZoneDetailsPage extends StatelessWidget {
                       vertical: 6,
                     ),
                     decoration: BoxDecoration(
-                      color: _statusColor(zone.status)
-                          .withValues(alpha: 0.1),
+                      color: _statusColor(zone.status).withValues(alpha: 0.1),
                       borderRadius: BorderRadius.circular(20),
                     ),
                     child: Row(
@@ -255,7 +254,7 @@ class ZoneDetailsPage extends StatelessWidget {
                       _levelWord,
                       style: TextStyle(
                         fontSize: 28,
-                        fontWeight: FontWeight.w800,
+                        fontWeight: FontWeight.w600,
                         color: _levelColor,
                       ),
                     ),
@@ -284,7 +283,7 @@ class ZoneDetailsPage extends StatelessWidget {
                             text: zone.density.toStringAsFixed(1),
                             style: TextStyle(
                               fontSize: 26,
-                              fontWeight: FontWeight.w800,
+                              fontWeight: FontWeight.w600,
                               color: _levelColor,
                             ),
                           ),
@@ -594,10 +593,9 @@ class ZoneDetailsPage extends StatelessWidget {
   }
 
   Widget _historyRow(StatusHistoryItem item) {
-    final c = item.level != null
-        ? outbreakColor(item.level!)
-        : _levelColor;
-    final line = '${item.statusLabel}${item.detail.isEmpty ? '' : ' ${item.detail}'}';
+    final c = item.level != null ? outbreakColor(item.level!) : _levelColor;
+    final line =
+        '${item.statusLabel}${item.detail.isEmpty ? '' : ' ${item.detail}'}';
     return Padding(
       padding: const EdgeInsets.only(bottom: 12),
       child: Row(
@@ -616,7 +614,8 @@ class ZoneDetailsPage extends StatelessWidget {
               children: [
                 Text(
                   '${item.date} ${item.time}',
-                  style: const TextStyle(fontSize: 12, color: Color(0xFF6B7280)),
+                  style:
+                      const TextStyle(fontSize: 12, color: Color(0xFF6B7280)),
                 ),
                 const SizedBox(height: 2),
                 Text(

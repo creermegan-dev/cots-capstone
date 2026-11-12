@@ -65,7 +65,7 @@ class BatchDetectionSummary extends StatelessWidget {
                 style: const TextStyle(
                     color: kPrimaryTeal,
                     fontSize: 32,
-                    fontWeight: FontWeight.w900)),
+                    fontWeight: FontWeight.w700)),
             Text('Overall confidence: $confidenceLabel',
                 key: const ValueKey('batch-detection-confidence'),
                 style: const TextStyle(
@@ -210,7 +210,7 @@ class _BatchDetectionGalleryState extends State<BatchDetectionGallery> {
           Text('${detection.count} COTS detected in this photo',
               key: const ValueKey('selected-photo-count'),
               style: const TextStyle(
-                  color: kTextNavy, fontSize: 18, fontWeight: FontWeight.w800)),
+                  color: kTextNavy, fontSize: 18, fontWeight: FontWeight.w600)),
           const SizedBox(height: 6),
           Text(
               'Overall confidence: ${detection.count > 0 ? '${CotsConfidencePolicy.percentFromConfidence(detection.confidence)}%' : '—'}',

@@ -33,7 +33,7 @@ class AdminDeskTopBar extends StatelessWidget {
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
                 style: TextStyle(
-                  fontWeight: FontWeight.w800,
+                  fontWeight: FontWeight.w600,
                   fontSize: tight ? 17 : 19,
                   color: AdminColors.headerTitle,
                 ),

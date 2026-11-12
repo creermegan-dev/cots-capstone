@@ -41,16 +41,6 @@ class AdminSidebarNavTile extends StatelessWidget {
                 decoration: BoxDecoration(
                   borderRadius: BorderRadius.circular(12),
                   color: selected ? AdminColors.navActive : Colors.transparent,
-                  boxShadow: selected
-                      ? [
-                          BoxShadow(
-                            color:
-                                AdminColors.navActive.withValues(alpha: 0.35),
-                            blurRadius: 12,
-                            offset: const Offset(0, 4),
-                          ),
-                        ]
-                      : null,
                 ),
                 child: Stack(
                   clipBehavior: Clip.none,
@@ -98,15 +88,6 @@ class AdminSidebarNavTile extends StatelessWidget {
             decoration: BoxDecoration(
               borderRadius: BorderRadius.circular(12),
               color: selected ? AdminColors.navActive : Colors.transparent,
-              boxShadow: selected
-                  ? [
-                      BoxShadow(
-                        color: AdminColors.navActive.withValues(alpha: 0.35),
-                        blurRadius: 12,
-                        offset: const Offset(0, 4),
-                      ),
-                    ]
-                  : null,
             ),
             child: Row(
               children: [

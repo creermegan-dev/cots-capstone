@@ -107,6 +107,9 @@ class ExpertActionsController extends ChangeNotifier {
   /// The number shown on the Notifications tab.
   int get count => loaded ? items.length : 0;
 
+  /// Reuse the existing records feed for dashboard dates; callers cannot edit it.
+  List<AdminRecordTableRow> get records => List.unmodifiable(_records);
+
   void start() {
     if (_started || _disposed) return;
     _started = true;
@@ -316,7 +319,7 @@ class _ExpertNotificationsScreenState extends State<ExpertNotificationsScreen> {
                     child: Text('Notifications',
                         style: TextStyle(
                             fontSize: 22,
-                            fontWeight: FontWeight.w800,
+                            fontWeight: FontWeight.w600,
                             color: AdminColors.headerTitle)),
                   ),
                   IconButton(

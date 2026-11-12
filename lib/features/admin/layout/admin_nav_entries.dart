@@ -61,4 +61,7 @@ final List<AdminNavEntry> kExpertNavEntries = [
       icon: Icons.map_outlined, label: 'Map Monitoring', index: 5),
   const AdminNavItemData(
       icon: Icons.notifications_outlined, label: 'Notifications', index: 6),
+  // Added 2026-11-09: the Expert creates the same PDF report as the Administrator.
+  const AdminNavItemData(
+      icon: Icons.description_outlined, label: 'Reports', index: 7),
 ];

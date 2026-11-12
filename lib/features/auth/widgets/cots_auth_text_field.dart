@@ -40,8 +40,8 @@ class CotsAuthTextField extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final desktop = authUseDesktopFields(context);
-    final radius = desktop ? AuthTokens.fieldRadius : 14.0;
-    final fill = desktop ? AuthTokens.inputFill : Colors.white;
+    const radius = AuthTokens.fieldRadius;
+    const fill = AuthTokens.inputFill;
     final borderColor = desktop ? AuthTokens.inputBorder : kBorderGray;
     final focusColor = desktop ? AuthTokens.focusTeal : kPrimaryTeal;
     final labelColor = desktop ? AuthTokens.titleNavy : kDarkTeal;
@@ -53,14 +53,14 @@ class CotsAuthTextField extends StatelessWidget {
         Text(
           label,
           style: TextStyle(
-            fontSize: desktop ? 14 : 13,
-            fontWeight: FontWeight.w600,
+            fontSize: 13,
+            fontWeight: FontWeight.w500,
             color: labelColor,
           ),
         ),
-        SizedBox(height: desktop ? 10 : 8),
-        SizedBox(
-          height: desktop ? AuthTokens.fieldHeight : null,
+        const SizedBox(height: 8),
+        ConstrainedBox(
+          constraints: const BoxConstraints(minHeight: AuthTokens.fieldHeight),
           child: TextFormField(
             controller: controller,
             keyboardType: keyboardType,
@@ -83,9 +83,9 @@ class CotsAuthTextField extends StatelessWidget {
               filled: true,
               fillColor: fill,
               prefixIcon: Icon(prefixIcon, color: focusColor, size: iconSize),
-              contentPadding: EdgeInsets.symmetric(
-                horizontal: desktop ? 16 : 4,
-                vertical: desktop ? 0 : 14,
+              contentPadding: const EdgeInsets.symmetric(
+                horizontal: 16,
+                vertical: 14,
               ),
               border: _border(borderColor, radius),
               enabledBorder: _border(borderColor, radius),

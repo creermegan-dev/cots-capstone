@@ -1,3 +1,4 @@
+import '../../widgets/no_cots_survey_records.dart';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
@@ -27,7 +28,17 @@ import 'user_record_details_page.dart';
 import '../../widgets/cots_loading_skeleton.dart';
 
 class FollowUpPage extends StatefulWidget {
-  const FollowUpPage({super.key});
+  const FollowUpPage(
+      {super.key,
+      this.capturesStream,
+      this.assignmentsStream,
+      this.surveysStream,
+      this.recordsStream});
+
+  final Stream<List<CaptureModel>>? capturesStream;
+  final Stream<List<FollowUpAssignmentModel>>? assignmentsStream;
+  final Stream<List<FollowUpSurveyModel>>? surveysStream;
+  final Stream<List<ScanRecordModel>>? recordsStream;
 
   @override
   State<FollowUpPage> createState() => _FollowUpPageState();
@@ -41,8 +52,34 @@ class _FollowUpPageState extends State<FollowUpPage> {
   bool _isReconciling = false;
   Object? _reconciliationError;
   List<String> _ambiguousCaptureIds = const [];
+  String? _streamsUid;
+  Stream<List<CaptureModel>>? _capturesStream;
+  Stream<List<FollowUpAssignmentModel>>? _assignmentsStream;
+  Stream<List<FollowUpSurveyModel>>? _surveysStream;
+  Stream<List<ScanRecordModel>>? _recordsStream;
+
+  void _bindStreams(String uid) {
+    _streamsUid = uid;
+    _reconciledSignature = null;
+    _capturesStream = widget.capturesStream ?? CaptureRepository.watchAll();
+    _assignmentsStream = widget.assignmentsStream ??
+        FollowUpMonitoringRepository.watchAssignmentsForDiver(uid);
+    _surveysStream = widget.surveysStream ??
+        FollowUpMonitoringRepository.watchMonitoringHistory(uid);
+    _recordsStream = widget.recordsStream ?? ScanRecordRepository.watchAll();
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    final uid = context.read<AuthProvider>().userModel?.uid;
+    if (uid != null && uid != _streamsUid) _bindStreams(uid);
+  }
 
   void _reconcileHistory(List<CaptureModel> captures, String uid) {
+    // Supabase already owns assignment creation. Do not fetch all captures
+    // again just to call the repository's Supabase no-op.
+    if (context.read<AuthProvider>().usesSupabase) return;
     final signature = captures
         .map((capture) =>
             '${capture.id}:${capture.uid}:${capture.monitoringAreaId}:'
@@ -77,7 +114,11 @@ class _FollowUpPageState extends State<FollowUpPage> {
   }
 
   void _retryReconciliation() {
-    setState(() => _reconciledSignature = null);
+    setState(() {
+      _reconciledSignature = null;
+      final uid = context.read<AuthProvider>().userModel?.uid;
+      if (uid != null) _bindStreams(uid);
+    });
   }
 
   @override
@@ -129,62 +170,49 @@ class _FollowUpPageState extends State<FollowUpPage> {
           ? const Center(
               child: Text('Sign in to view assigned follow-up areas.'))
           : StreamBuilder<List<CaptureModel>>(
-              stream: CaptureRepository.watchAll(),
+              stream: _capturesStream,
               builder: (context, captureSnapshot) {
-                if (captureSnapshot.hasError) {
-                  return _loadError(
-                    'Could not load detection history.',
-                    captureSnapshot.error!,
-                  );
-                }
-                if (!captureSnapshot.hasData) {
-                  return const CotsPageLoading(
-                      label: 'Loading follow-up monitoring');
-                }
-                final captures = captureSnapshot.data!;
-                _reconcileHistory(captures, uid);
                 return StreamBuilder<List<FollowUpAssignmentModel>>(
-                  stream: FollowUpMonitoringRepository.watchAssignmentsForDiver(
-                      uid),
+                  stream: _assignmentsStream,
                   builder: (context, assignmentSnapshot) {
-                    if (assignmentSnapshot.hasError) {
-                      return _loadError(
-                        'Could not load assigned monitoring areas.',
-                        assignmentSnapshot.error!,
-                      );
-                    }
-                    if (!assignmentSnapshot.hasData) {
-                      return const CotsPageLoading(
-                          label: 'Loading follow-up monitoring');
-                    }
                     return StreamBuilder<List<FollowUpSurveyModel>>(
-                      stream:
-                          FollowUpMonitoringRepository.watchMonitoringHistory(
-                              uid),
+                      stream: _surveysStream,
                       builder: (context, surveySnapshot) {
-                        if (surveySnapshot.hasError) {
-                          return _loadError(
-                            'Could not load monitoring history.',
-                            surveySnapshot.error!,
-                          );
-                        }
-                        if (!surveySnapshot.hasData) {
-                          return const CotsPageLoading(
-                              label: 'Loading follow-up monitoring');
-                        }
                         return StreamBuilder<List<ScanRecordModel>>(
-                          stream: ScanRecordRepository.watchAll(),
+                          stream: _recordsStream,
                           builder: (context, recordSnapshot) {
+                            // All four subscriptions start together, even while
+                            // another source is still waiting for its first data.
+                            if (captureSnapshot.hasError) {
+                              return _loadError(
+                                  'Could not load detection history.',
+                                  captureSnapshot.error!);
+                            }
+                            if (assignmentSnapshot.hasError) {
+                              return _loadError(
+                                  'Could not load assigned monitoring areas.',
+                                  assignmentSnapshot.error!);
+                            }
+                            if (surveySnapshot.hasError) {
+                              return _loadError(
+                                  'Could not load monitoring history.',
+                                  surveySnapshot.error!);
+                            }
                             if (recordSnapshot.hasError) {
                               return _loadError(
                                 'Could not load linked elimination records.',
                                 recordSnapshot.error!,
                               );
                             }
-                            if (!recordSnapshot.hasData) {
+                            if (!captureSnapshot.hasData ||
+                                !assignmentSnapshot.hasData ||
+                                !surveySnapshot.hasData ||
+                                !recordSnapshot.hasData) {
                               return const CotsPageLoading(
                                   label: 'Loading follow-up monitoring');
                             }
+                            final captures = captureSnapshot.data!;
+                            _reconcileHistory(captures, uid);
                             return _buildContent(
                               assignments: assignmentSnapshot.data!,
                               surveys: surveySnapshot.data ?? const [],
@@ -223,7 +251,7 @@ class _FollowUpPageState extends State<FollowUpPage> {
             ),
             const SizedBox(height: 12),
             OutlinedButton.icon(
-              onPressed: () => setState(() {}),
+              onPressed: _retryReconciliation,
               icon: const Icon(Icons.refresh),
               label: const Text('Retry'),
             ),
@@ -257,6 +285,8 @@ class _FollowUpPageState extends State<FollowUpPage> {
         padding: const EdgeInsets.fromLTRB(16, 16, 16, 104),
         children: [
           _pageIntro(),
+          const NoCotsSurveyRecords(),
+
           // Stage 4: handover offers made to this Diver.
           if (SupabaseConfig.isConfigured) ...[
             const SizedBox(height: 12),
@@ -316,7 +346,7 @@ class _FollowUpPageState extends State<FollowUpPage> {
               'Monthly reef follow-up',
               style: TextStyle(
                 color: kTextNavy,
-                fontWeight: FontWeight.w800,
+                fontWeight: FontWeight.w600,
                 fontSize: 17,
               ),
             ),
@@ -402,7 +432,7 @@ class _FollowUpPageState extends State<FollowUpPage> {
                     style: const TextStyle(
                       color: kTextNavy,
                       fontSize: 16,
-                      fontWeight: FontWeight.w800,
+                      fontWeight: FontWeight.w600,
                     ),
                   ),
                   const SizedBox(height: 3),
@@ -537,14 +567,25 @@ class _FollowUpPageState extends State<FollowUpPage> {
                 style: TextButton.styleFrom(
                     alignment: Alignment.centerLeft,
                     minimumSize: const Size(48, 48)),
-                onPressed: () => Navigator.of(context).push<void>(
-                    MaterialPageRoute(
+                onPressed: survey.noCotsObserved
+                    ? () => showDialog<void>(
+                        context: context,
+                        builder: (context) => AlertDialog(
+                                title: const Text(
+                                    'No COTS observed during this survey'),
+                                content:
+                                    Text('Diver-reported · ${survey.areaName}\n${_dateFormat.format(survey.surveyDate)}\n${survey.cotsReportedLater ? 'COTS were reported later this month. This earlier survey remains in history.\n' : ''}This month’s visit is complete. Existing COTS totals are unchanged.'),
+                                actions: [
+                                  TextButton(
+                                      onPressed: () => Navigator.pop(context),
+                                      child: const Text('Close'))
+                                ]))
+                    : () => Navigator.of(context).push<void>(MaterialPageRoute(
                         builder: (_) => UserRecordDetailsPage(
-                            record:
-                                ScanRecordModel.fromFollowUpSurvey(survey)))),
+                            record: ScanRecordModel.fromFollowUpSurvey(survey)))),
                 child: Text(
                   '${_dateFormat.format(survey.surveyDate)} · '
-                  '${survey.submittedBy} · ${followUpSurveyStatusLabel(followUpSurveyStatus(survey, captures))} · '
+                  '${survey.submittedBy} · ${survey.noCotsObserved ? (survey.cotsReportedLater ? 'No COTS observed earlier; COTS reported later this month · Diver-reported' : 'No COTS observed during this visit · Diver-reported') : followUpSurveyStatusLabel(followUpSurveyStatus(survey, captures))} · '
                   '${followUpCountSummary(survey)}'
                   '${survey.calculatedLevel == null ? '' : ' · ${CotsDensity.describe(survey.densityPerHectare, survey.calculatedLevel)}'}'
                   '${survey.assessedLevel == null ? '' : ' · Expert: ${survey.assessedLevel}'}',
@@ -628,7 +669,7 @@ class _FollowUpPageState extends State<FollowUpPage> {
               'No monitoring areas assigned yet',
               style: TextStyle(
                 color: kTextNavy,
-                fontWeight: FontWeight.w800,
+                fontWeight: FontWeight.w600,
                 fontSize: 16,
               ),
             ),

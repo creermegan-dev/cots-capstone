@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../../../models/detection_model.dart';
 import 'package:provider/provider.dart';
 
 import '../../auth/auth_navigation.dart';
@@ -219,8 +220,8 @@ class _AdminRecordDetailsScreenState extends State<AdminRecordDetailsScreen> {
     var count = 0;
     for (var i = 0; i < _detectionItems.length; i++) {
       if (CotsConfidencePolicy.cotsNeedsAdminReview(
-            _detectionItems[i].confidencePercent,
-          ) &&
+              _detectionItems[i].confidencePercent,
+              autoApproveThreshold: _row.autoApproveMin) &&
           _cotsDecisions[i] != PerCotsAdminDecision.pending) {
         count++;
       }
@@ -231,8 +232,8 @@ class _AdminRecordDetailsScreenState extends State<AdminRecordDetailsScreen> {
   bool get _allCotsReviewed {
     for (var i = 0; i < _detectionItems.length; i++) {
       if (CotsConfidencePolicy.cotsNeedsAdminReview(
-            _detectionItems[i].confidencePercent,
-          ) &&
+              _detectionItems[i].confidencePercent,
+              autoApproveThreshold: _row.autoApproveMin) &&
           _cotsDecisions[i] == PerCotsAdminDecision.pending) {
         return false;
       }
@@ -257,6 +258,7 @@ class _AdminRecordDetailsScreenState extends State<AdminRecordDetailsScreen> {
     _detectionItems = CotsConfidencePolicy.buildDetectionItems(
       count: _row.cotsCount,
       averagePercent: _row.confidencePercent,
+      autoApproveThreshold: _row.autoApproveMin,
       boxes: _row.detectionBoxes.isNotEmpty ? _row.detectionBoxes : null,
       imageWidth: _row.imageWidth > 0 ? _row.imageWidth : 1920,
       imageHeight: _row.imageHeight > 0 ? _row.imageHeight : 1080,
@@ -616,7 +618,7 @@ class _AdminRecordDetailsScreenState extends State<AdminRecordDetailsScreen> {
                     _recordReviewActionRow(),
                     const SizedBox(height: 12),
                     Text(
-                      'Review each COTS below ${CotsConfidencePolicy.autoApproveMin}% (${CotsConfidencePolicy.adminReviewMin}–${CotsConfidencePolicy.autoApproveMin - 1}% band). '
+                      'Review each COTS below ${_row.autoApproveMin}% (${CotsConfidencePolicy.adminReviewMin}–${_row.autoApproveMin - 1}% band). '
                       'Higher-confidence COTS in the same photo are already auto-approved.',
                       style: TextStyle(
                         fontSize: 12,
@@ -782,7 +784,7 @@ class _AdminRecordDetailsScreenState extends State<AdminRecordDetailsScreen> {
               r.verificationBadgeLabel,
               style: TextStyle(
                   color: badgeColor,
-                  fontWeight: FontWeight.w900,
+                  fontWeight: FontWeight.w700,
                   fontSize: 11,
                   letterSpacing: 0.6),
             ),
@@ -790,7 +792,7 @@ class _AdminRecordDetailsScreenState extends State<AdminRecordDetailsScreen> {
           const SizedBox(height: 12),
           Text('Record ID: ${r.recordId}',
               style: const TextStyle(
-                  fontWeight: FontWeight.w800,
+                  fontWeight: FontWeight.w600,
                   fontSize: 14,
                   color: AdminColors.headerTitle)),
           const SizedBox(height: 6),
@@ -849,7 +851,7 @@ class _AdminRecordDetailsScreenState extends State<AdminRecordDetailsScreen> {
                   overflow: TextOverflow.ellipsis,
                   style: const TextStyle(
                       fontSize: 22,
-                      fontWeight: FontWeight.w900,
+                      fontWeight: FontWeight.w700,
                       color: AdminColors.headerTitle),
                 ),
                 Text(
@@ -896,7 +898,7 @@ class _AdminRecordDetailsScreenState extends State<AdminRecordDetailsScreen> {
                 Text(r.monitoringStatus,
                     style: const TextStyle(
                         fontSize: 20,
-                        fontWeight: FontWeight.w900,
+                        fontWeight: FontWeight.w700,
                         color: AdminColors.headerTitle)),
               ],
             ),
@@ -934,7 +936,7 @@ class _AdminRecordDetailsScreenState extends State<AdminRecordDetailsScreen> {
                 Text(r.submittedDate,
                     style: const TextStyle(
                         fontSize: 15,
-                        fontWeight: FontWeight.w900,
+                        fontWeight: FontWeight.w700,
                         color: AdminColors.headerTitle)),
                 if (r.submittedTime.isNotEmpty)
                   Text(r.submittedTime,
@@ -959,6 +961,9 @@ class _AdminRecordDetailsScreenState extends State<AdminRecordDetailsScreen> {
           _kv('Location from', r.locationAccuracy),
           _kv('Upload method', r.submissionMethod),
           _kv('Capture type', CaptureSource.displayLabel(_row.captureSource)),
+          if (!widget.expertContext &&
+              context.watch<AuthProvider?>()?.userModel?.isExpert != true)
+            _kv('Detection model', storedDetectionModelLabel(_row.modelName)),
           _kv('Date taken', r.dateCaptured),
           _kv('Date uploaded', r.dateUploaded),
           _kv('User remarks', r.userRemarks),
@@ -986,7 +991,7 @@ class _AdminRecordDetailsScreenState extends State<AdminRecordDetailsScreen> {
                   r.autoZoneAssignment,
                   style: const TextStyle(
                       color: AdminColors.statGreen,
-                      fontWeight: FontWeight.w800,
+                      fontWeight: FontWeight.w600,
                       fontSize: 11),
                 ),
               ),
@@ -1309,14 +1314,14 @@ class _AdminRecordDetailsScreenState extends State<AdminRecordDetailsScreen> {
         children: [
           _policyRow(
             AdminColors.statGreen,
-            'AI Auto-Approved (${CotsConfidencePolicy.autoApproveMin}–100%)',
-            'Each COTS at ${CotsConfidencePolicy.autoApproveMin}%+ is accepted automatically — Automatically Accepted.',
+            'AI Auto-Approved (${_row.autoApproveMin}–100%)',
+            'Each COTS at ${_row.autoApproveMin}%+ is accepted automatically — Automatically Accepted.',
           ),
           const SizedBox(height: 8),
           _policyRow(
             AdminColors.statYellow,
-            'Requires Expert Validation (${CotsConfidencePolicy.adminReviewMin}–${CotsConfidencePolicy.autoApproveMin - 1})',
-            'Any individual COTS below ${CotsConfidencePolicy.autoApproveMin}% must be accepted or rejected by an expert — even when other COTS in the same photo are higher.',
+            'Requires Expert Validation (${CotsConfidencePolicy.adminReviewMin}–${_row.autoApproveMin - 1})',
+            'Any individual COTS below ${_row.autoApproveMin}% must be accepted or rejected by an expert — even when other COTS in the same photo are higher.',
           ),
           const SizedBox(height: 8),
           _policyRow(
@@ -1346,7 +1351,7 @@ class _AdminRecordDetailsScreenState extends State<AdminRecordDetailsScreen> {
             children: [
               Text(title,
                   style: const TextStyle(
-                      fontWeight: FontWeight.w800,
+                      fontWeight: FontWeight.w600,
                       fontSize: 12,
                       color: AdminColors.headerTitle)),
               const SizedBox(height: 2),
@@ -1397,8 +1402,8 @@ class _AdminRecordDetailsScreenState extends State<AdminRecordDetailsScreen> {
         children: [
           if (_needsPerCotsReview)
             Text(
-              'Inspect each bounding box on the image. COTS at ${CotsConfidencePolicy.autoApproveMin}%+ are auto-approved; '
-              'any COTS below ${CotsConfidencePolicy.autoApproveMin}% (${CotsConfidencePolicy.adminReviewMin}–${CotsConfidencePolicy.autoApproveMin - 1}%) needs your confirmation.',
+              'Inspect each bounding box on the image. COTS at ${_row.autoApproveMin}%+ are auto-approved; '
+              'any COTS below ${_row.autoApproveMin}% (${CotsConfidencePolicy.adminReviewMin}–${_row.autoApproveMin - 1}%) needs your confirmation.',
               style: TextStyle(
                   fontSize: 12,
                   color: AdminColors.muted.withValues(alpha: 0.92),
@@ -1406,7 +1411,7 @@ class _AdminRecordDetailsScreenState extends State<AdminRecordDetailsScreen> {
             )
           else if (_allCotsAutoApproved)
             Text(
-              'All ${_detectionItems.length} detections are ${CotsConfidencePolicy.autoApproveMin}%+ — each COTS was AI auto-approved.',
+              'All ${_detectionItems.length} detections are ${_row.autoApproveMin}%+ — each COTS was AI auto-approved.',
               style: TextStyle(
                   fontSize: 12,
                   color: AdminColors.statGreen.withValues(alpha: 0.95),
@@ -1436,8 +1441,8 @@ class _AdminRecordDetailsScreenState extends State<AdminRecordDetailsScreen> {
               _cotsDecisions[i],
               readOnly ||
                   !CotsConfidencePolicy.cotsNeedsAdminReview(
-                    _detectionItems[i].confidencePercent,
-                  ),
+                      _detectionItems[i].confidencePercent,
+                      autoApproveThreshold: _row.autoApproveMin),
               i,
             ),
           ],
@@ -1508,7 +1513,7 @@ class _AdminRecordDetailsScreenState extends State<AdminRecordDetailsScreen> {
                     Text(
                       '${item.label} — ${item.confidencePercent}%',
                       style: const TextStyle(
-                        fontWeight: FontWeight.w800,
+                        fontWeight: FontWeight.w600,
                         fontSize: 12.5,
                         color: AdminColors.headerTitle,
                       ),
@@ -1516,8 +1521,8 @@ class _AdminRecordDetailsScreenState extends State<AdminRecordDetailsScreen> {
                     Text(
                       readOnly
                           ? (CotsConfidencePolicy.cotsNeedsAdminReview(
-                              item.confidencePercent,
-                            )
+                                  item.confidencePercent,
+                                  autoApproveThreshold: _row.autoApproveMin)
                               ? decision.label
                               : item.band == CotsVerificationBand.aiAutoApproved
                                   ? 'AI auto-approved'
@@ -1564,7 +1569,7 @@ class _AdminRecordDetailsScreenState extends State<AdminRecordDetailsScreen> {
                 Text(
                   decision.label,
                   style: TextStyle(
-                    fontWeight: FontWeight.w800,
+                    fontWeight: FontWeight.w600,
                     fontSize: 11,
                     color: statusColor,
                   ),
@@ -1606,7 +1611,7 @@ class _AdminRecordDetailsScreenState extends State<AdminRecordDetailsScreen> {
                       Text('${r.cotsDetected} individuals',
                           style: const TextStyle(
                               fontSize: 16,
-                              fontWeight: FontWeight.w900,
+                              fontWeight: FontWeight.w700,
                               color: AdminColors.headerTitle)),
                     ],
                   ),
@@ -1634,7 +1639,7 @@ class _AdminRecordDetailsScreenState extends State<AdminRecordDetailsScreen> {
                       Text('${r.confidencePercent}% avg',
                           style: const TextStyle(
                               fontSize: 16,
-                              fontWeight: FontWeight.w900,
+                              fontWeight: FontWeight.w700,
                               color: AdminColors.headerTitle)),
                     ],
                   ),
@@ -1646,8 +1651,8 @@ class _AdminRecordDetailsScreenState extends State<AdminRecordDetailsScreen> {
           Text(
             'Average confidence across all labeled COTS. '
             'Each COTS is evaluated individually: '
-            '${CotsConfidencePolicy.autoApproveMin}–100% = AI auto-approve · '
-            '${CotsConfidencePolicy.adminReviewMin}–${CotsConfidencePolicy.autoApproveMin - 1} = expert review for that COTS · '
+            '${_row.autoApproveMin}–100% = AI auto-approve · '
+            '${CotsConfidencePolicy.adminReviewMin}–${_row.autoApproveMin - 1} = expert review for that COTS · '
             '0–${CotsConfidencePolicy.adminReviewMin - 1} = retake photo.',
             style: TextStyle(
                 fontSize: 11.5,
@@ -1692,17 +1697,17 @@ class _AdminRecordDetailsScreenState extends State<AdminRecordDetailsScreen> {
           Wrap(
             spacing: 12,
             runSpacing: 8,
-            children: const [
+            children: [
               _LegendDot(
                   color: AdminColors.statBlue,
-                  label:
-                      'High confidence (${CotsConfidencePolicy.autoApproveMin}%+)'),
+                  label: 'High confidence (${_row.autoApproveMin}%+)'),
               _LegendDot(
                   color: AdminColors.statYellow,
                   label:
-                      'Needs review (${CotsConfidencePolicy.adminReviewMin}–${CotsConfidencePolicy.autoApproveMin - 1}%)'),
-              _LegendDot(color: AdminColors.statGreen, label: 'Confirmed COTS'),
-              _LegendDot(color: AdminColors.statRed, label: 'Rejected'),
+                      'Needs review (${CotsConfidencePolicy.adminReviewMin}–${_row.autoApproveMin - 1}%)'),
+              const _LegendDot(
+                  color: AdminColors.statGreen, label: 'Confirmed COTS'),
+              const _LegendDot(color: AdminColors.statRed, label: 'Rejected'),
             ],
           ),
           const SizedBox(height: 8),
@@ -1759,7 +1764,7 @@ class _AdminRecordDetailsScreenState extends State<AdminRecordDetailsScreen> {
               child: Text(
                 'Status Information',
                 style: TextStyle(
-                  fontWeight: FontWeight.w800,
+                  fontWeight: FontWeight.w600,
                   fontSize: 14,
                   color: AdminColors.headerTitle,
                 ),
@@ -1784,7 +1789,7 @@ class _AdminRecordDetailsScreenState extends State<AdminRecordDetailsScreen> {
                 child: Text(
                   statusText,
                   style: const TextStyle(
-                    fontWeight: FontWeight.w900,
+                    fontWeight: FontWeight.w700,
                     fontSize: 16,
                     color: AdminColors.headerTitle,
                   ),
@@ -1845,7 +1850,7 @@ class _AdminRecordDetailsScreenState extends State<AdminRecordDetailsScreen> {
                 child: Text(title,
                     style: const TextStyle(
                         fontSize: 16,
-                        fontWeight: FontWeight.w800,
+                        fontWeight: FontWeight.w600,
                         color: AdminColors.headerTitle)),
               ),
             ],
@@ -1905,7 +1910,7 @@ class _AdminRecordDetailsScreenState extends State<AdminRecordDetailsScreen> {
                 child: Text(
                   ZoneReview.expertTitle,
                   style: const TextStyle(
-                      fontSize: 15, fontWeight: FontWeight.w800),
+                      fontSize: 15, fontWeight: FontWeight.w600),
                 ),
               ),
             ],
@@ -1946,7 +1951,7 @@ class _AdminRecordDetailsScreenState extends State<AdminRecordDetailsScreen> {
             'Comments',
             style: TextStyle(
               fontSize: 13,
-              fontWeight: FontWeight.w800,
+              fontWeight: FontWeight.w600,
               color: AdminColors.headerTitle.withValues(alpha: 0.95),
             ),
           ),

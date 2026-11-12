@@ -461,6 +461,7 @@ class _LoginScreenState extends State<LoginScreen> {
       onBackToLanding: auth.isBusy ? null : _goLanding,
       mobileHeader: const AuthMobileHeader(),
       desktopHeader: const AuthCardHeader(
+        showLogo: false,
         title: 'Welcome back',
         subtitle: 'Sign in to continue monitoring and protecting coral reefs.',
       ),

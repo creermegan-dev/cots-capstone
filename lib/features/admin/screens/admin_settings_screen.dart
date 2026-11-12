@@ -635,7 +635,7 @@ class _AdminSettingsScreenState extends State<AdminSettingsScreen> {
             children: [
               Text(title,
                   style: const TextStyle(
-                      fontWeight: FontWeight.w800,
+                      fontWeight: FontWeight.w600,
                       fontSize: 14,
                       color: AdminColors.headerTitle)),
               const SizedBox(height: 4),
@@ -718,7 +718,7 @@ class _AdminSettingsScreenState extends State<AdminSettingsScreen> {
                       title,
                       style: const TextStyle(
                           fontSize: 17,
-                          fontWeight: FontWeight.w900,
+                          fontWeight: FontWeight.w700,
                           color: AdminColors.headerTitle),
                     ),
                     const SizedBox(height: 4),
@@ -747,7 +747,7 @@ class _AdminSettingsScreenState extends State<AdminSettingsScreen> {
       t,
       style: TextStyle(
           fontSize: 12,
-          fontWeight: FontWeight.w800,
+          fontWeight: FontWeight.w600,
           color: AdminColors.muted.withValues(alpha: 0.88),
           letterSpacing: 0.2),
     );

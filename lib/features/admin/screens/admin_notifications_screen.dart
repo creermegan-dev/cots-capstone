@@ -234,7 +234,7 @@ class _AdminNotificationsScreenState extends State<AdminNotificationsScreen> {
           const SizedBox(height: 10),
           Text(title,
               style:
-                  const TextStyle(fontSize: 17, fontWeight: FontWeight.w800)),
+                  const TextStyle(fontSize: 17, fontWeight: FontWeight.w600)),
           const SizedBox(height: 5),
           Text(message,
               textAlign: TextAlign.center,
@@ -265,10 +265,8 @@ class _NotificationTile extends StatelessWidget {
         ),
       AppNotification.reviewNeeded ||
       AppNotification.zoneReviewNeeded ||
-      AppNotification.zoneReviewReminder => (
-          Icons.rate_review_outlined,
-          AdminColors.statYellow
-        ),
+      AppNotification.zoneReviewReminder =>
+        (Icons.rate_review_outlined, AdminColors.statYellow),
       AppNotification.interventionAssigned => (
           Icons.assignment_ind_outlined,
           AdminColors.statYellow
@@ -336,7 +334,7 @@ class _NotificationTile extends StatelessWidget {
                               fontSize: 15,
                               fontWeight: notification.isRead
                                   ? FontWeight.w600
-                                  : FontWeight.w800,
+                                  : FontWeight.w600,
                               color: AdminColors.headerTitle,
                             ),
                           ),

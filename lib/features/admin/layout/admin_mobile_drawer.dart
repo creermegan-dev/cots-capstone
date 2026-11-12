@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../../../widgets/cots_logo.dart';
 
 import '../models/admin_nav_models.dart';
 import '../theme/admin_theme.dart';
@@ -34,16 +35,7 @@ class AdminMobileDrawer extends StatelessWidget {
       width: MediaQuery.sizeOf(context).width.clamp(280.0, 320.0),
       child: DecoratedBox(
         decoration: const BoxDecoration(
-          gradient: LinearGradient(
-            begin: Alignment.topLeft,
-            end: Alignment.bottomRight,
-            colors: [
-              AdminColors.sidebarTop,
-              AdminColors.sidebarBottom,
-              Color(0xFF0D2238),
-            ],
-            stops: [0.0, 0.55, 1.0],
-          ),
+          color: AdminColors.sidebarTop,
         ),
         child: SafeArea(
           child: Column(
@@ -53,6 +45,14 @@ class AdminMobileDrawer extends StatelessWidget {
                 padding: const EdgeInsets.fromLTRB(20, 16, 12, 12),
                 child: Row(
                   children: [
+                    Container(
+                      decoration: const BoxDecoration(
+                        shape: BoxShape.circle,
+                        color: Colors.white,
+                      ),
+                      child: const CotsLogo(size: 40),
+                    ),
+                    const SizedBox(width: 10),
                     Expanded(
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
@@ -62,7 +62,7 @@ class AdminMobileDrawer extends StatelessWidget {
                             'COTS Monitor',
                             style: TextStyle(
                               color: Colors.white.withValues(alpha: 0.95),
-                              fontWeight: FontWeight.w800,
+                              fontWeight: FontWeight.w600,
                               fontSize: 16,
                             ),
                           ),

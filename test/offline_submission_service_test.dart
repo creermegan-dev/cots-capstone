@@ -1,4 +1,5 @@
 import 'dart:io';
+import 'dart:convert';
 import 'dart:async';
 import 'dart:typed_data';
 
@@ -23,6 +24,36 @@ void main() {
       await temporaryDirectory.delete(recursive: true);
     }
   });
+
+  for (final offline in [false, true]) {
+    test(
+        'submission progress and local timings survive cleanup (offline=$offline)',
+        () async {
+      final phases = <String>[];
+      final service = OfflineSubmissionService(
+        directoryProvider: () async => temporaryDirectory,
+        enableAutomaticSync: false,
+        recordUploader: (_, __) async {
+          if (offline) throw const SocketException('offline');
+        },
+      );
+      await service.initialize();
+      final result = await _submit(service,
+          id: 'timing-test', uid: 'diver-a', onProgress: phases.add);
+      expect(result.isPending, offline);
+      expect(phases.first, 'Saving on this device');
+      expect(phases.last, offline ? 'Upload needs retry' : 'Upload saved');
+      final root = Directory('${temporaryDirectory.path}/pending_submissions');
+      final timing = jsonDecode(
+          await File('${root.path}/last_submission_timing.json')
+              .readAsString()) as Map;
+      expect(timing['elapsed_ms'], isNonNegative);
+      expect((timing['phases'] as List).map((p) => p['phase']), phases);
+      expect(timing.keys.toSet(), {'elapsed_ms', 'original_bytes', 'phases'});
+      expect(service.pendingCount, offline ? 1 : 0);
+      service.dispose();
+    });
+  }
 
   test('background sync cannot delete a photo while Submit saves progress',
       () async {
@@ -61,6 +92,9 @@ void main() {
     var uploads = 0;
     Future<void> uploader(Map<String, dynamic> task, File image) async {
       uploads++;
+      final savedDetection = task['detection'] as Map;
+      expect(savedDetection['model_name'], 'yolo11');
+      expect(savedDetection['model_sha256'], 'test-model-version');
       expect(await image.exists(), isTrue);
       if (!online) throw const SocketException('offline');
     }
@@ -183,8 +217,10 @@ Future<OfflineSubmitResult> _submit(
   OfflineSubmissionService service, {
   required String id,
   required String uid,
+  void Function(String)? onProgress,
 }) {
   return service.submitRecord(
+    onProgress: onProgress,
     uid: uid,
     submittedBy: 'Test Diver',
     imageName: 'cots.jpg',
@@ -196,6 +232,8 @@ Future<OfflineSubmitResult> _submit(
       count: 1,
       confidence: 0.82,
       boxes: [],
+      modelName: 'yolo11',
+      modelSha256: 'test-model-version',
     ),
     latitude: 7.1,
     longitude: 125.6,

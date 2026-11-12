@@ -15,11 +15,11 @@ const Color kAccentPurple = Color(0xFF7C3AED);
 // Auth / ocean UI accents (signup gradient highlights)
 const Color kOceanCyan = Color(0xFF2EC4C4);
 
-/// Soft card shadow (~4% black) usable in const `BoxDecoration`s.
+/// Restrained elevation for floating controls and legacy card surfaces.
 const List<BoxShadow> kSoftCardShadow = [
   BoxShadow(
-    color: Color(0x0A000000),
-    blurRadius: 10,
-    offset: Offset(0, 3),
+    color: Color(0x05000000),
+    blurRadius: 4,
+    offset: Offset(0, 1),
   ),
 ];

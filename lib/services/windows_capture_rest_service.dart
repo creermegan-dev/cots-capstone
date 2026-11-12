@@ -57,6 +57,7 @@ class WindowsCaptureRestService {
       'ai_detected_count': _int(detection.count),
       'cots_count': _int(detection.count),
       'confidence': _double(detection.confidence),
+      'auto_approve_min': _int(CotsConfidencePolicy.autoApproveMin),
       'capture_source': _string(CaptureSource.goProUnderwaterImage),
       'citizen_contribution': _bool(true),
       'notes': _string(notes),

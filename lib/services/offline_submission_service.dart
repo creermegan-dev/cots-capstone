@@ -1,3 +1,4 @@
+import 'no_cots_survey_service.dart';
 import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
@@ -39,17 +40,24 @@ class PendingSubmissionSummary {
       required this.name,
       required this.createdAt,
       this.record,
+      this.surveyParams,
       this.failureReason});
   final String id;
   final String name;
   final DateTime? createdAt;
   final ScanRecordModel? record;
+  final Map<String, dynamic>? surveyParams;
   final String? failureReason;
+  bool get isRefusedNoCotsSurvey =>
+      surveyParams != null && NoCotsSurveyConflict.matchesReason(failureReason);
 
   factory PendingSubmissionSummary.fromTask(
       Map<String, dynamic> task, String directory) {
     final id = task['id']?.toString() ?? '';
-    final name = task['image_name']?.toString() ?? 'Follow-up survey';
+    final name = task['image_name']?.toString() ??
+        (task['kind'] == 'no_cots_survey'
+            ? 'No COTS observed survey'
+            : 'Follow-up survey');
     final created = DateTime.tryParse(task['created_at']?.toString() ?? '');
     ScanRecordModel? record;
     if (task['kind'] == 'record' && task['linked_capture_id'] == null) {
@@ -72,6 +80,8 @@ class PendingSubmissionSummary {
           uid: task['uid'] as String,
           submittedBy: task['submitted_by']?.toString() ?? 'Diver',
           imageName: name,
+          modelName: detection['model_name']?.toString() ?? '',
+          modelSha256: detection['model_sha256']?.toString() ?? '',
           aiDetectedCount: (detection['count'] as num).round(),
           confidence: (detection['confidence'] as num).toDouble(),
           captureSource: CaptureSource.goProUnderwaterImage,
@@ -133,6 +143,9 @@ class PendingSubmissionSummary {
         name: name,
         createdAt: created,
         record: record,
+        surveyParams: task['kind'] == 'no_cots_survey'
+            ? Map<String, dynamic>.from(task['survey_params'] as Map)
+            : null,
         failureReason: task['_failure_reason'] as String?);
   }
 }
@@ -166,11 +179,13 @@ class OfflineSubmissionService extends ChangeNotifier
     OfflineDirectoryProvider? directoryProvider,
     OfflineRecordUploader? recordUploader,
     OfflineSurveyUploader? surveyUploader,
+    OfflineSurveyUploader? noCotsUploader,
     bool enableAutomaticSync = true,
   })  : _directoryProvider =
             directoryProvider ?? getApplicationDocumentsDirectory,
         _recordUploaderOverride = recordUploader,
         _surveyUploaderOverride = surveyUploader,
+        _noCotsUploaderOverride = noCotsUploader,
         _enableAutomaticSync = enableAutomaticSync;
 
   static final OfflineSubmissionService instance = OfflineSubmissionService();
@@ -178,6 +193,7 @@ class OfflineSubmissionService extends ChangeNotifier
   final OfflineDirectoryProvider _directoryProvider;
   final OfflineRecordUploader? _recordUploaderOverride;
   final OfflineSurveyUploader? _surveyUploaderOverride;
+  final OfflineSurveyUploader? _noCotsUploaderOverride;
   final bool _enableAutomaticSync;
   late final OfflineSyncMonitor _connectivityMonitor = OfflineSyncMonitor(
     onOnline: syncPending,
@@ -255,16 +271,11 @@ class OfflineSubmissionService extends ChangeNotifier
     void Function(String message)? onWarning,
     bool? gpsFromPhoto,
     bool? timeFromPhoto,
+    void Function(String phase)? onProgress,
   }) async {
     _activeUserId = uid.trim();
-    final evidence = SupabaseConfig.isConfigured
-        ? EvidenceImagePayload.prepare(
-            originalBytes: imageBytes,
-            originalName: imageName,
-          )
-        : null;
     final task = <String, dynamic>{
-      'version': evidence == null ? 1 : 2,
+      'version': SupabaseConfig.isConfigured ? 2 : 1,
       'kind': 'record',
       'id': submissionId,
       'created_at': DateTime.now().toUtc().toIso8601String(),
@@ -276,6 +287,8 @@ class OfflineSubmissionService extends ChangeNotifier
         'count': detection.count,
         'confidence': detection.confidence,
         'boxes': detection.boxes.map((box) => box.toMap()).toList(),
+        'model_name': detection.modelName,
+        'model_sha256': detection.modelSha256,
       },
       'latitude': latitude,
       'longitude': longitude,
@@ -324,14 +337,18 @@ class OfflineSubmissionService extends ChangeNotifier
               'initial_detected_count': followUpAssignment.initialDetectedCount,
               'initial_collection': followUpAssignment.initialCollection,
             },
-      if (evidence != null) 'evidence': evidence.toMetadata(),
-      if (evidence != null)
-        'evidence_prepared_at': DateTime.now().toUtc().toIso8601String(),
     };
+    final clock = Stopwatch()..start();
+    final timings = <Map<String, dynamic>>[];
+    void progress(String phase) {
+      timings.add({'phase': phase, 'elapsed_ms': clock.elapsedMilliseconds});
+      onProgress?.call(phase);
+    }
+
+    progress('Saving on this device');
     final directory = await _writeTask(
       task,
       imageBytes: imageBytes,
-      evidenceBytes: evidence?.bytes,
     );
     try {
       await _sendRecord(
@@ -339,8 +356,10 @@ class OfflineSubmissionService extends ChangeNotifier
         File('${directory.path}${Platform.pathSeparator}image.jpg'),
         directory: directory,
         onWarning: onWarning,
+        onProgress: progress,
       );
       await _deleteTask(directory);
+      progress('Upload saved');
       return OfflineSubmitResult(
         recordId: submissionId,
         state: SupabaseConfig.isConfigured
@@ -348,6 +367,7 @@ class OfflineSubmissionService extends ChangeNotifier
             : OfflineSubmitState.synchronized,
       );
     } catch (error) {
+      progress('Upload needs retry');
       await _rememberFailure(directory, error);
       final pendingState = _pendingState(error);
       if (pendingState == null) {
@@ -356,6 +376,49 @@ class OfflineSubmissionService extends ChangeNotifier
       }
       await _refreshCount();
       return OfflineSubmitResult(recordId: submissionId, state: pendingState);
+    } finally {
+      _activeTasks.remove(directory.path);
+      // Local timing only: no image, filename, GPS, remarks or credentials.
+      // This survives successful queue cleanup and never changes submit status.
+      try {
+        await File(
+                '${directory.parent.path}${Platform.pathSeparator}last_submission_timing.json')
+            .writeAsString(
+                jsonEncode({
+                  'elapsed_ms': clock.elapsedMilliseconds,
+                  'original_bytes': imageBytes.length,
+                  'phases': timings
+                }),
+                flush: true);
+      } catch (_) {}
+    }
+  }
+
+  Future<bool> submitNoCotsSurvey(
+      {required String uid,
+      required String id,
+      required Map<String, dynamic> params}) async {
+    _activeUserId = uid.trim();
+    final task = <String, dynamic>{
+      'version': 2,
+      'kind': 'no_cots_survey',
+      'id': id,
+      'uid': uid,
+      'created_at': DateTime.now().toUtc().toIso8601String(),
+      'survey_params': params
+    };
+    final directory = await _writeTask(task);
+    try {
+      await _sendNoCots(task);
+      await _deleteTask(directory);
+      return false;
+    } catch (error) {
+      await _rememberFailure(directory, error);
+      await _refreshCount();
+      // A policy refusal is not a successful offline submission. Preserve its
+      // draft and reason for diagnosis, but let the form explain the refusal.
+      if (error is NoCotsSurveyConflict) rethrow;
+      return true;
     } finally {
       _activeTasks.remove(directory.path);
     }
@@ -446,12 +509,25 @@ class OfflineSubmissionService extends ChangeNotifier
             jsonDecode(await metadata.readAsString()) as Map,
           );
           if (task['uid'] != activeUserId) continue;
+          if (task['kind'] == 'no_cots_survey') {
+            final failure = File(
+                '${directory.path}${Platform.pathSeparator}upload_failure.txt');
+            if (await failure.exists() &&
+                NoCotsSurveyConflict.matchesReason(
+                    await failure.readAsString())) {
+              // A permanent site/month refusal is not an offline upload.
+              // Keep it visible for the owner to remove, without retrying it.
+              continue;
+            }
+          }
           if (task['kind'] == 'record') {
             await _sendRecord(
               task,
               File('${directory.path}${Platform.pathSeparator}image.jpg'),
               directory: directory,
             );
+          } else if (task['kind'] == 'no_cots_survey') {
+            await _sendNoCots(task);
           } else if (task['kind'] == 'survey') {
             await _sendSurvey(task);
           } else {
@@ -532,9 +608,10 @@ class OfflineSubmissionService extends ChangeNotifier
             task['_failure_reason'] = await failure.readAsString();
           }
           if (task is Map && task['uid'] == activeUserId) {
-            count++;
-            summaries.add(PendingSubmissionSummary.fromTask(
-                Map<String, dynamic>.from(task), directory.path));
+            final summary = PendingSubmissionSummary.fromTask(
+                Map<String, dynamic>.from(task), directory.path);
+            if (!summary.isRefusedNoCotsSurvey) count++;
+            summaries.add(summary);
           }
         } catch (_) {
           // A corrupt task is ignored here and retained for diagnosis.
@@ -554,11 +631,54 @@ class OfflineSubmissionService extends ChangeNotifier
     await _refreshCount();
   }
 
+  /// Removes only the current owner's locally saved, permanently refused
+  /// no-COTS draft. Never calls the server or removes a pending photo upload.
+  Future<bool> removeRefusedNoCotsDraft(String id) async {
+    final uid = _activeUserId;
+    if (uid == null || id.isEmpty) return false;
+    final root = await _queueRoot();
+    final rootPath = await root.resolveSymbolicLinks();
+    for (final entity in root.listSync(followLinks: false)) {
+      if (entity is! Directory || !_activeTasks.add(entity.path)) continue;
+      try {
+        final resolved = await entity.resolveSymbolicLinks();
+        if (Directory(resolved).parent.path != rootPath) continue;
+        final metadata =
+            File('${entity.path}${Platform.pathSeparator}metadata.json');
+        final failure =
+            File('${entity.path}${Platform.pathSeparator}upload_failure.txt');
+        if (!await metadata.exists() || !await failure.exists()) continue;
+        final task = jsonDecode(await metadata.readAsString());
+        if (task is! Map ||
+            task['uid'] != uid ||
+            task['id'] != id ||
+            task['kind'] != 'no_cots_survey' ||
+            task['survey_params'] is! Map ||
+            !NoCotsSurveyConflict.matchesReason(await failure.readAsString())) {
+          continue;
+        }
+        if (await File('${entity.path}${Platform.pathSeparator}image.jpg')
+                .exists() ||
+            await File('${entity.path}${Platform.pathSeparator}evidence.jpg')
+                .exists()) {
+          continue;
+        }
+        if (_activeUserId != uid) return false;
+        await _deleteTask(entity);
+        return true;
+      } finally {
+        _activeTasks.remove(entity.path);
+      }
+    }
+    return false;
+  }
+
   Future<void> _sendRecord(
     Map<String, dynamic> task,
     File image, {
     Directory? directory,
     void Function(String message)? onWarning,
+    void Function(String phase)? onProgress,
   }) =>
       _recordUploaderOverride?.call(task, image) ??
       _uploadRecord(
@@ -566,7 +686,11 @@ class OfflineSubmissionService extends ChangeNotifier
         image,
         directory: directory,
         onWarning: onWarning,
+        onProgress: onProgress,
       );
+
+  Future<void> _sendNoCots(Map<String, dynamic> task) =>
+      _noCotsUploaderOverride?.call(task) ?? NoCotsSurveyService.submit(task);
 
   Future<void> _sendSurvey(Map<String, dynamic> task) =>
       _surveyUploaderOverride?.call(task) ?? _uploadSurvey(task);
@@ -576,6 +700,7 @@ class OfflineSubmissionService extends ChangeNotifier
     File image, {
     Directory? directory,
     void Function(String message)? onWarning,
+    void Function(String phase)? onProgress,
   }) async {
     if (!image.existsSync()) {
       throw StateError('Pending submission image is missing.');
@@ -587,9 +712,11 @@ class OfflineSubmissionService extends ChangeNotifier
     final assignmentMap = task['follow_up_assignment'] is Map
         ? Map<String, dynamic>.from(task['follow_up_assignment'] as Map)
         : null;
+    onProgress?.call('Preparing photo');
     final evidence = SupabaseConfig.isConfigured
         ? await _loadOrPrepareEvidence(task, image, directory)
         : null;
+    onProgress?.call('Saving record details');
     await ScanRecordService.submit(
       submissionId: task['id'] as String,
       followUpSurveyId: task['follow_up_survey_id'] as String?,
@@ -610,6 +737,8 @@ class OfflineSubmissionService extends ChangeNotifier
         count: (detectionMap['count'] as num).round(),
         confidence: (detectionMap['confidence'] as num).toDouble(),
         boxes: CotsBoundingBox.listFromDynamic(detectionMap['boxes']),
+        modelName: detectionMap['model_name'] as String?,
+        modelSha256: detectionMap['model_sha256'] as String?,
       ),
       latitude: _double(task['latitude']),
       longitude: _double(task['longitude']),
@@ -643,12 +772,29 @@ class OfflineSubmissionService extends ChangeNotifier
       evidence: evidence,
       onEvidenceProgress: directory == null
           ? null
-          : (purpose, stage) => _saveEvidenceProgress(
+          : (purpose, stage) {
+              final label = purpose == EvidencePurpose.detection
+                  ? 'detection'
+                  : 'removal';
+              final phase = switch (stage) {
+                EvidenceUploadStage.prepared => 'Preparing photo',
+                EvidenceUploadStage.assetReserved => 'Reserving $label photo',
+                EvidenceUploadStage.variantReserved =>
+                  'Saving $label photo to server',
+                EvidenceUploadStage.uploaded => 'Linking $label photo',
+                EvidenceUploadStage.linked => 'Checking $label evidence',
+                EvidenceUploadStage.verificationRequested ||
+                EvidenceUploadStage.awaitingVerification =>
+                  'Finishing $label record',
+              };
+              onProgress?.call(phase);
+              return _saveEvidenceProgress(
                 directory,
                 task,
                 purpose,
                 stage,
-              ),
+              );
+            },
     );
   }
 
@@ -671,7 +817,7 @@ class OfflineSubmissionService extends ChangeNotifier
       );
     }
 
-    final prepared = EvidenceImagePayload.prepare(
+    final prepared = await EvidenceImagePayload.prepareAsync(
       originalBytes: await original.readAsBytes(),
       originalName: task['image_name']?.toString() ?? 'evidence.jpg',
     );
@@ -739,16 +885,18 @@ class OfflineSubmissionService extends ChangeNotifier
   Future<void> _rememberFailure(Directory directory, Object error) async {
     // Diagnostic sidecar only: never alter the queued upload or its retry rules.
     final state = _pendingState(error);
-    final message = switch (state) {
-      OfflineSubmitState.authorizationBlocked =>
-        'Upload not permitted. Ask the Expert to check your Diver verification. If already verified, reconnect and sign in again before retrying.',
-      OfflineSubmitState.networkPending =>
-        'Could not reach the server. Reconnect to the internet and retry.',
-      OfflineSubmitState.uploadPending =>
-        'Photo upload did not finish. Your submission is saved on this device; retry when connected.',
-      _ =>
-        'Upload could not be completed. Your submission is saved on this device. Retry; if it continues, report this to the project team.',
-    };
+    final message = error is NoCotsSurveyConflict
+        ? error.message
+        : switch (state) {
+            OfflineSubmitState.authorizationBlocked =>
+              'Upload not permitted. Ask the Expert to check your Diver verification. If already verified, reconnect and sign in again before retrying.',
+            OfflineSubmitState.networkPending =>
+              'Could not reach the server. Reconnect to the internet and retry.',
+            OfflineSubmitState.uploadPending =>
+              'Photo upload did not finish. Your submission is saved on this device; retry when connected.',
+            _ =>
+              'Upload could not be completed. Your submission is saved on this device. Retry; if it continues, report this to the project team.',
+          };
     try {
       await File('${directory.path}${Platform.pathSeparator}upload_failure.txt')
           .writeAsString(message, flush: true);

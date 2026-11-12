@@ -139,7 +139,7 @@ class _UserProfileModalBody extends StatelessWidget {
                     Text('User Profile',
                         style: TextStyle(
                             fontSize: 22,
-                            fontWeight: FontWeight.w900,
+                            fontWeight: FontWeight.w700,
                             color: AdminColors.headerTitle)),
                     SizedBox(height: 6),
                     Text(
@@ -182,7 +182,7 @@ class _UserProfileModalBody extends StatelessWidget {
               adminUserInitials(data.name),
               style: const TextStyle(
                   fontSize: 22,
-                  fontWeight: FontWeight.w900,
+                  fontWeight: FontWeight.w700,
                   color: AdminColors.statBlue),
             ),
           ),
@@ -190,7 +190,7 @@ class _UserProfileModalBody extends StatelessWidget {
           Text(data.name,
               textAlign: TextAlign.center,
               style:
-                  const TextStyle(fontSize: 18, fontWeight: FontWeight.w900)),
+                  const TextStyle(fontSize: 18, fontWeight: FontWeight.w700)),
           const SizedBox(height: 8),
           Container(
             padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
@@ -203,7 +203,7 @@ class _UserProfileModalBody extends StatelessWidget {
             child: Text(
               data.active ? 'Active' : 'Inactive',
               style: TextStyle(
-                fontWeight: FontWeight.w800,
+                fontWeight: FontWeight.w600,
                 fontSize: 12,
                 color:
                     data.active ? AdminColors.statGreen : AdminColors.statRed,
@@ -253,7 +253,7 @@ class _UserProfileModalBody extends StatelessWidget {
       child: Text(t,
           style: TextStyle(
               fontSize: 11,
-              fontWeight: FontWeight.w800,
+              fontWeight: FontWeight.w600,
               color: AdminColors.muted.withValues(alpha: 0.85))),
     );
   }
@@ -299,7 +299,7 @@ class _UserProfileModalBody extends StatelessWidget {
             'User ID',
             Text(data.userId,
                 style:
-                    const TextStyle(fontWeight: FontWeight.w900, fontSize: 13)),
+                    const TextStyle(fontWeight: FontWeight.w700, fontSize: 13)),
           ),
           row(
             'Role',
@@ -313,7 +313,7 @@ class _UserProfileModalBody extends StatelessWidget {
                     borderRadius: BorderRadius.circular(20)),
                 child: Text(data.role,
                     style: TextStyle(
-                        fontWeight: FontWeight.w800,
+                        fontWeight: FontWeight.w600,
                         color: roleColor,
                         fontSize: 12)),
               ),
@@ -345,7 +345,7 @@ class _UserProfileModalBody extends StatelessWidget {
                 child: Text(
                   data.active ? 'ACTIVE' : 'INACTIVE',
                   style: TextStyle(
-                    fontWeight: FontWeight.w900,
+                    fontWeight: FontWeight.w700,
                     fontSize: 11,
                     letterSpacing: 0.6,
                     color: data.active
@@ -374,13 +374,13 @@ class _UserProfileModalBody extends StatelessWidget {
         children: [
           const Text('Role information',
               style: TextStyle(
-                  fontWeight: FontWeight.w900,
+                  fontWeight: FontWeight.w700,
                   fontSize: 14,
                   color: AdminColors.headerTitle)),
           const SizedBox(height: 10),
           Text(data.role,
               style: TextStyle(
-                  fontWeight: FontWeight.w900, fontSize: 16, color: roleColor)),
+                  fontWeight: FontWeight.w700, fontSize: 16, color: roleColor)),
           const SizedBox(height: 8),
           Text(data.roleDescription,
               style: TextStyle(
@@ -391,7 +391,7 @@ class _UserProfileModalBody extends StatelessWidget {
           Text('Permissions',
               style: TextStyle(
                   fontSize: 11,
-                  fontWeight: FontWeight.w800,
+                  fontWeight: FontWeight.w600,
                   color: AdminColors.muted.withValues(alpha: 0.85))),
           const SizedBox(height: 8),
           for (final p in data.permissions)
@@ -428,13 +428,13 @@ class _UserProfileModalBody extends StatelessWidget {
         children: [
           const Text('Organization information',
               style: TextStyle(
-                  fontWeight: FontWeight.w900,
+                  fontWeight: FontWeight.w700,
                   fontSize: 14,
                   color: AdminColors.headerTitle)),
           const SizedBox(height: 10),
           Text(data.organization,
               style:
-                  const TextStyle(fontWeight: FontWeight.w900, fontSize: 16)),
+                  const TextStyle(fontWeight: FontWeight.w700, fontSize: 16)),
           const SizedBox(height: 8),
           _orgLine('Organization type', data.orgType),
           _orgLine('Location', data.orgLocation),
@@ -488,7 +488,7 @@ class _UserProfileModalBody extends StatelessWidget {
         child: Text(
           text,
           style: TextStyle(
-              fontWeight: FontWeight.w800,
+              fontWeight: FontWeight.w600,
               fontSize: 12,
               color: ok ? AdminColors.statGreen : AdminColors.statRed),
         ),
@@ -531,7 +531,7 @@ class _UserProfileModalBody extends StatelessWidget {
           const Padding(
             padding: EdgeInsets.only(top: 12, bottom: 4),
             child: Text('Account information',
-                style: TextStyle(fontWeight: FontWeight.w900, fontSize: 14)),
+                style: TextStyle(fontWeight: FontWeight.w700, fontSize: 14)),
           ),
           Divider(height: 1, color: Colors.black.withValues(alpha: 0.06)),
           line(
@@ -563,7 +563,7 @@ class _UserProfileModalBody extends StatelessWidget {
                 const SizedBox(width: 6),
                 Text(data.loginIp,
                     style: const TextStyle(
-                        fontWeight: FontWeight.w800, fontSize: 13)),
+                        fontWeight: FontWeight.w600, fontSize: 13)),
               ],
             ),
           ),
@@ -604,7 +604,7 @@ class _OutlinedCloseButtonState extends State<_OutlinedCloseButton> {
               RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
         ),
         child:
-            const Text('Close', style: TextStyle(fontWeight: FontWeight.w800)),
+            const Text('Close', style: TextStyle(fontWeight: FontWeight.w600)),
       ),
     );
   }

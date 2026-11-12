@@ -1,3 +1,6 @@
+import '../../models/davao_gulf_geography.dart';
+import '../../widgets/no_cots_survey_records.dart';
+import '../../services/no_cots_survey_service.dart';
 import 'dart:async';
 
 import 'package:firebase_auth/firebase_auth.dart' hide AuthProvider;
@@ -32,9 +35,12 @@ class ScanRecord {
     required this.scanSubmittedAt,
     required this.zone,
     this.group,
+    this.survey,
     this.pendingSync = false,
     this.searchText = '',
     this.failureReason,
+    this.sortAt,
+    this.refusedDraft = false,
   });
 
   final String recordId;
@@ -45,11 +51,14 @@ class ScanRecord {
   final int cotsDetected;
   final int? confidencePercent;
   final SubmissionGroup? group;
+  final Map<String, dynamic>? survey;
   final bool pendingSync;
   final String? failureReason;
   final String searchText;
   final String scanSubmittedAt;
   final String zone;
+  final DateTime? sortAt;
+  final bool refusedDraft;
 }
 
 ScanRecord _scanRecordFromModel(ScanRecordModel model) {
@@ -65,6 +74,7 @@ ScanRecord _scanRecordFromModel(ScanRecordModel model) {
     confidencePercent: (model.confidence.clamp(0.0, 1.0) * 100).round(),
     scanSubmittedAt: formatted,
     zone: model.zone,
+    sortAt: when,
   );
 }
 
@@ -90,8 +100,9 @@ Color _statusColor(String status) {
 }
 
 class RecordsPage extends StatefulWidget {
-  const RecordsPage({super.key, this.recordsStream});
+  const RecordsPage({super.key, this.recordsStream, this.surveyLoader});
   final Stream<List<ScanRecordModel>>? recordsStream;
+  final NoCotsSurveyLoader? surveyLoader;
 
   @override
   State<RecordsPage> createState() => _RecordsPageState();
@@ -109,6 +120,7 @@ enum _RecordGroup {
   bool includes(String status) => switch (this) {
         all => true,
         accepted => const [
+            'Diver-reported',
             'Accepted',
             'Automatically Accepted',
             'Partially accepted'
@@ -131,6 +143,50 @@ class _RecordsPageState extends State<RecordsPage> {
   Stream<List<ScanRecordModel>>? _recordsStream;
   String? _recordsUid;
   Timer? _retryTimer;
+  final Set<String> _removingDrafts = {};
+
+  Future<void> _removeSavedDraft(ScanRecord record) async {
+    if (!record.refusedDraft || _removingDrafts.contains(record.recordId)) {
+      return;
+    }
+    final remove = await showDialog<bool>(
+        context: context,
+        builder: (context) => AlertDialog(
+              title: const Text('Remove saved draft?'),
+              content: const Text(
+                  'This no-COTS survey was refused and was not submitted. Remove its saved draft from this phone? Uploaded records and monthly visit history will be kept.'),
+              actions: [
+                TextButton(
+                    onPressed: () => Navigator.pop(context, false),
+                    child: const Text('Cancel')),
+                TextButton(
+                    key: const ValueKey('confirm-remove-survey-draft'),
+                    onPressed: () => Navigator.pop(context, true),
+                    child: const Text('Remove saved draft')),
+              ],
+            ));
+    if (remove != true || !mounted) return;
+    setState(() => _removingDrafts.add(record.recordId));
+    try {
+      final removed = await context
+          .read<OfflineSubmissionService>()
+          .removeRefusedNoCotsDraft(record.recordId);
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+            content: Text(removed
+                ? 'Saved draft removed from this phone.'
+                : 'This draft is not available for removal. Refresh and try again.')));
+      }
+    } catch (_) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+            content:
+                Text('Could not remove the saved draft. Please try again.')));
+      }
+    } finally {
+      if (mounted) setState(() => _removingDrafts.remove(record.recordId));
+    }
+  }
 
   void _retryRecords() {
     _retryTimer?.cancel();
@@ -156,6 +212,7 @@ class _RecordsPageState extends State<RecordsPage> {
     });
   }
 
+  List<Map<String, dynamic>> _surveyRows = const [];
   List<ScanRecord> _allRecords = const [];
   List<ScanRecordModel> _allModels = const [];
 
@@ -185,6 +242,7 @@ class _RecordsPageState extends State<RecordsPage> {
             : FirebaseAuth.instance.currentUser?.uid);
     if (uid != null && (_recordsStream == null || _recordsUid != uid)) {
       if (_recordsUid != uid) {
+        _surveyRows = const [];
         _allModels = const [];
         _allRecords = const [];
       }
@@ -294,6 +352,7 @@ class _RecordsPageState extends State<RecordsPage> {
               ? 'Unknown'
               : DateFormat('MMM d, yyyy h:mm a').format(time.toLocal()),
           zone: first.zone,
+          sortAt: time,
           group: group,
           pendingSync: pending,
           failureReason: local
@@ -307,11 +366,75 @@ class _RecordsPageState extends State<RecordsPage> {
               .map((r) => '${r.displayRecordId} ${r.imageName}')
               .join(' '));
     }).toList();
+    for (final row in _surveyRows) {
+      final time = DateTime.tryParse(row['submitted_at']?.toString() ?? '');
+      _allRecords.add(ScanRecord(
+          recordId: row['id'].toString(),
+          displayId: 'Survey · ${row['area_name']}',
+          submittedBy: row['submitted_by']?.toString() ?? 'Diver',
+          activityType: NoCotsSurveyService.observation(row),
+          status: 'Diver-reported',
+          cotsDetected: 0,
+          confidencePercent: null,
+          scanSubmittedAt: time == null
+              ? 'Unknown'
+              : DateFormat('MMM d, yyyy h:mm a').format(time.toLocal()),
+          zone: row['area_name']?.toString() ?? '',
+          sortAt:
+              time ?? DateTime.tryParse(row['surveyed_at']?.toString() ?? ''),
+          survey: row));
+    }
+    for (final task
+        in offline.pendingSubmissions.where((t) => t.surveyParams != null)) {
+      if (_surveyRows.any((row) => row['id'] == task.id)) continue;
+      final p = task.surveyParams!;
+      final blocked = task.isRefusedNoCotsSurvey;
+      final site = DavaoGulfGeography.barangayById(p['p_area_code'].toString())
+              ?.displayName ??
+          p['p_area_code'];
+      final row = <String, dynamic>{
+        'id': task.id,
+        'area_name': site,
+        'surveyed_at': p['p_surveyed_at'],
+        'latitude': p['p_latitude'],
+        'longitude': p['p_longitude'],
+        'gps_accuracy_m': p['p_accuracy'],
+        'surveyed_area_m2': p['p_area_m2'],
+        'notes': p['p_notes'],
+        'submitted_by': 'You',
+        'submitted_at': null
+      };
+      _allRecords.add(ScanRecord(
+          recordId: task.id,
+          displayId: 'Survey · $site',
+          submittedBy: 'You',
+          activityType: 'No COTS observed during this survey',
+          status: blocked ? 'Not submitted' : 'Pending synchronization',
+          cotsDetected: 0,
+          confidencePercent: null,
+          scanSubmittedAt:
+              blocked ? 'Not submitted' : 'Pending synchronization',
+          zone: site.toString(),
+          sortAt: task.createdAt,
+          survey: row,
+          pendingSync: !blocked,
+          refusedDraft: blocked,
+          failureReason: task.failureReason));
+    }
+    _allRecords.sort((a, b) =>
+        (b.sortAt ?? DateTime(1970)).compareTo(a.sortAt ?? DateTime(1970)));
     final pendingSubmissionCount = _allRecords
             .where((r) => r.pendingSync)
             .length +
-        offline.pendingSubmissions.where((task) => task.record == null).length;
+        offline.pendingSubmissions
+            .where((task) => task.record == null && task.surveyParams == null)
+            .length;
     final filtered = _filtered;
+    final blockedSurveys = offline.pendingSubmissions
+        .where((task) =>
+            task.surveyParams != null &&
+            NoCotsSurveyConflict.matchesReason(task.failureReason))
+        .length;
     final shown = filtered.take(_visibleCount).toList();
     final hasMore = _visibleCount < filtered.length;
     final hasSearchOrFilter =
@@ -322,6 +445,15 @@ class _RecordsPageState extends State<RecordsPage> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
+          // Keep the loader mounted outside the lazy list. Scrolling must not
+          // dispose/recreate its timer, lose a refresh or hide loaded surveys.
+          NoCotsSurveyRecords(
+              key: ValueKey('surveys-$_recordsUid'),
+              loader: widget.surveyLoader,
+              renderEntries: false,
+              onLoaded: (rows) {
+                if (mounted) setState(() => _surveyRows = rows);
+              }),
           Expanded(
             child: ListView(
               padding: const EdgeInsets.fromLTRB(16, 8, 16, 100),
@@ -374,7 +506,9 @@ class _RecordsPageState extends State<RecordsPage> {
                               child: Text(
                                 offline.isSyncing
                                     ? 'Synchronizing pending submissions…'
-                                    : '$pendingSubmissionCount submission${pendingSubmissionCount == 1 ? '' : 's'} pending synchronization',
+                                    : blockedSurveys > 0
+                                        ? '$blockedSurveys survey${blockedSurveys == 1 ? '' : 's'} could not be submitted. See the reason below.${pendingSubmissionCount > 0 ? ' $pendingSubmissionCount pending synchronization.' : ''}'
+                                        : '$pendingSubmissionCount submission${pendingSubmissionCount == 1 ? '' : 's'} pending synchronization',
                                 style: const TextStyle(
                                   color: Color(0xFF684500),
                                   fontWeight: FontWeight.w700,
@@ -398,7 +532,8 @@ class _RecordsPageState extends State<RecordsPage> {
                 Consumer<OfflineSubmissionService>(
                     builder: (context, offline, _) {
                   final pending = offline.pendingSubmissions
-                      .where((task) => task.record == null)
+                      .where((task) =>
+                          task.record == null && task.surveyParams == null)
                       .toList();
                   if (pending.isEmpty) return const SizedBox.shrink();
                   return Column(
@@ -529,7 +664,15 @@ class _RecordsPageState extends State<RecordsPage> {
                               )
                             : _RecordCard(
                                 record: r,
+                                onRemoveDraft:
+                                    _removingDrafts.contains(r.recordId)
+                                        ? null
+                                        : () => _removeSavedDraft(r),
                                 onTap: () {
+                                  if (r.survey != null) {
+                                    showNoCotsSurveyDetails(context, r.survey!);
+                                    return;
+                                  }
                                   ScanRecordModel? model;
                                   for (final m in _allModels) {
                                     if (m.id == r.recordId) {
@@ -652,7 +795,7 @@ class _RecordsPageState extends State<RecordsPage> {
                 Text(value,
                     style: const TextStyle(
                         fontSize: 18,
-                        fontWeight: FontWeight.w800,
+                        fontWeight: FontWeight.w600,
                         color: kNavy)),
                 const SizedBox(height: 2),
                 Text(label,
@@ -681,9 +824,11 @@ class _GroupedRecordCard extends StatelessWidget {
 }
 
 class _RecordCard extends StatelessWidget {
-  const _RecordCard({required this.record, required this.onTap});
+  const _RecordCard(
+      {required this.record, required this.onTap, this.onRemoveDraft});
   final ScanRecord record;
   final VoidCallback onTap;
+  final VoidCallback? onRemoveDraft;
 
   @override
   Widget build(BuildContext context) {
@@ -727,7 +872,7 @@ class _RecordCard extends StatelessWidget {
                   final id = Text(record.displayId,
                       style: const TextStyle(
                           fontSize: 13,
-                          fontWeight: FontWeight.w800,
+                          fontWeight: FontWeight.w600,
                           color: kNavy));
                   return Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
@@ -744,7 +889,7 @@ class _RecordCard extends StatelessWidget {
                           id,
                         const SizedBox(height: 4),
                         Text(
-                            'Submitted by ${record.submittedBy}${record.group == null ? ' · ${record.activityType}' : ''}',
+                            '${record.refusedDraft ? 'Saved by' : 'Submitted by'} ${record.submittedBy}${record.group == null ? ' · ${record.activityType}' : ''}',
                             style: const TextStyle(
                                 fontSize: 12,
                                 color: Color(0xFF607D8B),
@@ -765,7 +910,9 @@ class _RecordCard extends StatelessWidget {
                               const SizedBox(width: 5),
                               Expanded(
                                   child: Text(
-                                      'Uploaded ${record.scanSubmittedAt}',
+                                      record.refusedDraft
+                                          ? 'Not uploaded'
+                                          : 'Uploaded ${record.scanSubmittedAt}',
                                       style: const TextStyle(
                                           fontSize: 11,
                                           color: Color(0xFF607D8B)))),
@@ -777,6 +924,17 @@ class _RecordCard extends StatelessWidget {
                               style: const TextStyle(
                                   fontSize: 12, color: Color(0xFF8A5A00))),
                         ],
+                        if (record.refusedDraft)
+                          TextButton.icon(
+                            key: ValueKey(
+                                'remove-survey-draft-${record.recordId}'),
+                            onPressed: onRemoveDraft,
+                            style: TextButton.styleFrom(
+                                foregroundColor: kHigh,
+                                minimumSize: const Size(48, 48)),
+                            icon: const Icon(Icons.delete_outline),
+                            label: const Text('Remove saved draft'),
+                          ),
                       ]);
                 })),
                 const SizedBox(width: 4),

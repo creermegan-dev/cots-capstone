@@ -32,6 +32,7 @@ dependencies:
   connectivity_plus: ^6.1.4
   pdf: ^3.13.1
   file_saver: ^0.4.0
+  file_selector_platform_interface: 2.7.0
   firebase_messaging: ^16.7.1
   crypto: ^3.0.8
   qr_flutter: ^4.1.0
@@ -53,8 +54,11 @@ flutter:
   uses-material-design: true
   assets:
     - assets/images/cots_logo.png
-    - assets/images/landing_coral.jpg
+    - assets/images/landing_cots.png
     - assets/models/yolov8_best.onnx
+    - assets/models/trained_yolo8.onnx
+    - assets/models/trained_yolo11.onnx
+    - assets/models/trained_yolo26.onnx
     - assets/models/yolo26_best.onnx
     - assets/map/parts.json
     - assets/map/areas.json

@@ -79,7 +79,7 @@ Marker recordDotMarker(ScanRecordModel record, {VoidCallback? onTap}) {
               style: const TextStyle(
                   color: Colors.white,
                   fontSize: 11,
-                  fontWeight: FontWeight.w800)),
+                  fontWeight: FontWeight.w600)),
         ),
       ),
     ),
@@ -291,7 +291,7 @@ class _CotsMapPageState extends State<CotsMapPage> {
             children: [
               const ListTile(
                   title: Text('Show month',
-                      style: TextStyle(fontWeight: FontWeight.w800))),
+                      style: TextStyle(fontWeight: FontWeight.w600))),
               RadioListTile<DateTime?>(
                 value: null,
                 groupValue: _month,
@@ -456,7 +456,7 @@ class _CotsMapPageState extends State<CotsMapPage> {
                     overflow: TextOverflow.ellipsis,
                     style: const TextStyle(
                         fontSize: 11,
-                        fontWeight: FontWeight.w800,
+                        fontWeight: FontWeight.w600,
                         color: kNavy)),
                 Text(_levelLine(level),
                     maxLines: 1,
@@ -469,7 +469,7 @@ class _CotsMapPageState extends State<CotsMapPage> {
                   const Text('Your site',
                       style: TextStyle(
                           fontSize: 10,
-                          fontWeight: FontWeight.w800,
+                          fontWeight: FontWeight.w600,
                           color: kNavy)),
               ],
             ),
@@ -803,7 +803,7 @@ class _CotsMapPageState extends State<CotsMapPage> {
                     'MAP PAGE',
                     style: TextStyle(
                       fontSize: 12,
-                      fontWeight: FontWeight.w800,
+                      fontWeight: FontWeight.w600,
                       color: kGreen,
                       letterSpacing: 0.8,
                     ),

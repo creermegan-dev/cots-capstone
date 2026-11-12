@@ -1,3 +1,23 @@
+# Detection-page model selection (2026-11-10)
+
+The Detection upload page now selects YOLOv8n, YOLO11s (default), or YOLO26s.
+Each selection uses the exact supplied checkpoint exported locally with Ultralytics
+8.4.55, ONNX opset 17, float32, static 640, batch 1, nms=False, simplify=False.
+YOLOv8/11 output [1,5,8400] uses external NMS; YOLO26 [1,100,6] uses native
+end-to-end output. Existing preprocessing and review thresholds are unchanged.
+Changing the selection clears previous results; detection must run again before
+continuing. The monthly visit form remains unchanged.
+
+- `trained_yolo8.onnx`: SHA-256 `adef20fa2bd64353114c695875f08fc46679fb6de9d3e396ec7038d1e5568ce2`.
+- `trained_yolo11.onnx`: SHA-256 `30075f81627f94da58289044b80fcefa8879d3d2acae3681556ccbd63f02736c`.
+- `trained_yolo26.onnx`: SHA-256 `19ad713742cfbc7263df75173fe3d0e5f1153b9fcd196629e852906927877d39`.
+
+These assets are separate from the historical CLI-selected assets below. Original
+checkpoint files and historical records were not overwritten. Phone testing is
+still required; desktop export checks do not establish field accuracy.
+
+---
+
 # Bundled COTS detectors
 
 ## Default model: YOLO11s
@@ -28,7 +48,7 @@ SHA-256: `e0b0e5e934577706ad60b88fd75ade5992b8da1443b06eedd3cee6b08b874575`.
   the oriented source image. Do not run raw YOLO NMS a second time or guess that
   small pixel coordinates are normalized.
 - Confidence filtering and per-COTS acceptance remain unchanged: scores rounding
-  to at least 20% are retained; 20-79% require Expert review; 80-100% are
+  to at least 20% are retained; 20-84% require Expert review; 85-100% are
   automatically accepted. An uncertain candidate can still be a duplicate or a
   false detection, so confidence is not an accuracy measurement.
 
@@ -68,7 +88,7 @@ SHA-256: `a2707702a7232ac4864921f52f45e00e361efda71f73cd3c1efb8599e1da8e9f`.
   end2end=False).
 - Decoder keeps scores rounding to at least 20% (threshold 0.195), applies
   IoU 0.45 NMS, then maps boxes to the oriented source image. Acceptance is a
-  separate per-COTS policy: 80-100% automatic, 20-79% Expert review.
+  separate per-COTS policy: 85-100% automatic, 20-84% Expert review.
 - Normalized exports require explicit decoder configuration. The production
   detector checks the bundled shape rather than silently treating incompatibility
   as zero detections. RT-DETR decoding remains a legacy helper, not this model.

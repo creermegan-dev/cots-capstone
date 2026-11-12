@@ -102,7 +102,7 @@ class AdminSummaryFooterCards extends StatelessWidget {
                   body,
                   style: const TextStyle(
                     fontSize: 14,
-                    fontWeight: FontWeight.w800,
+                    fontWeight: FontWeight.w600,
                     color: AdminColors.headerTitle,
                     height: 1.25,
                   ),

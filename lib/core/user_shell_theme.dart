@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'cots_theme.dart';
 
 /// Shared palette for user-facing screens (map, profile, records, etc.).
 const Color kNavy = Color(0xFF0D1B2A);
@@ -9,4 +10,4 @@ const Color kGreen = Color(0xFF1B4332);
 const Color kHigh = Color(0xFFE53935);
 const Color kModerate = Color(0xFFFFA726);
 const Color kLow = Color(0xFF43A047);
-const Color kGray = Color(0xFFF4F6F9);
+const Color kGray = CotsUi.background;

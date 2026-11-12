@@ -1,10 +1,11 @@
 import 'package:flutter/material.dart';
+import '../../../core/cots_theme.dart';
 
 import '../../../models/cots_tally.dart';
+import '../../../models/cots_confidence_policy.dart';
 import '../../../models/staff_submission_rows.dart';
 import '../../user/user_submission_details_page.dart';
 import '../../../models/zone_directory_summary.dart';
-import '../../../services/admin_report_export_service.dart';
 import '../../../services/scan_record_repository.dart';
 import '../../../widgets/cots_loading_skeleton.dart';
 import '../models/admin_record_table_row.dart';
@@ -12,6 +13,7 @@ import '../theme/admin_theme.dart';
 import '../widgets/admin_dashboard_header.dart';
 import '../widgets/admin_data_table.dart';
 import 'admin_record_details_screen.dart';
+import 'monthly_report_screen.dart';
 
 class AdminReportsScreen extends StatefulWidget {
   const AdminReportsScreen({super.key, this.recordsStream});
@@ -30,9 +32,6 @@ class _AdminReportsScreenState extends State<AdminReportsScreen> {
   String _zone = 'All Sites';
   int _page = 0;
   int _rowsPerPage = 10;
-  bool _exporting = false;
-
-  final _exportService = const AdminReportExportService();
 
   /// Last-used summary stat card (0–4); `null` if filters were changed manually and no preset matches.
   int? _selectedStatIndex;
@@ -61,38 +60,19 @@ class _AdminReportsScreenState extends State<AdminReportsScreen> {
     setState(() => _refreshGeneration++);
   }
 
-  Future<void> _exportReports(
-    List<_ReportRow> rows, {
-    required bool asPdf,
-  }) async {
-    if (rows.isEmpty || _exporting) return;
-    setState(() => _exporting = true);
-    try {
-      final records = rows.map((row) => row.source).toList(growable: false);
-      final path = asPdf
-          ? await _exportService.savePdf(records)
-          : await _exportService.saveCsv(records);
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          behavior: SnackBarBehavior.floating,
-          content: Text(
-            '${asPdf ? 'PDF' : 'CSV'} report saved${path == null || path.isEmpty ? '.' : ' to $path'}',
+  /// Opens "Create report": pick a month and site, preview, export one PDF.
+  void _openCreateReport() {
+    Navigator.of(context).push(
+      MaterialPageRoute<void>(
+        builder: (routeContext) => adminThemedSubtree(
+          routeContext,
+          child: const Scaffold(
+            backgroundColor: AdminColors.contentBg,
+            body: SafeArea(child: MonthlyReportScreen()),
           ),
         ),
-      );
-    } catch (error) {
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          behavior: SnackBarBehavior.floating,
-          backgroundColor: AdminColors.statRed,
-          content: Text('Could not export reports: $error'),
-        ),
-      );
-    } finally {
-      if (mounted) setState(() => _exporting = false);
-    }
+      ),
+    );
   }
 
   @override
@@ -263,7 +243,7 @@ class _AdminReportsScreenState extends State<AdminReportsScreen> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          _header(filtered),
+          _header(),
           const SizedBox(height: 18),
           _statCards(rows),
           const SizedBox(height: 18),
@@ -310,7 +290,7 @@ class _AdminReportsScreenState extends State<AdminReportsScreen> {
                   size: 42, color: AdminColors.statRed),
               const SizedBox(height: 12),
               const Text('Could not load reports',
-                  style: TextStyle(fontSize: 18, fontWeight: FontWeight.w800)),
+                  style: TextStyle(fontSize: 18, fontWeight: FontWeight.w600)),
               const SizedBox(height: 6),
               Text('$error',
                   textAlign: TextAlign.center,
@@ -328,59 +308,27 @@ class _AdminReportsScreenState extends State<AdminReportsScreen> {
     );
   }
 
-  Widget _header(List<_ReportRow> filteredRows) {
+  Widget _header() {
     return AdminDashboardHeader(
       title: 'Reports',
       subtitle:
           'All system reports submitted by users. Detection reports are reviewed by admin based on confidence level.',
       onRefreshTap: _onReportsRefresh,
-      trailingExtra: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          OutlinedButton.icon(
-            onPressed: filteredRows.isEmpty || _exporting
-                ? null
-                : () => _exportReports(filteredRows, asPdf: true),
-            icon: const Icon(Icons.picture_as_pdf_outlined, size: 16),
-            label: const Text('Export PDF'),
-            style: OutlinedButton.styleFrom(
-              foregroundColor: AdminColors.statRed,
-              side: BorderSide(
-                  color: AdminColors.statRed.withValues(alpha: 0.35)),
-              backgroundColor: Colors.white,
-              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 9),
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(10),
-              ),
-              textStyle: const TextStyle(
+      trailingExtra: FilledButton.icon(
+        key: const Key('create-report-button'),
+        onPressed: _openCreateReport,
+        icon: const Icon(Icons.description_outlined, size: 16),
+        label: const Text('Create report'),
+        style: FilledButton.styleFrom(
+          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 9),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(10),
+          ),
+          textStyle: Theme.of(context).textTheme.labelLarge?.copyWith(
                 fontSize: 13,
                 fontWeight: FontWeight.w600,
               ),
-            ),
-          ),
-          const SizedBox(width: 8),
-          OutlinedButton.icon(
-            onPressed: filteredRows.isEmpty || _exporting
-                ? null
-                : () => _exportReports(filteredRows, asPdf: false),
-            icon: const Icon(Icons.table_view_outlined, size: 16),
-            label: const Text('Export CSV'),
-            style: OutlinedButton.styleFrom(
-              foregroundColor: AdminColors.statGreen,
-              side: BorderSide(
-                  color: AdminColors.statGreen.withValues(alpha: 0.35)),
-              backgroundColor: Colors.white,
-              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 9),
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(10),
-              ),
-              textStyle: const TextStyle(
-                fontSize: 13,
-                fontWeight: FontWeight.w600,
-              ),
-            ),
-          ),
-        ],
+        ),
       ),
     );
   }
@@ -662,10 +610,14 @@ class _AdminReportsScreenState extends State<AdminReportsScreen> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          _guideLine(AdminColors.statGreen, 'High (80–100%)',
+          _guideLine(
+              AdminColors.statGreen,
+              'High (${CotsConfidencePolicy.autoApproveMin}–100%)',
               'Accepted by the confidence policy.'),
           const SizedBox(height: 10),
-          _guideLine(AdminColors.statYellow, 'Medium (20–79%)',
+          _guideLine(
+              AdminColors.statYellow,
+              'Medium (${CotsConfidencePolicy.adminReviewMin}–${CotsConfidencePolicy.autoApproveMin - 1}%)',
               'Requires expert verification.'),
           const SizedBox(height: 10),
           _guideLine(AdminColors.statRed, 'Low (<20%)',
@@ -709,7 +661,7 @@ class _AdminReportsScreenState extends State<AdminReportsScreen> {
         Expanded(
           child: RichText(
             text: TextSpan(
-              style: TextStyle(
+              style: Theme.of(context).textTheme.bodyMedium?.copyWith(
                   fontSize: 13,
                   height: 1.4,
                   color: AdminColors.headerTitle.withValues(alpha: 0.88),
@@ -717,7 +669,7 @@ class _AdminReportsScreenState extends State<AdminReportsScreen> {
               children: [
                 TextSpan(
                     text: '$title — ',
-                    style: const TextStyle(fontWeight: FontWeight.w900)),
+                    style: const TextStyle(fontWeight: FontWeight.w700)),
                 TextSpan(
                     text: text,
                     style: const TextStyle(fontWeight: FontWeight.w500)),
@@ -736,7 +688,7 @@ class _AdminReportsScreenState extends State<AdminReportsScreen> {
         children: [
           Text(title,
               style: const TextStyle(
-                  fontWeight: FontWeight.w900,
+                  fontWeight: FontWeight.w700,
                   fontSize: 15,
                   color: AdminColors.headerTitle)),
           const SizedBox(height: 12),
@@ -749,16 +701,7 @@ class _AdminReportsScreenState extends State<AdminReportsScreen> {
   static Widget _card({required Widget child, EdgeInsetsGeometry? padding}) {
     return Container(
       padding: padding ?? const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(14),
-        boxShadow: [
-          BoxShadow(
-              color: Colors.black.withValues(alpha: 0.06),
-              blurRadius: 18,
-              offset: const Offset(0, 6)),
-        ],
-      ),
+      decoration: CotsUi.cardDecoration(),
       child: child,
     );
   }
@@ -822,7 +765,7 @@ class _StatCardState extends State<_StatCard> {
           message: 'Apply table filter: ${s.title}',
           child: InkWell(
             onTap: widget.onTap,
-            borderRadius: BorderRadius.circular(14),
+            borderRadius: BorderRadius.circular(CotsUi.cardRadius),
             hoverColor: accent.withValues(alpha: 0.06),
             child: AnimatedContainer(
               duration: const Duration(milliseconds: 180),
@@ -831,21 +774,13 @@ class _StatCardState extends State<_StatCard> {
                 color: widget.selected
                     ? accent.withValues(alpha: 0.06)
                     : Colors.white,
-                borderRadius: BorderRadius.circular(14),
+                borderRadius: BorderRadius.circular(CotsUi.cardRadius),
                 border: Border.all(
                   color: widget.selected
-                      ? accent.withValues(alpha: 0.55)
-                      : Colors.black.withValues(alpha: _hover ? 0.1 : 0.06),
-                  width: widget.selected ? 2 : 1,
+                      ? accent.withValues(alpha: 0.32)
+                      : (_hover ? const Color(0xFFCBD4DC) : CotsUi.divider),
+                  width: 1,
                 ),
-                boxShadow: [
-                  BoxShadow(
-                    color: Colors.black.withValues(
-                        alpha: _hover || widget.selected ? 0.1 : 0.06),
-                    blurRadius: _hover || widget.selected ? 22 : 16,
-                    offset: Offset(0, _hover || widget.selected ? 8 : 5),
-                  ),
-                ],
               ),
               child: Row(
                 children: [
@@ -855,7 +790,7 @@ class _StatCardState extends State<_StatCard> {
                     decoration: BoxDecoration(
                         color: accent.withValues(alpha: 0.12),
                         borderRadius: BorderRadius.circular(12)),
-                    child: Icon(s.icon, color: accent, size: 24),
+                    child: Icon(s.icon, color: accent, size: 20),
                   ),
                   const SizedBox(width: 12),
                   Expanded(
@@ -864,17 +799,17 @@ class _StatCardState extends State<_StatCard> {
                       children: [
                         Text(s.title,
                             style: const TextStyle(
-                                fontWeight: FontWeight.w800,
+                                fontWeight: FontWeight.w600,
                                 fontSize: 12,
                                 color: AdminColors.headerTitle)),
                         Text(s.value,
                             style: const TextStyle(
-                                fontWeight: FontWeight.w900,
+                                fontWeight: FontWeight.w600,
                                 fontSize: 24,
                                 color: AdminColors.headerTitle)),
                         Text(s.subtitle,
                             style: TextStyle(
-                                fontSize: 11,
+                                fontSize: 12,
                                 color:
                                     AdminColors.muted.withValues(alpha: 0.9))),
                       ],
@@ -1012,15 +947,23 @@ class _ReportRow {
   String get typeLabel => type.label;
 
   String get confidenceBand {
-    if (confidencePct >= 80) return 'High';
-    if (confidencePct >= 20) return 'Medium';
+    if (confidencePct >= CotsConfidencePolicy.autoApproveMin) {
+      return 'High';
+    }
+    if (confidencePct >= CotsConfidencePolicy.adminReviewMin) {
+      return 'Medium';
+    }
     return 'Low';
   }
 
   Color get confidenceColor {
     if (source.isSubmissionSummary) return AdminColors.muted;
-    if (confidencePct >= 80) return AdminColors.statGreen;
-    if (confidencePct >= 20) return AdminColors.statYellow;
+    if (confidencePct >= CotsConfidencePolicy.autoApproveMin) {
+      return AdminColors.statGreen;
+    }
+    if (confidencePct >= CotsConfidencePolicy.adminReviewMin) {
+      return AdminColors.statYellow;
+    }
     return AdminColors.statRed;
   }
 }
@@ -1191,13 +1134,6 @@ class _ReportTableRowState extends State<_ReportTableRow> {
                   border: Border.all(
                       color:
                           Colors.black.withValues(alpha: _hover ? 0.1 : 0.06)),
-                  boxShadow: [
-                    BoxShadow(
-                      color: Colors.black.withValues(alpha: 0.05),
-                      blurRadius: 10,
-                      offset: const Offset(0, 2),
-                    ),
-                  ],
                 ),
                 child: Table(
                   columnWidths: _ReportTableDim.columnWidths,
@@ -1227,7 +1163,7 @@ class _ReportTableRowState extends State<_ReportTableRow> {
                                     maxLines: 1,
                                     overflow: TextOverflow.ellipsis,
                                     style: const TextStyle(
-                                      fontWeight: FontWeight.w900,
+                                      fontWeight: FontWeight.w700,
                                       fontSize: 12,
                                       color: AdminColors.statBlue,
                                       decoration: TextDecoration.underline,
@@ -1251,7 +1187,7 @@ class _ReportTableRowState extends State<_ReportTableRow> {
                                   maxLines: 1,
                                   overflow: TextOverflow.ellipsis,
                                   style: TextStyle(
-                                      fontWeight: FontWeight.w800,
+                                      fontWeight: FontWeight.w600,
                                       fontSize: 12,
                                       color: r.type.color),
                                 ),
@@ -1332,7 +1268,7 @@ class _ReportTableRowState extends State<_ReportTableRow> {
                                 child: Text(
                                     widget.onReview != null ? 'Review' : 'View',
                                     style: const TextStyle(
-                                        fontWeight: FontWeight.w800,
+                                        fontWeight: FontWeight.w600,
                                         fontSize: 11.5)),
                               ),
                             ],

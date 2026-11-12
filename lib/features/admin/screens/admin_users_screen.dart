@@ -402,7 +402,7 @@ class _AdminUsersScreenState extends State<AdminUsersScreen> {
     final rc = adminUserRoleColor(r.role);
     return [
       AdminDataTableCells.text(r.id,
-          style: const TextStyle(fontWeight: FontWeight.w900, fontSize: 12)),
+          style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 12)),
       AdminDataTableCells.cell(
         child: Row(
           children: [
@@ -411,7 +411,7 @@ class _AdminUsersScreenState extends State<AdminUsersScreen> {
               backgroundColor: rc.withValues(alpha: 0.18),
               child: Text(r.initials,
                   style: TextStyle(
-                      fontSize: 11, fontWeight: FontWeight.w900, color: rc)),
+                      fontSize: 11, fontWeight: FontWeight.w700, color: rc)),
             ),
             const SizedBox(width: 8),
             Expanded(
@@ -420,7 +420,7 @@ class _AdminUsersScreenState extends State<AdminUsersScreen> {
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
                 style: const TextStyle(
-                  fontWeight: FontWeight.w800,
+                  fontWeight: FontWeight.w600,
                   fontSize: 12.5,
                   color: AdminColors.statBlue,
                   decoration: TextDecoration.underline,
@@ -493,7 +493,7 @@ class _AdminUsersScreenState extends State<AdminUsersScreen> {
                   children: [
                     const Text('About user roles & organizations',
                         style: TextStyle(
-                            fontWeight: FontWeight.w900, fontSize: 14)),
+                            fontWeight: FontWeight.w700, fontSize: 14)),
                     const SizedBox(height: 8),
                     Text(
                       'Roles define the level of access and permissions in the system.\n\n'
@@ -515,7 +515,7 @@ class _AdminUsersScreenState extends State<AdminUsersScreen> {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               const Text('Role legend',
-                  style: TextStyle(fontWeight: FontWeight.w900, fontSize: 14)),
+                  style: TextStyle(fontWeight: FontWeight.w700, fontSize: 14)),
               const SizedBox(height: 10),
               _legendLine(const Color(0xFF6A1B9A), 'Administrator',
                   'System oversight and technical preferences'),
@@ -573,7 +573,7 @@ class _AdminUsersScreenState extends State<AdminUsersScreen> {
                 children: [
                   TextSpan(
                       text: '$title — ',
-                      style: const TextStyle(fontWeight: FontWeight.w900)),
+                      style: const TextStyle(fontWeight: FontWeight.w700)),
                   TextSpan(
                       text: text,
                       style: const TextStyle(fontWeight: FontWeight.w500)),
@@ -662,12 +662,12 @@ class _UserStatCardState extends State<_UserStatCard> {
                 children: [
                   Text(s.title,
                       style: const TextStyle(
-                          fontWeight: FontWeight.w800,
+                          fontWeight: FontWeight.w600,
                           fontSize: 12,
                           color: AdminColors.headerTitle)),
                   Text(s.value,
                       style: const TextStyle(
-                          fontWeight: FontWeight.w900,
+                          fontWeight: FontWeight.w700,
                           fontSize: 24,
                           color: AdminColors.headerTitle)),
                   Text(s.subtitle,

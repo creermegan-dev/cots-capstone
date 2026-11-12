@@ -31,35 +31,28 @@ class AdminStatCard extends StatelessWidget {
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
         color: selected
-            ? accentColor.withValues(alpha: 0.08)
+            ? accentColor.withValues(alpha: 0.05)
             : AdminColors.cardWhite,
-        borderRadius: BorderRadius.circular(14),
+        borderRadius: BorderRadius.circular(16),
         border: Border.all(
           color: selected
-              ? accentColor.withValues(alpha: 0.45)
+              ? accentColor.withValues(alpha: 0.32)
               : const Color(0xFFE5E7EB),
-          width: selected ? 1.5 : 1,
+          width: 1,
         ),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withValues(alpha: 0.03),
-            blurRadius: 10,
-            offset: const Offset(0, 3),
-          ),
-        ],
       ),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Container(
-            padding: const EdgeInsets.all(10),
+            padding: const EdgeInsets.all(8),
             decoration: BoxDecoration(
-              color: accentColor.withValues(alpha: 0.12),
+              color: accentColor.withValues(alpha: 0.08),
               borderRadius: BorderRadius.circular(11),
             ),
-            child: Icon(icon, color: accentColor, size: 22),
+            child: Icon(icon, color: accentColor, size: 20),
           ),
-          const SizedBox(width: 14),
+          const SizedBox(width: 12),
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
@@ -67,7 +60,7 @@ class AdminStatCard extends StatelessWidget {
                 Text(
                   title,
                   style: const TextStyle(
-                    fontSize: 12,
+                    fontSize: 12.5,
                     fontWeight: FontWeight.w600,
                     color: AdminColors.muted,
                     decoration: TextDecoration.none,
@@ -77,8 +70,8 @@ class AdminStatCard extends StatelessWidget {
                 Text(
                   value,
                   style: const TextStyle(
-                    fontSize: 24,
-                    fontWeight: FontWeight.w800,
+                    fontSize: 26,
+                    fontWeight: FontWeight.w600,
                     letterSpacing: -0.4,
                     color: AdminColors.headerTitle,
                     height: 1.05,
@@ -89,9 +82,9 @@ class AdminStatCard extends StatelessWidget {
                 Text(
                   subtitle,
                   style: TextStyle(
-                    fontSize: 11.5,
+                    fontSize: 12,
                     color: AdminColors.muted.withValues(alpha: 0.9),
-                    height: 1.25,
+                    height: 1.35,
                     decoration: TextDecoration.none,
                   ),
                 ),
@@ -109,7 +102,7 @@ class AdminStatCard extends StatelessWidget {
           color: Colors.transparent,
           child: InkWell(
             onTap: onTap,
-            borderRadius: BorderRadius.circular(14),
+            borderRadius: BorderRadius.circular(16),
             child: card,
           ),
         ),

@@ -8,6 +8,7 @@ import 'package:provider/provider.dart';
 import 'package:http/http.dart' as http;
 
 import '../../core/cots_colors.dart';
+import '../../core/cots_theme.dart';
 import '../../core/supabase_config.dart';
 import '../../models/activity_type.dart';
 import '../../models/intervention_assignment_model.dart';
@@ -16,6 +17,7 @@ import '../../models/submission_group.dart';
 import '../../models/monitoring_analytics.dart';
 import '../../widgets/monitoring_record_map.dart';
 import '../../widgets/cots_loading_skeleton.dart';
+import '../../widgets/cots_logo.dart';
 import '../../providers/auth_provider.dart';
 import '../../services/intervention_assignment_repository.dart';
 import '../../services/scan_record_repository.dart';
@@ -294,7 +296,7 @@ class _AssignedTasksSection extends StatelessWidget {
                         style: TextStyle(
                           color: kTextNavy,
                           fontSize: 15,
-                          fontWeight: FontWeight.w800,
+                          fontWeight: FontWeight.w600,
                         ),
                       ),
                     ),
@@ -302,7 +304,7 @@ class _AssignedTasksSection extends StatelessWidget {
                       '${tasks.length}',
                       style: const TextStyle(
                         color: kPrimaryTeal,
-                        fontWeight: FontWeight.w900,
+                        fontWeight: FontWeight.w700,
                       ),
                     ),
                   ],
@@ -344,7 +346,7 @@ class _AssignedTaskRow extends StatelessWidget {
                     : task.captureId,
                 style: const TextStyle(
                   color: kTextNavy,
-                  fontWeight: FontWeight.w800,
+                  fontWeight: FontWeight.w600,
                 ),
               ),
               const SizedBox(height: 3),
@@ -405,22 +407,41 @@ class _DiverSidebarMenu extends StatelessWidget {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
-                const Text(
-                  'COTS Monitor',
-                  style: TextStyle(
-                    color: Colors.white,
-                    fontSize: 18,
-                    fontWeight: FontWeight.w900,
-                  ),
-                ),
-                const SizedBox(height: 4),
-                Text(
-                  'Diver Portal',
-                  style: TextStyle(
-                    color: Colors.white.withValues(alpha: 0.7),
-                    fontSize: 12,
-                    fontWeight: FontWeight.w600,
-                  ),
+                Row(
+                  children: [
+                    Container(
+                      decoration: const BoxDecoration(
+                        shape: BoxShape.circle,
+                        color: Colors.white,
+                      ),
+                      child: const CotsLogo(size: 40),
+                    ),
+                    const SizedBox(width: 10),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          const Text(
+                            'COTS Monitor',
+                            style: TextStyle(
+                              color: Colors.white,
+                              fontSize: 18,
+                              fontWeight: FontWeight.w700,
+                            ),
+                          ),
+                          const SizedBox(height: 4),
+                          Text(
+                            'Diver Portal',
+                            style: TextStyle(
+                              color: Colors.white.withValues(alpha: 0.7),
+                              fontSize: 12,
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
                 ),
                 const SizedBox(height: 22),
                 _sideItem(
@@ -511,7 +532,7 @@ class _DiverSidebarMenu extends StatelessWidget {
                     style: TextStyle(
                       color:
                           Colors.white.withValues(alpha: selected ? 1 : 0.88),
-                      fontWeight: selected ? FontWeight.w800 : FontWeight.w600,
+                      fontWeight: selected ? FontWeight.w600 : FontWeight.w600,
                       fontSize: 13,
                     ),
                   ),
@@ -554,7 +575,7 @@ class _RecentMonitoringActivities extends StatelessWidget {
             'Recent monitoring activities',
             style: TextStyle(
               fontSize: 15,
-              fontWeight: FontWeight.w800,
+              fontWeight: FontWeight.w600,
               color: kTextNavy,
             ),
           ),
@@ -615,7 +636,7 @@ class _RecentMonitoringActivities extends StatelessWidget {
                         ? 'Removal Evidence'
                         : 'Monitoring Capture',
                 style: const TextStyle(
-                  fontWeight: FontWeight.w800,
+                  fontWeight: FontWeight.w600,
                   color: kTextNavy,
                   fontSize: 13,
                 ),
@@ -723,7 +744,7 @@ class _DashboardHeader extends StatelessWidget {
                     'Diver Dashboard',
                     style: TextStyle(
                       fontSize: 24,
-                      fontWeight: FontWeight.w900,
+                      fontWeight: FontWeight.w700,
                       color: kTextNavy,
                       letterSpacing: -0.5,
                       height: 1.15,
@@ -869,12 +890,7 @@ class _MetricCard extends StatelessWidget {
   Widget build(BuildContext context) {
     return Container(
       padding: const EdgeInsets.all(14),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: kBorderGray),
-        boxShadow: kSoftCardShadow,
-      ),
+      decoration: CotsUi.cardDecoration(),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -893,7 +909,7 @@ class _MetricCard extends StatelessWidget {
             value,
             style: const TextStyle(
               fontSize: 22,
-              fontWeight: FontWeight.w900,
+              fontWeight: FontWeight.w700,
               color: kTextNavy,
               letterSpacing: -0.4,
               height: 1.0,
@@ -916,6 +932,7 @@ class _MetricCard extends StatelessWidget {
     );
   }
 }
+
 class _MonitoredZonesCard extends StatelessWidget {
   const _MonitoredZonesCard({required this.records});
   final List<ScanRecordModel> records;
@@ -937,12 +954,7 @@ class _AnalyticsPreviewCard extends StatelessWidget {
     final spots = analytics.dailyTrendSpots;
     return Container(
       padding: const EdgeInsets.all(14),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: kBorderGray),
-        boxShadow: kSoftCardShadow,
-      ),
+      decoration: CotsUi.cardDecoration(),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
@@ -956,7 +968,7 @@ class _AnalyticsPreviewCard extends StatelessWidget {
                       'ANALYTICS OVERVIEW',
                       style: TextStyle(
                         fontSize: 10,
-                        fontWeight: FontWeight.w800,
+                        fontWeight: FontWeight.w600,
                         letterSpacing: 0.6,
                         color: kMutedGray,
                       ),
@@ -985,7 +997,7 @@ class _AnalyticsPreviewCard extends StatelessWidget {
                     Text(
                       'View more',
                       style:
-                          TextStyle(fontWeight: FontWeight.w800, fontSize: 12),
+                          TextStyle(fontWeight: FontWeight.w600, fontSize: 12),
                     ),
                     Icon(Icons.chevron_right_rounded, size: 18),
                   ],
@@ -1012,7 +1024,7 @@ class _AnalyticsPreviewCard extends StatelessWidget {
                       'COTS Trend',
                       style: TextStyle(
                         fontSize: 13,
-                        fontWeight: FontWeight.w800,
+                        fontWeight: FontWeight.w600,
                         color: kTextNavy,
                       ),
                     )),

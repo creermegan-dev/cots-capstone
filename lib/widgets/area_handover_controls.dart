@@ -136,7 +136,7 @@ class _AreaHandoverButtonState extends State<AreaHandoverButton> {
                 children: [
                   const Text('Handover of this area',
                       style: TextStyle(
-                          fontWeight: FontWeight.w800, color: kTextNavy)),
+                          fontWeight: FontWeight.w600, color: kTextNavy)),
                   Text(handover.statusLabel),
                   _line('Reason', handover.reason),
                   if (handover.canCancel)
@@ -333,7 +333,7 @@ class _HandoverOffersCardState extends State<HandoverOffersCard> {
                         const Text('Area handover offer',
                             style: TextStyle(
                                 fontSize: 16,
-                                fontWeight: FontWeight.w800,
+                                fontWeight: FontWeight.w600,
                                 color: kTextNavy)),
                         const SizedBox(height: 6),
                         Text(
@@ -474,7 +474,7 @@ class _ExpertHandoversSectionState extends State<ExpertHandoversSection> {
               const Text('Site handovers',
                   style: TextStyle(
                       fontSize: 18,
-                      fontWeight: FontWeight.w800,
+                      fontWeight: FontWeight.w600,
                       color: kTextNavy)),
               if (open.isEmpty && missed.isEmpty)
                 const Padding(
@@ -489,7 +489,7 @@ class _ExpertHandoversSectionState extends State<ExpertHandoversSection> {
                       children: [
                         Text(handover.areaName,
                             style:
-                                const TextStyle(fontWeight: FontWeight.w800)),
+                                const TextStyle(fontWeight: FontWeight.w600)),
                         _line('From', handover.fromDiverName),
                         _line(
                             'Started by',

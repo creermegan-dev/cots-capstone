@@ -352,6 +352,7 @@ abstract final class FollowUpMonitoringRepository {
                 imageName: record.imageName,
                 aiDetectedCount: record.aiDetectedCount,
                 confidence: record.confidence,
+                autoApproveMin: record.autoApproveMin,
                 captureSource: record.captureSource,
                 zone: record.zone,
                 notes: record.notes,
@@ -626,6 +627,7 @@ abstract final class FollowUpMonitoringRepository {
     final items = CotsConfidencePolicy.buildDetectionItems(
       count: capture.aiDetectedCount,
       averagePercent: capture.confidencePercent,
+      autoApproveThreshold: capture.autoApproveMin,
       boxes: capture.detectionBoxes.isEmpty ? null : capture.detectionBoxes,
       imageWidth: capture.imageWidth > 0 ? capture.imageWidth : 1920,
       imageHeight: capture.imageHeight > 0 ? capture.imageHeight : 1080,
@@ -928,10 +930,8 @@ abstract final class FollowUpMonitoringRepository {
 
   /// One area's visits and detection records, for the Expert's summary.
   static Future<
-      ({
-        List<FollowUpSurveyModel> surveys,
-        List<CaptureModel> captures
-      })> loadAreaHistory(String areaId) async {
+          ({List<FollowUpSurveyModel> surveys, List<CaptureModel> captures})>
+      loadAreaHistory(String areaId) async {
     if (SupabaseConfig.isConfigured) {
       // Visit status comes from the database, so records are not needed.
       return (

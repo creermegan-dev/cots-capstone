@@ -4,10 +4,16 @@ class CotsDetectionResult {
     required this.count,
     required this.confidence,
     required this.boxes,
+    this.modelName,
+    this.modelSha256,
   });
 
   /// Number of COTS instances after NMS.
   final int count;
+
+  /// Exact detector identity captured at inference, preserved during offline sync.
+  final String? modelName;
+  final String? modelSha256;
 
   /// Mean confidence of kept detections (0–1).
   final double confidence;
@@ -61,8 +67,10 @@ class CotsBoundingBox {
     if (value is! List) return const [];
     return [
       for (final item in value)
-        if (item is Map<String, dynamic>) CotsBoundingBox.fromMap(item)
-        else if (item is Map) CotsBoundingBox.fromMap(Map<String, dynamic>.from(item)),
+        if (item is Map<String, dynamic>)
+          CotsBoundingBox.fromMap(item)
+        else if (item is Map)
+          CotsBoundingBox.fromMap(Map<String, dynamic>.from(item)),
     ];
   }
 }

@@ -19,11 +19,6 @@ import 'zone_assignment_service.dart';
 abstract final class SupabaseRecordService {
   static SupabaseClient get _client => Supabase.instance.client;
 
-  static const _yolo26Sha =
-      'e0b0e5e934577706ad60b88fd75ade5992b8da1443b06eedd3cee6b08b874575';
-  static const _yolo11Sha =
-      'a2707702a7232ac4864921f52f45e00e361efda71f73cd3c1efb8599e1da8e9f';
-
   static Future<String> submitCapture({
     required String submissionId,
     String? encounterId,
@@ -103,9 +98,8 @@ abstract final class SupabaseRecordService {
           timeSourceFor(dateTaken: dateTaken, timeFromPhoto: timeFromPhoto),
       'original_time_text': dateTaken?.toIso8601String(),
       'timezone_assumed': false,
-      'model_name': CotsYoloDetector.modelName,
-      'model_sha256':
-          CotsYoloDetector.modelName == 'yolo11' ? _yolo11Sha : _yolo26Sha,
+      'model_name': detection.modelName ?? CotsYoloDetector.modelName,
+      'model_sha256': detection.modelSha256 ?? CotsYoloDetector.modelSha256,
       'source_width': imageWidth,
       'source_height': imageHeight,
       'latitude': latitude,
@@ -127,7 +121,8 @@ abstract final class SupabaseRecordService {
       final areaMessage = AreaMessages.forError(error);
       if (areaMessage != null) throw StateError(areaMessage);
       if (error.code != '23505') rethrow;
-      await _validateCaptureRetry(captureId, uid, area['id'].toString());
+      await _validateCaptureRetry(captureId, uid, area['id'].toString(),
+          detection.modelSha256 ?? CotsYoloDetector.modelSha256);
     }
 
     if (detection.boxes.isNotEmpty) {
@@ -144,20 +139,8 @@ abstract final class SupabaseRecordService {
             'y2': detection.boxes[index].y2,
           },
       ];
-      try {
-        await _client.from('detection_items').insert(items);
-      } on PostgrestException catch (error) {
-        if (error.code != '23505') rethrow;
-        final saved = await _client
-            .from('detection_items')
-            .select('id')
-            .eq('capture_id', captureId);
-        if ((saved as List).length != items.length) {
-          throw StateError(
-            'The saved detection differs from this retry. Its original data was preserved.',
-          );
-        }
-      }
+      await ensureDetectionItems(
+          client: _client, captureId: captureId, expected: items);
     }
 
     if (imageBytes.isEmpty || imageName.trim().isEmpty) {
@@ -223,8 +206,16 @@ abstract final class SupabaseRecordService {
     required EvidenceImagePayload evidence,
     bool? gpsFromPhoto,
     EvidenceProgressCallback? onEvidenceProgress,
+    String? samePhotoCaptureSubmissionId,
   }) async {
     final eliminationId = stableUuid('elimination', submissionId);
+    final copySource = samePhotoCaptureSubmissionId == null
+        ? null
+        : samePhotoCopySource(
+            ownerId: uid,
+            captureId: captureId,
+            captureSubmissionId: samePhotoCaptureSubmissionId,
+            evidence: evidence);
     final capturedAt = (dateTaken ?? DateTime.now()).toUtc();
     final hasGps = latitude != null && longitude != null;
     final row = <String, dynamic>{
@@ -279,8 +270,25 @@ abstract final class SupabaseRecordService {
       capturedAt: capturedAt,
       captureTimeSource: dateTaken == null ? 'device' : 'exif',
       onProgress: onEvidenceProgress,
+      copyFrom: copySource,
     );
     return eliminationId;
+  }
+
+  static EvidenceCopySource samePhotoCopySource(
+      {required String ownerId,
+      required String captureId,
+      required String captureSubmissionId,
+      required EvidenceImagePayload evidence}) {
+    if (stableUuid('capture', captureSubmissionId) != captureId) {
+      throw ArgumentError('The removal photo must belong to its new capture.');
+    }
+    final asset = stableUuid('detection-media-asset', captureSubmissionId);
+    final variant = stableUuid('detection-media-variant', captureSubmissionId);
+    return EvidenceCopySource(
+        bucket: 'detection-evidence',
+        objectPath: '$ownerId/$asset/$variant',
+        sha256Hex: evidence.sha256Hex);
   }
 
   /// Saves the Expert's decision through the server function, which checks
@@ -318,7 +326,7 @@ abstract final class SupabaseRecordService {
 
   /// Pairs each on-screen COTS decision with its stored detection item.
   /// Pending items are left out; the server requires a decision for every
-  /// 20–79% item and refuses to accept any item below 20%.
+  /// 20–84% item and refuses to accept any item below 20%.
   static List<Map<String, String>> buildExpertItemResults({
     required List<String> itemIds,
     required List<PerCotsAdminDecision> decisions,
@@ -352,11 +360,32 @@ abstract final class SupabaseRecordService {
 
   /// Review state shown in the app: the latest Expert decision, or the
   /// server's final status when no decision was needed.
+  /// Counts only explicit approvals of real boxes in the latest saved decision.
+  static int explicitExpertConfirmed(
+      Set<String> itemIds, List<Map<String, dynamic>> decisions) {
+    if (decisions.isEmpty) return 0;
+    final sorted = [...decisions]..sort((a, b) =>
+        ((b['decision_sequence'] as num?) ?? -1)
+            .compareTo((a['decision_sequence'] as num?) ?? -1));
+    final latest = sorted.first;
+    if (latest['decision'] != 'approve' && latest['decision'] != 'correct') {
+      return 0;
+    }
+    final byItem = <String, String>{};
+    for (final entry in (latest['item_decisions'] as List?) ?? []) {
+      if (entry is Map && itemIds.contains(entry['item_id']?.toString())) {
+        byItem[entry['item_id'].toString()] = entry['decision'].toString();
+      }
+    }
+    return byItem.values.where((decision) => decision == 'approve').length;
+  }
+
   static ExpertReviewState reviewStateFor({
     required String status,
     required List<String> itemIds,
     required List<double> itemConfidences,
     required List<Map<String, dynamic>> decisions,
+    int autoApproveMin = CotsConfidencePolicy.autoApproveMin,
   }) {
     Map<String, dynamic>? latest;
     for (final decision in decisions) {
@@ -394,7 +423,7 @@ abstract final class SupabaseRecordService {
             'reject' => PerCotsAdminDecision.rejected,
             _ => !approved
                 ? PerCotsAdminDecision.rejected
-                : (itemConfidences[i] * 100).round() >= 80
+                : (itemConfidences[i] * 100).round() >= autoApproveMin
                     ? PerCotsAdminDecision.confirmed
                     : PerCotsAdminDecision.rejected,
           },
@@ -406,6 +435,47 @@ abstract final class SupabaseRecordService {
 
   static Stream<List<CaptureModel>> watchCaptures({String? ownerId}) {
     return _poll(() => loadCaptures(ownerId: ownerId));
+  }
+
+  /// One-time metadata read for a monthly report, without evidence/name queries
+  /// or waiting for the live captures/removals streams to initialize/cancel.
+  static Future<List<CaptureModel>> loadReportCaptures({
+    required DateTime month,
+    required List<String> siteCodes,
+    SupabaseClient? client,
+  }) async {
+    if (siteCodes.isEmpty) return const [];
+    final database = client ?? _client;
+    // Calendar boundaries in Manila, independent of the computer's timezone.
+    final start = DateTime.utc(month.year, month.month)
+        .subtract(const Duration(hours: 8));
+    final end = DateTime.utc(month.year, month.month + 1)
+        .subtract(const Duration(hours: 8));
+    const pageSize = 200;
+    final captures = <CaptureModel>[];
+    for (var offset = 0;; offset += pageSize) {
+      final rows = await database
+          .from('captures')
+          .select(
+            'id,owner_id,encounter_id,status,auto_approve_min,submitted_at,captured_at,gps_source,capture_time_source,model_name,model_sha256,'
+            'monitoring_areas!inner(code,name,municipality,barangay),'
+            'detection_items(id,item_index,x1,y1,x2,y2,confidence),'
+            'expert_decisions(decision,item_decisions,decision_sequence,expert_id,decided_at),'
+            'confirmed_cots,waiting_cots',
+          )
+          .eq('status', 'finalized')
+          .gte('captured_at', start.toIso8601String())
+          .lt('captured_at', end.toIso8601String())
+          .inFilter('monitoring_areas.code', siteCodes)
+          .order('captured_at', ascending: true)
+          .order('id', ascending: true)
+          .range(offset, offset + pageSize - 1);
+      for (final row in rows) {
+        captures.add(_captureFromRow(row, const {}, const {}));
+      }
+      if (rows.length < pageSize) break;
+    }
+    return captures;
   }
 
   static Future<List<CaptureModel>> loadCaptures({String? ownerId}) async {
@@ -501,8 +571,8 @@ abstract final class SupabaseRecordService {
     // come from person_names_json (full names only). Fall back to the
     // profiles table for databases without it.
     try {
-      final rows = await _client.rpc<dynamic>('person_names_json',
-          params: {'ids': ids.toList()});
+      final rows = await _client
+          .rpc<dynamic>('person_names_json', params: {'ids': ids.toList()});
       return {
         for (final row in (rows as List?) ?? const [])
           (row as Map)['id'].toString(): row['full_name']?.toString() ?? '',
@@ -616,7 +686,10 @@ abstract final class SupabaseRecordService {
         : const <String, dynamic>{};
     final code = area['code']?.toString() ?? '';
     final photo = evidence[row['id'].toString()];
+    final autoApproveMin =
+        CotsConfidencePolicy.storedAutoApproveMin(row['auto_approve_min']);
     final review = reviewStateFor(
+      autoApproveMin: autoApproveMin,
       status: row['status']?.toString() ?? 'pending',
       itemIds: [for (final item in items) item['id'].toString()],
       itemConfidences: [for (final box in boxes) box.score],
@@ -628,6 +701,13 @@ abstract final class SupabaseRecordService {
     return CaptureModel(
       id: row['id'].toString(),
       uid: row['owner_id'].toString(),
+      modelName: row['model_name']?.toString() ?? '',
+      expertConfirmedCount: explicitExpertConfirmed(
+          items.map((item) => item['id'].toString()).toSet(), [
+        for (final d in (row['expert_decisions'] as List?) ?? [])
+          Map<String, dynamic>.from(d as Map)
+      ]),
+      modelSha256: row['model_sha256']?.toString() ?? '',
       submittedBy: names[row['owner_id'].toString()] ?? 'Field personnel',
       imageName: photo?.originalName ?? '',
       storageObjectPath:
@@ -655,6 +735,7 @@ abstract final class SupabaseRecordService {
           review.reviewerId.isEmpty ? '' : names[review.reviewerId] ?? 'Expert',
       adminReviewedAt: review.reviewedAt,
       adminCotsDecisions: review.itemDecisions,
+      autoApproveMin: autoApproveMin,
       zoneAssignedTo: row['zone_review_assigned_to']?.toString() ?? '',
       confirmedCount: (row['confirmed_cots'] as num?)?.round(),
       waitingCount: (row['waiting_cots'] as num?)?.round(),
@@ -747,10 +828,61 @@ abstract final class SupabaseRecordService {
     );
   }
 
+  /// Resume immutable detections without inserting into a finalized capture.
+  /// Existing items must match in full; only absent items may be inserted.
+  static Future<void> ensureDetectionItems({
+    required SupabaseClient client,
+    required String captureId,
+    required List<Map<String, dynamic>> expected,
+  }) async {
+    const fields = [
+      'id',
+      'capture_id',
+      'item_index',
+      'confidence',
+      'x1',
+      'y1',
+      'x2',
+      'y2'
+    ];
+    Future<List<Map<String, dynamic>>> read() async => [
+          for (final row in await client
+              .from('detection_items')
+              .select(fields.join(','))
+              .eq('capture_id', captureId))
+            Map<String, dynamic>.from(row),
+        ];
+    List<Map<String, dynamic>> missing(List<Map<String, dynamic>> saved) {
+      final byId = {for (final row in expected) row['id']: row};
+      final savedIds = <Object?>{};
+      for (final row in saved) {
+        final original = byId[row['id']];
+        if (original == null ||
+            !savedIds.add(row['id']) ||
+            fields.any((key) => row[key] != original[key])) {
+          throw StateError(
+              'The saved detection differs from this retry. Its original data was preserved.');
+        }
+      }
+      return expected.where((row) => !savedIds.contains(row['id'])).toList();
+    }
+
+    final absent = missing(await read());
+    if (absent.isEmpty) return;
+    try {
+      await client.from('detection_items').insert(absent);
+    } on PostgrestException {
+      // Another retry/worker can finish between the read and insert. A frozen
+      // capture error is safe to recover only if every original item now matches.
+      if (missing(await read()).isNotEmpty) rethrow;
+    }
+  }
+
   static Future<void> _validateCaptureRetry(
     String captureId,
     String uid,
     String areaId,
+    String modelSha256,
   ) async {
     final saved = await _client
         .from('captures')
@@ -760,10 +892,7 @@ abstract final class SupabaseRecordService {
     if (saved == null ||
         saved['owner_id'] != uid ||
         saved['area_id'] != areaId ||
-        saved['model_sha256'] !=
-            (CotsYoloDetector.modelName == 'yolo11'
-                ? _yolo11Sha
-                : _yolo26Sha)) {
+        saved['model_sha256'] != modelSha256) {
       throw StateError(
         'The saved capture differs from this retry. Its original data was preserved.',
       );

@@ -127,14 +127,13 @@ class CotsDetectionImageOverlay extends StatelessWidget {
         ? decisions![index]
         : PerCotsAdminDecision.pending;
 
-    final color =
-        boxColorOverride ?? _boxColor(item.confidencePercent, decision);
+    final color = boxColorOverride ?? _boxColor(item, decision);
     final selected = selectedIndex == index;
     final reviewLabel = decision == PerCotsAdminDecision.rejected &&
             item.confidencePercent >= CotsConfidencePolicy.adminReviewMin
         ? ' · Expert rejected'
         : decision == PerCotsAdminDecision.confirmed &&
-                item.confidencePercent < CotsConfidencePolicy.autoApproveMin
+                item.confidencePercent < item.autoApproveMin
             ? ' · Expert accepted'
             : '';
 
@@ -194,15 +193,15 @@ class CotsDetectionImageOverlay extends StatelessWidget {
     );
   }
 
-  Color _boxColor(int confidencePercent, PerCotsAdminDecision decision) {
+  Color _boxColor(CotsDetectionReviewItem item, PerCotsAdminDecision decision) {
     if (decision == PerCotsAdminDecision.rejected) return kDangerRed;
     // Initial auto-accepted decisions may also be stored as "confirmed".
     // Keep those blue rather than implying a manual Expert decision.
-    if (confidencePercent >= CotsConfidencePolicy.autoApproveMin) {
+    if (item.band == CotsVerificationBand.aiAutoApproved) {
       return kInfoBlue;
     }
     if (decision == PerCotsAdminDecision.confirmed) return kSuccessGreen;
-    return switch (CotsConfidencePolicy.bandFromPercent(confidencePercent)) {
+    return switch (item.band) {
       CotsVerificationBand.aiAutoApproved => kInfoBlue,
       CotsVerificationBand.adminReview => kWarningOrange,
       CotsVerificationBand.retakeRequired => kDangerRed,

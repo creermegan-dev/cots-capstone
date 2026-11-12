@@ -3,6 +3,7 @@ import 'dart:io';
 import 'dart:typed_data';
 
 import 'package:crypto/crypto.dart';
+import 'package:flutter/foundation.dart' show compute;
 import 'package:http/http.dart' as http;
 import 'package:image/image.dart' as img;
 import 'package:supabase_flutter/supabase_flutter.dart';
@@ -61,6 +62,13 @@ class EvidenceImagePayload {
   final int height;
 
   int get byteSize => bytes.length;
+
+  /// Image decoding, orientation and JPEG compression must not block the UI.
+  static Future<EvidenceImagePayload> prepareAsync({
+    required Uint8List originalBytes,
+    required String originalName,
+  }) =>
+      compute(_prepareEvidenceInBackground, (originalBytes, originalName));
 
   static EvidenceImagePayload prepare({
     required Uint8List originalBytes,
@@ -196,7 +204,23 @@ abstract interface class EvidenceGateway {
   Future<Map<String, dynamic>?> requestVerification(String variantId);
 }
 
-class SupabaseEvidenceGateway implements EvidenceGateway {
+/// Optional transport optimization; old gateways retain their upload behavior.
+abstract interface class EvidenceCopyGateway {
+  Future<void> copy(String sourceBucket, String sourcePath,
+      String destinationBucket, String destinationPath);
+}
+
+class EvidenceCopySource {
+  const EvidenceCopySource(
+      {required this.bucket,
+      required this.objectPath,
+      required this.sha256Hex});
+  final String bucket;
+  final String objectPath;
+  final String sha256Hex;
+}
+
+class SupabaseEvidenceGateway implements EvidenceGateway, EvidenceCopyGateway {
   SupabaseEvidenceGateway(this.client);
 
   final SupabaseClient client;
@@ -226,6 +250,13 @@ class SupabaseEvidenceGateway implements EvidenceGateway {
   }
 
   @override
+  Future<void> copy(String sourceBucket, String sourcePath,
+      String destinationBucket, String destinationPath) async {
+    await client.storage.from(sourceBucket).copy(sourcePath, destinationPath,
+        destinationBucket: destinationBucket);
+  }
+
+  @override
   Future<void> upload(String bucket, String path, Uint8List bytes) async {
     await client.storage.from(bucket).uploadBinary(
           path,
@@ -247,11 +278,33 @@ class SupabaseEvidenceGateway implements EvidenceGateway {
   @override
   Future<void> link(
       String targetKind, String targetId, String variantId) async {
-    await client.rpc<void>('link_evidence', params: {
-      'target_kind': targetKind,
-      'target': targetId,
-      'variant': variantId,
-    });
+    final (table, column) = switch (targetKind) {
+      'capture' => ('capture_evidence', 'capture_id'),
+      'elimination' => ('elimination_evidence', 'elimination_id'),
+      'survey' => ('survey_evidence', 'survey_id'),
+      _ => throw ArgumentError('Unknown evidence target'),
+    };
+    Future<bool> linked() async =>
+        await client
+            .from(table)
+            .select('variant_id')
+            .eq(column, targetId)
+            .eq('variant_id', variantId)
+            .maybeSingle() !=
+        null;
+    // Asset identity, image bytes and variant identity are verified by the
+    // caller before linking. Do not relink an already-finalized target.
+    if (await linked()) return;
+    try {
+      await client.rpc<void>('link_evidence', params: {
+        'target_kind': targetKind,
+        'target': targetId,
+        'variant': variantId,
+      });
+    } on PostgrestException {
+      // Recover a lost response or concurrent link only for this exact pair.
+      if (!await linked()) rethrow;
+    }
   }
 
   @override
@@ -282,10 +335,17 @@ class EvidenceReservation {
 }
 
 class SupabaseEvidenceService {
-  SupabaseEvidenceService({EvidenceGateway? gateway})
-      : _gateway = gateway ?? SupabaseEvidenceGateway(Supabase.instance.client);
+  SupabaseEvidenceService({
+    EvidenceGateway? gateway,
+    Duration verificationWait = const Duration(seconds: 5),
+    Duration copyWait = const Duration(seconds: 5),
+  })  : _verificationWait = verificationWait,
+        _copyWait = copyWait,
+        _gateway = gateway ?? SupabaseEvidenceGateway(Supabase.instance.client);
 
   final EvidenceGateway _gateway;
+  final Duration _verificationWait;
+  final Duration _copyWait;
 
   Future<EvidenceReservation> reserveUploadAndLink({
     required EvidencePurpose purpose,
@@ -298,6 +358,7 @@ class SupabaseEvidenceService {
     required DateTime capturedAt,
     required String captureTimeSource,
     EvidenceProgressCallback? onProgress,
+    EvidenceCopySource? copyFrom,
   }) async {
     final bucket = purpose == EvidencePurpose.detection
         ? 'detection-evidence'
@@ -305,6 +366,14 @@ class SupabaseEvidenceService {
     final targetKind =
         purpose == EvidencePurpose.detection ? 'capture' : 'elimination';
     final objectPath = '$ownerId/$assetId/$variantId';
+    if (copyFrom != null &&
+        (purpose != EvidencePurpose.elimination ||
+            copyFrom.bucket != 'detection-evidence' ||
+            !copyFrom.objectPath.startsWith('$ownerId/') ||
+            copyFrom.sha256Hex != payload.sha256Hex)) {
+      throw ArgumentError(
+          'Only the same owner\'s matching detection photo can be copied for removal evidence.');
+    }
     final asset = <String, dynamic>{
       'id': assetId,
       'owner_id': ownerId,
@@ -345,12 +414,32 @@ class SupabaseEvidenceService {
       await onProgress?.call(EvidenceUploadStage.assetReserved);
       await _reserveVariant(variant);
       await onProgress?.call(EvidenceUploadStage.variantReserved);
-      await _uploadOrRecover(bucket, objectPath, payload);
+      var copied = false;
+      final copyGateway = _gateway is EvidenceCopyGateway
+          ? _gateway as EvidenceCopyGateway
+          : null;
+      if (copyFrom != null && copyGateway != null) {
+        try {
+          await copyGateway
+              .copy(copyFrom.bucket, copyFrom.objectPath, bucket, objectPath)
+              .timeout(_copyWait);
+          copied = true;
+        } catch (_) {
+          // Unsupported copy, interrupted response or immutable destination:
+          // use the original upload/recovery path. Neither object is overwritten.
+        }
+      }
+      if (!copied) await _uploadOrRecover(bucket, objectPath, payload);
       await onProgress?.call(EvidenceUploadStage.uploaded);
       await _gateway.link(targetKind, targetId, variantId);
       await onProgress?.call(EvidenceUploadStage.linked);
       try {
-        final response = await _gateway.requestVerification(variantId);
+        // The object is safely uploaded and linked. A cold/slow worker must
+        // not hold Submit open; its request continues after this local timeout.
+        // Only the trusted worker can finalize the record, also via its queue.
+        final response = await _gateway
+            .requestVerification(variantId)
+            .timeout(_verificationWait);
         serverState = _serverState(response);
         await onProgress?.call(EvidenceUploadStage.verificationRequested);
         if (serverState == EvidenceServerState.rejected) {
@@ -392,14 +481,13 @@ class SupabaseEvidenceService {
   }
 
   Future<void> _reserveAsset(Map<String, dynamic> expected) async {
-    var saved = await _gateway.getAsset(expected['id'] as String);
-    if (saved == null) {
-      try {
-        await _gateway.insertAsset(expected);
-      } catch (_) {
-        saved = await _gateway.getAsset(expected['id'] as String);
-        if (saved == null) rethrow;
-      }
+    Map<String, dynamic>? saved;
+    try {
+      await _gateway.insertAsset(expected);
+    } catch (_) {
+      // A duplicate or lost INSERT response still needs exact identity checks.
+      saved = await _gateway.getAsset(expected['id'] as String);
+      if (saved == null) rethrow;
     }
     saved ??= expected;
     _requireMatching(
@@ -422,14 +510,12 @@ class SupabaseEvidenceService {
   }
 
   Future<void> _reserveVariant(Map<String, dynamic> expected) async {
-    var saved = await _gateway.getVariant(expected['id'] as String);
-    if (saved == null) {
-      try {
-        await _gateway.insertVariant(expected);
-      } catch (_) {
-        saved = await _gateway.getVariant(expected['id'] as String);
-        if (saved == null) rethrow;
-      }
+    Map<String, dynamic>? saved;
+    try {
+      await _gateway.insertVariant(expected);
+    } catch (_) {
+      saved = await _gateway.getVariant(expected['id'] as String);
+      if (saved == null) rethrow;
     }
     saved ??= expected;
     _requireMatching(
@@ -477,6 +563,10 @@ class SupabaseEvidenceService {
     Object? uploadError;
     try {
       await _gateway.upload(bucket, path, payload.bytes);
+      // Storage acknowledged this immutable upload. Trusted server verification
+      // checks its bytes before finalization; downloading the entire photo here
+      // adds another full transfer to every successful submission.
+      return;
     } catch (error) {
       uploadError = error;
     }
@@ -490,8 +580,7 @@ class SupabaseEvidenceService {
         );
       }
     } catch (error) {
-      if (uploadError != null) throw uploadError;
-      rethrow;
+      throw uploadError;
     }
   }
 
@@ -551,3 +640,7 @@ abstract final class PrivateEvidenceSessionGuard {
     }
   }
 }
+
+EvidenceImagePayload _prepareEvidenceInBackground((Uint8List, String) input) =>
+    EvidenceImagePayload.prepare(
+        originalBytes: input.$1, originalName: input.$2);

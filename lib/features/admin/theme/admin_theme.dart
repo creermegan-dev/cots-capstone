@@ -1,19 +1,19 @@
 import 'package:flutter/material.dart';
-import 'package:google_fonts/google_fonts.dart';
 import 'package:intl/intl.dart';
+import '../../../core/cots_theme.dart';
 
 /// Admin panel color palette (separate from user-facing [cots_colors]).
 abstract final class AdminColors {
-  static const Color sidebarTop = Color(0xFF0F2744);
-  static const Color sidebarBottom = Color(0xFF143D52);
-  static const Color sidebarAccentGlow = Color(0x3318C6D9);
-  static const Color navActive = Color(0xFF2563EB);
+  static const Color sidebarTop = Color(0xFF102B3B);
+  static const Color sidebarBottom = sidebarTop;
+  static const Color sidebarAccentGlow = Colors.transparent;
+  static const Color navActive = Color(0xFF24515B);
   static const Color navText = Color(0xFFB8C5D6);
   static const Color navTextActive = Colors.white;
-  static const Color contentBg = Color(0xFFF3F5F8);
+  static const Color contentBg = CotsUi.background;
   static const Color cardWhite = Colors.white;
-  static const Color headerTitle = Color(0xFF102A43);
-  static const Color muted = Color(0xFF627D98);
+  static const Color headerTitle = CotsUi.text;
+  static const Color muted = CotsUi.secondaryText;
 
   static const Color statBlue = Color(0xFF2563EB);
   static const Color statRed = Color(0xFFE53935);
@@ -83,7 +83,7 @@ abstract final class AdminDateTimeTokens {
         foregroundColor: const Color(0xFF64748B),
         backgroundColor: Colors.white,
         padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 12),
-        shape: const StadiumBorder(),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
         side: const BorderSide(color: _outlineBorder),
       );
 
@@ -112,8 +112,8 @@ abstract final class AdminDateTimeTokens {
 
 ThemeData adminTheme(BuildContext context) {
   final base = Theme.of(context);
-  final inter = GoogleFonts.interTextTheme(base.textTheme);
-  final primaryInter = GoogleFonts.interTextTheme(base.primaryTextTheme);
+  final inter = base.textTheme;
+  final primaryInter = base.primaryTextTheme;
   return Theme.of(context).copyWith(
     textTheme: inter.apply(decoration: TextDecoration.none),
     primaryTextTheme: primaryInter.apply(decoration: TextDecoration.none),

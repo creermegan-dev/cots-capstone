@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 
 import 'auth_layout.dart';
 
-/// Full-width gradient CTA used on auth screens.
+/// Full-width primary action with shared auth sizing and feedback.
 class CotsGradientPrimaryButton extends StatefulWidget {
   const CotsGradientPrimaryButton({
     super.key,
@@ -25,10 +25,7 @@ class _CotsGradientPrimaryButtonState extends State<CotsGradientPrimaryButton> {
 
   @override
   Widget build(BuildContext context) {
-    final desktop = authUseDesktopFields(context);
-    final radius = desktop ? AuthTokens.buttonRadius : 16.0;
-    final height = desktop ? AuthTokens.buttonHeight : null;
-    final vPad = desktop ? 0.0 : 16.0;
+    const radius = AuthTokens.buttonRadius;
 
     return MouseRegion(
       onEnter: (_) => setState(() => _hover = true),
@@ -36,36 +33,12 @@ class _CotsGradientPrimaryButtonState extends State<CotsGradientPrimaryButton> {
       child: AnimatedContainer(
         duration: const Duration(milliseconds: 180),
         curve: Curves.easeOutCubic,
-        height: height,
+        constraints: const BoxConstraints(minHeight: AuthTokens.buttonHeight),
         decoration: BoxDecoration(
           borderRadius: BorderRadius.circular(radius),
-          gradient: LinearGradient(
-            colors: [
-              AuthTokens.gradientStart.withValues(
-                alpha: widget.isLoading ? 0.65 : 1,
-              ),
-              AuthTokens.gradientEnd.withValues(
-                alpha: widget.isLoading ? 0.65 : 1,
-              ),
-            ],
-            begin: Alignment.centerLeft,
-            end: Alignment.centerRight,
+          color: AuthTokens.focusTeal.withValues(
+            alpha: widget.isLoading ? 0.60 : (_hover ? 0.92 : 1),
           ),
-          boxShadow: _hover && desktop && !widget.isLoading
-              ? [
-                  BoxShadow(
-                    color: AuthTokens.gradientStart.withValues(alpha: 0.35),
-                    blurRadius: 18,
-                    offset: const Offset(0, 8),
-                  ),
-                ]
-              : [
-                  BoxShadow(
-                    color: AuthTokens.gradientStart.withValues(alpha: 0.25),
-                    blurRadius: desktop ? 12 : 8,
-                    offset: Offset(0, desktop ? 6 : 4),
-                  ),
-                ],
         ),
         child: Material(
           color: Colors.transparent,
@@ -73,7 +46,7 @@ class _CotsGradientPrimaryButtonState extends State<CotsGradientPrimaryButton> {
             onTap: widget.isLoading ? null : widget.onPressed,
             borderRadius: BorderRadius.circular(radius),
             child: Padding(
-              padding: EdgeInsets.symmetric(vertical: vPad),
+              padding: const EdgeInsets.symmetric(vertical: 14, horizontal: 16),
               child: Center(
                 child: AnimatedSwitcher(
                   duration: const Duration(milliseconds: 200),
@@ -90,11 +63,11 @@ class _CotsGradientPrimaryButtonState extends State<CotsGradientPrimaryButton> {
                       : Text(
                           widget.label,
                           key: const ValueKey('label'),
-                          style: TextStyle(
+                          style: const TextStyle(
                             color: Colors.white,
-                            fontWeight: FontWeight.w700,
-                            fontSize: desktop ? 16 : 16,
-                            letterSpacing: 0.2,
+                            fontWeight: FontWeight.w600,
+                            fontSize: 16,
+                            letterSpacing: 0,
                           ),
                         ),
                 ),

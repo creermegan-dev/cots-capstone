@@ -193,7 +193,7 @@ class _ViewNotesModalState extends State<_ViewNotesModal> {
                           'View Notes',
                           style: TextStyle(
                               fontSize: 20,
-                              fontWeight: FontWeight.w800,
+                              fontWeight: FontWeight.w600,
                               color: AdminColors.headerTitle),
                         ),
                         const SizedBox(height: 6),
@@ -230,7 +230,7 @@ class _ViewNotesModalState extends State<_ViewNotesModal> {
                     'User Remarks',
                     style: TextStyle(
                         fontSize: 12,
-                        fontWeight: FontWeight.w800,
+                        fontWeight: FontWeight.w600,
                         color: AdminColors.headerTitle),
                   ),
                   const SizedBox(height: 8),
@@ -254,7 +254,7 @@ class _ViewNotesModalState extends State<_ViewNotesModal> {
                     'Submitted By',
                     style: TextStyle(
                         fontSize: 12,
-                        fontWeight: FontWeight.w800,
+                        fontWeight: FontWeight.w600,
                         color: AdminColors.headerTitle),
                   ),
                   const SizedBox(height: 6),
@@ -270,7 +270,7 @@ class _ViewNotesModalState extends State<_ViewNotesModal> {
                     'Submitted On',
                     style: TextStyle(
                         fontSize: 12,
-                        fontWeight: FontWeight.w800,
+                        fontWeight: FontWeight.w600,
                         color: AdminColors.headerTitle),
                   ),
                   const SizedBox(height: 6),

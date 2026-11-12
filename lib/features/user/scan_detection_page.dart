@@ -1,3 +1,4 @@
+import 'no_cots_survey_page.dart';
 import 'dart:async';
 import 'dart:ui' as ui;
 
@@ -21,6 +22,8 @@ import '../../models/photo_location_rule.dart';
 import '../../models/photo_source.dart';
 import '../../models/cots_confidence_policy.dart';
 import '../../models/cots_detection_result.dart';
+import '../../models/detection_model.dart';
+import 'widgets/detection_model_picker.dart';
 import '../../models/cots_density.dart';
 import '../../models/follow_up_monitoring_model.dart';
 import '../../widgets/cots_detection_image_overlay.dart';
@@ -62,14 +65,14 @@ const scanRemovalConfirmationText =
 
 /// Whether a photo must be retried, replaced or removed before continuing:
 /// the AI could not process it, or (first encounter only) it shows no COTS.
-/// Monthly visits may have zero COTS.
+/// A zero result is not an absence survey; both photo flows require COTS.
 bool scanPhotoNeedsAttention({
   required bool isFollowUp,
   required bool analysisFailed,
   int? detectedCount,
   bool locationProblem = false,
 }) =>
-    locationProblem || analysisFailed || (!isFollowUp && detectedCount == 0);
+    locationProblem || analysisFailed || detectedCount == 0;
 
 /// Phone location status on the record page (Stage 7).
 enum ScanLocationAccess { checking, ready, serviceOff, denied, deniedForever }
@@ -112,6 +115,32 @@ class _ScanDetectionPageState extends State<ScanDetectionPage>
   _DetectionStep _step = _DetectionStep.upload;
   final List<_PendingScanImage> _images = [];
   String? _detectionProgress;
+  DetectionModel _selectedModel = DetectionModel.yolo11;
+  bool _modelLocked = false;
+  CotsYoloDetector? _detector;
+  CotsYoloDetector get _activeDetector =>
+      _detector ??= CotsYoloDetector.forModel(_selectedModel);
+
+  Future<void> _changeModel(DetectionModel value) async {
+    if (_isBusy || _modelLocked || value == _selectedModel) return;
+    final previous = _detector;
+    setState(() {
+      _isBusy = true;
+      _selectedModel = value;
+      _detector = null;
+      _removalConfirmed = false;
+      for (final image in _images) {
+        image.detection = null;
+        image.detectionError = null;
+      }
+    });
+    try {
+      await previous?.dispose();
+    } finally {
+      if (mounted) setState(() => _isBusy = false);
+    }
+  }
+
   double? _deviceGpsLat;
   double? _deviceGpsLng;
   DateTime? _deviceGpsAt;
@@ -157,7 +186,7 @@ class _ScanDetectionPageState extends State<ScanDetectionPage>
   int get _totalCotsDetected =>
       _images.fold(0, (sum, img) => sum + (img.detection?.count ?? 0));
 
-  /// COTS in the 20-79% band: sent to the Expert after submitting.
+  /// COTS in the 20-84% band: sent to the Expert after submitting.
   int get _waitingForExpert => _images.fold(0, (sum, img) {
         final boxes = img.detection?.boxes ?? const <CotsBoundingBox>[];
         return sum +
@@ -275,6 +304,8 @@ class _ScanDetectionPageState extends State<ScanDetectionPage>
   @override
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
+    final detector = _detector;
+    if (detector != null) unawaited(detector.dispose());
     _stopLiveClock();
     _notesController.dispose();
     _depthController.dispose();
@@ -448,7 +479,7 @@ class _ScanDetectionPageState extends State<ScanDetectionPage>
                   '$count COTS DETECTED',
                   style: const TextStyle(
                     color: Colors.white,
-                    fontWeight: FontWeight.w800,
+                    fontWeight: FontWeight.w600,
                     fontSize: 12,
                     letterSpacing: 0.6,
                   ),
@@ -536,6 +567,30 @@ class _ScanDetectionPageState extends State<ScanDetectionPage>
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
+        if (SupabaseConfig.isConfigured && !_isLinkedRemoval) ...[
+          const Text('What did you observe?',
+              style: TextStyle(fontWeight: FontWeight.bold)),
+          const SizedBox(height: 8),
+          const Text(
+              'COTS observed — upload photos below, or report a survey without COTS.'),
+          OutlinedButton.icon(
+              onPressed: _isBusy || _modelLocked
+                  ? null
+                  : () async {
+                      final submitted = await Navigator.of(context).push<bool>(
+                          MaterialPageRoute(
+                              builder: (_) => NoCotsSurveyPage(
+                                  siteCode:
+                                      widget.followUpAssignment?.areaId)));
+                      if (submitted == true && mounted) {
+                        Navigator.of(context).pushReplacement(MaterialPageRoute(
+                            builder: (_) => const RecordsPage()));
+                      }
+                    },
+              icon: const Icon(Icons.fact_check_outlined),
+              label: const Text('No COTS observed during this survey')),
+          const SizedBox(height: 12),
+        ],
         _sectionHeader(
           _isFollowUp
               ? 'Upload Monitoring Photos'
@@ -549,6 +604,13 @@ class _ScanDetectionPageState extends State<ScanDetectionPage>
                   : 'Select one or more underwater photos for AI crown-of-thorns detection.',
         ),
         const SizedBox(height: 12),
+        if (!_isFollowUp) ...[
+          DetectionModelPicker(
+              value: _selectedModel,
+              enabled: !_isBusy && !_modelLocked,
+              onChanged: (value) => unawaited(_changeModel(value))),
+          const SizedBox(height: 12),
+        ],
         _card(
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -836,7 +898,7 @@ class _ScanDetectionPageState extends State<ScanDetectionPage>
                       style: const TextStyle(
                         color: kTextNavy,
                         fontSize: 36,
-                        fontWeight: FontWeight.w900,
+                        fontWeight: FontWeight.w700,
                         height: 1,
                       ),
                     ),
@@ -955,7 +1017,7 @@ class _ScanDetectionPageState extends State<ScanDetectionPage>
                 style: TextStyle(
                   color: kTextNavy,
                   fontSize: 14,
-                  fontWeight: FontWeight.w800,
+                  fontWeight: FontWeight.w600,
                 ),
               ),
               const SizedBox(height: 5),
@@ -1316,7 +1378,7 @@ class _ScanDetectionPageState extends State<ScanDetectionPage>
                           statusLabel,
                           style: TextStyle(
                             color: statusColor,
-                            fontWeight: FontWeight.w800,
+                            fontWeight: FontWeight.w600,
                             fontSize: 17,
                           ),
                         ),
@@ -1338,7 +1400,7 @@ class _ScanDetectionPageState extends State<ScanDetectionPage>
                         '$pct%',
                         style: TextStyle(
                           color: statusColor,
-                          fontWeight: FontWeight.w900,
+                          fontWeight: FontWeight.w700,
                           fontSize: 22,
                         ),
                       ),
@@ -1366,7 +1428,7 @@ class _ScanDetectionPageState extends State<ScanDetectionPage>
                     'Infestation requires a field assessment',
                     style: TextStyle(
                       color: statusColor,
-                      fontWeight: FontWeight.w800,
+                      fontWeight: FontWeight.w600,
                       fontSize: 13,
                     ),
                   )),
@@ -1403,7 +1465,7 @@ class _ScanDetectionPageState extends State<ScanDetectionPage>
                       style: const TextStyle(
                         color: kTextNavy,
                         fontSize: 36,
-                        fontWeight: FontWeight.w900,
+                        fontWeight: FontWeight.w700,
                         height: 1,
                       ),
                     ),
@@ -1637,7 +1699,7 @@ class _ScanDetectionPageState extends State<ScanDetectionPage>
             style: const TextStyle(
               color: kTextNavy,
               fontSize: 15,
-              fontWeight: FontWeight.w800,
+              fontWeight: FontWeight.w600,
             ),
           ),
         ),
@@ -1789,8 +1851,7 @@ class _ScanDetectionPageState extends State<ScanDetectionPage>
               'Analyzing ${i + 1} of ${_images.length}: ${pending.fileName}';
         });
         try {
-          pending.detection =
-              await CotsYoloDetector.instance.detect(pending.bytes);
+          pending.detection = await _activeDetector.detect(pending.bytes);
           pending.detectionError = null;
         } catch (e) {
           pending.detection = null;
@@ -1917,7 +1978,26 @@ class _ScanDetectionPageState extends State<ScanDetectionPage>
     var queued = 0;
     final captureIds = <String>[];
     final submissionWarnings = <String>[];
+    var phase = 'Preparing submission';
+    var photoNumber = 1;
+    final submitClock = Stopwatch()..start();
+    void showProgress() {
+      if (mounted) {
+        setState(() => _detectionProgress =
+            'Photo $photoNumber of ${ready.length} · $phase · ${submitClock.elapsed.inSeconds}s');
+      }
+    }
+
+    final progressTimer =
+        Timer.periodic(const Duration(seconds: 1), (_) => showProgress());
+    showProgress();
     try {
+      // Results already contain the model identity and boxes. Uploading needs
+      // the photo and results, not the native model/session's working memory.
+      final detector = _detector;
+      _detector = null;
+      await detector?.dispose();
+      if (!mounted) return;
       if (_isFollowUp) {
         if (!await FollowUpReassignmentRepository.isResponsible(
             widget.followUpAssignment!, uid, _surveyDate)) {
@@ -1940,6 +2020,7 @@ class _ScanDetectionPageState extends State<ScanDetectionPage>
       ].where((s) => s.isNotEmpty).join('\n');
 
       for (var i = 0; i < ready.length; i++) {
+        photoNumber = i + 1;
         final img = ready[i];
         if (img.savedCaptureId != null) {
           if (_isFollowUp) captureIds.add(img.savedCaptureId!);
@@ -1957,7 +2038,12 @@ class _ScanDetectionPageState extends State<ScanDetectionPage>
                 ? (img.detection?.count ?? 0)
                 : removalTotal;
 
+        _modelLocked = true;
         final result = await OfflineSubmissionService.instance.submitRecord(
+          onProgress: (value) {
+            phase = value;
+            showProgress();
+          },
           onWarning: submissionWarnings.add,
           submissionId: img.submissionId,
           followUpSurveyId: _isFollowUp ? _followUpSurveyId : null,
@@ -2002,6 +2088,8 @@ class _ScanDetectionPageState extends State<ScanDetectionPage>
       }
 
       if (_isFollowUp) {
+        phase = 'Saving monthly visit';
+        showProgress();
         final assignment = widget.followUpAssignment!;
         final surveyPending =
             await OfflineSubmissionService.instance.submitSurvey(
@@ -2069,8 +2157,8 @@ class _ScanDetectionPageState extends State<ScanDetectionPage>
                     : submissionWarnings.isNotEmpty
                         ? submissionWarnings.first
                         : submitted == 1
-                            ? 'Citizen science record submitted successfully.'
-                            : '$submitted citizen science records submitted successfully.',
+                            ? 'Record submitted successfully.'
+                            : '$submitted records submitted successfully.',
           ),
         ),
       );
@@ -2088,6 +2176,8 @@ class _ScanDetectionPageState extends State<ScanDetectionPage>
         ),
       );
     } finally {
+      progressTimer.cancel();
+      submitClock.stop();
       if (mounted) {
         setState(() {
           _isBusy = false;
@@ -2326,7 +2416,7 @@ class _ScanDetectionPageState extends State<ScanDetectionPage>
                 ? '1 photo needs attention'
                 : '${problems.length} photos need attention',
             style: const TextStyle(
-                color: kDangerRed, fontWeight: FontWeight.w800, fontSize: 14),
+                color: kDangerRed, fontWeight: FontWeight.w600, fontSize: 14),
           ),
           const SizedBox(height: 4),
           const Text('Fix these photos before continuing.',
@@ -2446,7 +2536,7 @@ class _ScanDetectionPageState extends State<ScanDetectionPage>
       _detectionProgress = 'Analyzing ${img.fileName}';
     });
     try {
-      img.detection = await CotsYoloDetector.instance.detect(img.bytes);
+      img.detection = await _activeDetector.detect(img.bytes);
       img.detectionError = null;
     } catch (e) {
       img.detection = null;
@@ -2809,7 +2899,7 @@ class _ScanDetectionPageState extends State<ScanDetectionPage>
           style: const TextStyle(
             color: kTextNavy,
             fontSize: 16,
-            fontWeight: FontWeight.w800,
+            fontWeight: FontWeight.w600,
           ),
         ),
         const SizedBox(height: 4),
@@ -2858,7 +2948,7 @@ class _ScanDetectionPageState extends State<ScanDetectionPage>
                       style: TextStyle(
                         color: assigned ? kTextNavy : kMutedGray,
                         fontSize: 16,
-                        fontWeight: FontWeight.w800,
+                        fontWeight: FontWeight.w600,
                         height: 1.3,
                       ),
                     ),
@@ -2883,7 +2973,7 @@ class _ScanDetectionPageState extends State<ScanDetectionPage>
                   assigned ? 'Assigned' : 'Unassigned',
                   style: TextStyle(
                     color: assigned ? kPrimaryTeal : kMutedGray,
-                    fontWeight: FontWeight.w800,
+                    fontWeight: FontWeight.w600,
                     fontSize: 12,
                   ),
                 ),
@@ -3012,7 +3102,7 @@ class _ScanDetectionPageState extends State<ScanDetectionPage>
                             style: TextStyle(
                               color: kTextNavy,
                               fontSize: 17,
-                              fontWeight: FontWeight.w800,
+                              fontWeight: FontWeight.w600,
                             ),
                           ),
                         ),
@@ -3214,7 +3304,7 @@ class _ConfidenceGauge extends StatelessWidget {
                   '$clamped%',
                   style: const TextStyle(
                     color: kTextNavy,
-                    fontWeight: FontWeight.w900,
+                    fontWeight: FontWeight.w700,
                     fontSize: 16,
                   ),
                 ),

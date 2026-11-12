@@ -49,7 +49,7 @@ class AdminZoneMonitoringMap extends StatelessWidget {
           const Text('Dive sites & detections',
               style: TextStyle(
                   fontSize: 17,
-                  fontWeight: FontWeight.w800,
+                  fontWeight: FontWeight.w600,
                   color: AdminColors.headerTitle)),
           if (located.isEmpty) ...[
             const SizedBox(height: 12),

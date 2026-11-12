@@ -7,6 +7,7 @@ import '../../admin/layout/admin_nav_entries.dart';
 import '../../admin/layout/admin_responsive_chrome.dart';
 import '../../admin/screens/admin_records_submissions_screen.dart';
 import '../../admin/screens/admin_map_monitoring_screen.dart';
+import '../../admin/screens/monthly_report_screen.dart';
 import '../../admin/theme/admin_theme.dart';
 import '../../auth/auth_navigation.dart';
 import '../models/expert_action_item.dart';
@@ -42,6 +43,7 @@ class ExpertShellScreen extends StatefulWidget {
     'Assessments',
     'Map Monitoring',
     'Notifications',
+    'Reports',
   ];
 
   /// The tab where the Expert acts on a "Needs your action" item.
@@ -118,9 +120,10 @@ class _ExpertShellScreenState extends State<ExpertShellScreen> {
               body: switch (_index) {
                 0 => ExpertDashboardScreen(
                     actions: _actions,
+                    onOpenPersonnel: () => setState(() => _index = 2),
+                    onOpenNotifications: () => setState(() => _index = 6),
                     onOpen: (place) => setState(
                         () => _index = ExpertShellScreen.tabFor(place)),
-                    onOpenMap: () => setState(() => _index = 5),
                   ),
                 6 => ExpertNotificationsScreen(
                     actions: _actions,
@@ -136,6 +139,7 @@ class _ExpertShellScreenState extends State<ExpertShellScreen> {
                 3 => const ExpertReassignmentsScreen(),
                 4 => const ExpertAssessmentsScreen(),
                 5 => const AdminMapMonitoringScreen(),
+                7 => const MonthlyReportScreen(showBack: false),
                 _ => ExpertNotificationsScreen(
                     actions: _actions,
                     noticesStream: widget.noticesStream,

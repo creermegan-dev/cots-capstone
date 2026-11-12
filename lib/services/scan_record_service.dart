@@ -108,6 +108,9 @@ abstract final class ScanRecordService {
         );
       }
       final removalId = await RemovalRecordService.submit(
+        // Only this new encounter uses the exact photo already uploaded above.
+        // Evidence for an older linked capture must use its own new upload.
+        samePhotoCaptureSubmissionId: isNewEncounter ? submissionId : null,
         encounterId: isNewEncounter ? encounterId : null,
         submissionId: submissionId == null ? null : '${submissionId}_removal',
         captureId: captureId,

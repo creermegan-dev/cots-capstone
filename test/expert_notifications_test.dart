@@ -329,6 +329,7 @@ void main() {
       'Assessments',
       'Map Monitoring',
       'Notifications',
+      'Reports',
     ]);
     expect(ExpertShellScreen.tabFor(ExpertActionPlace.verification), 1);
     expect(ExpertShellScreen.tabFor(ExpertActionPlace.reassignments), 3);

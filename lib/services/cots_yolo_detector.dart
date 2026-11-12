@@ -3,17 +3,28 @@ import 'package:flutter_onnxruntime/flutter_onnxruntime.dart';
 import 'package:image/image.dart' as img;
 
 import '../models/cots_detection_result.dart';
+import '../models/detection_model.dart';
 import 'yolo_image_preprocess.dart';
 import 'yolo_postprocess.dart';
 
 /// On-device COTS detector using YOLO11s, with an optional YOLO26 comparison.
 class CotsYoloDetector {
-  CotsYoloDetector._();
+  CotsYoloDetector._() : selectedModel = null;
+  CotsYoloDetector.forModel(this.selectedModel);
+  final DetectionModel? selectedModel;
+  String get _name => selectedModel?.id ?? modelName;
+  String get _sha => selectedModel?.sha256 ?? modelSha256;
+  String get _asset => selectedModel?.assetPath ?? modelAssetPath;
+  bool get _endToEnd => selectedModel?.endToEnd ?? !_usesYolo11;
+  Future<void> _work = Future<void>.value();
 
   static final CotsYoloDetector instance = CotsYoloDetector._();
 
   static const modelName =
       String.fromEnvironment('COTS_MODEL', defaultValue: 'yolo11');
+  static const modelSha256 = modelName == 'yolo11'
+      ? 'a2707702a7232ac4864921f52f45e00e361efda71f73cd3c1efb8599e1da8e9f'
+      : 'e0b0e5e934577706ad60b88fd75ade5992b8da1443b06eedd3cee6b08b874575';
   static const _usesYolo11 = modelName == 'yolo11';
   static const modelAssetPath = _usesYolo11
       ? 'assets/models/yolov8_best.onnx'
@@ -39,10 +50,12 @@ class CotsYoloDetector {
   }
 
   Future<void> _loadSession() async {
-    if (modelName != 'yolo26' && modelName != 'yolo11') {
+    if (selectedModel == null &&
+        modelName != 'yolo26' &&
+        modelName != 'yolo11') {
       throw ArgumentError('COTS_MODEL must be yolo26 or yolo11.');
     }
-    final session = await _runtime.createSessionFromAsset(modelAssetPath);
+    final session = await _runtime.createSessionFromAsset(_asset);
     try {
       final inputs = await session.getInputInfo();
       final outputs = await session.getOutputInfo();
@@ -56,7 +69,7 @@ class CotsYoloDetector {
       _outputName = outputs.first['name'] as String? ?? 'output0';
 
       if (kDebugMode) {
-        debugPrint('ONNX model loaded: $modelAssetPath');
+        debugPrint('ONNX model loaded: $_asset');
         debugPrint('ONNX inputs: $inputs');
         debugPrint('ONNX outputs: $outputs');
       }
@@ -67,7 +80,14 @@ class CotsYoloDetector {
     }
   }
 
-  Future<CotsDetectionResult> detect(Uint8List imageBytes) async {
+  Future<CotsDetectionResult> detect(Uint8List imageBytes) {
+    final result = _work.then((_) => _detect(imageBytes));
+    _work =
+        result.then<void>((_) {}, onError: (Object error, StackTrace stack) {});
+    return result;
+  }
+
+  Future<CotsDetectionResult> _detect(Uint8List imageBytes) async {
     await _ensureSession();
     final session = _session!;
     final inputName = _inputName!;
@@ -94,7 +114,7 @@ class CotsYoloDetector {
         for (final value in outputs.values) {
           await value.dispose();
         }
-        throw StateError('$modelName did not return its expected output.');
+        throw StateError('$_name did not return its expected output.');
       }
 
       try {
@@ -105,22 +125,28 @@ class CotsYoloDetector {
         }
         if (shape.length != 3 ||
             shape[0] != 1 ||
-            shape[1] != (_usesYolo11 ? 5 : 100) ||
-            shape[2] != (_usesYolo11 ? 8400 : 6)) {
+            shape[1] != (_endToEnd ? 100 : 5) ||
+            shape[2] != (_endToEnd ? 6 : 8400)) {
           throw FormatException(
-              'Unexpected bundled $modelName output shape: $shape.');
+              'Unexpected bundled $_name output shape: $shape.');
         }
         final boxes = _postprocessor.decode(flat, shape, preprocessed.meta,
-            endToEnd: !_usesYolo11);
+            endToEnd: _endToEnd);
         if (kDebugMode) {
-          debugPrint('$modelName detections after processing: ${boxes.length}');
+          debugPrint('$_name detections after processing: ${boxes.length}');
           if (boxes.isNotEmpty) {
             debugPrint(
               'YOLO top score: ${boxes.first.score.toStringAsFixed(3)}',
             );
           }
         }
-        return summarize(boxes);
+        final result = summarize(boxes);
+        return CotsDetectionResult(
+            count: result.count,
+            confidence: result.confidence,
+            boxes: result.boxes,
+            modelName: _name,
+            modelSha256: _sha);
       } finally {
         await outputTensor.dispose();
         for (final value in outputs.values) {
@@ -135,6 +161,7 @@ class CotsYoloDetector {
   }
 
   Future<void> dispose() async {
+    await _work;
     await _session?.close();
     _session = null;
     _inputName = null;

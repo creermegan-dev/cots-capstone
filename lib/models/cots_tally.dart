@@ -15,7 +15,7 @@ class CotsTally {
   /// Counted: the Expert did not reject them (Stage 1-2 rules).
   final int confirmed;
 
-  /// Waiting for the Expert (20-79% COTS, or another Diver's record in an
+  /// Waiting for the Expert (20-84% COTS, or another Diver's record in an
   /// assigned zone).
   final int waiting;
 

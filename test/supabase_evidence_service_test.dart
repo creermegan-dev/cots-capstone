@@ -1,6 +1,8 @@
+import 'dart:async';
 import 'dart:typed_data';
 
 import 'package:cots_monitor/services/supabase_evidence_service.dart';
+import 'package:cots_monitor/services/supabase_record_service.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:image/image.dart' as img;
 
@@ -44,6 +46,9 @@ void main() {
       expect(gateway.links, {'capture:capture:variant'});
       expect(gateway.variants['variant']!['upload_status'], isNull);
       expect(stages.last, EvidenceUploadStage.awaitingVerification);
+      expect(gateway.downloadAttempts, 0);
+      expect(gateway.assetReads, 0);
+      expect(gateway.variantReads, 0);
     });
 
     test('recovers when upload succeeded but its response was lost', () async {
@@ -63,6 +68,64 @@ void main() {
 
       expect(gateway.objects, hasLength(1));
       expect(gateway.links, hasLength(1));
+      expect(gateway.downloadAttempts, 1);
+    });
+
+    test('slow verification returns queued after safe upload and link',
+        () async {
+      final worker = Completer<Map<String, dynamic>?>();
+      gateway.pendingVerification = worker.future;
+      service = SupabaseEvidenceService(
+        gateway: gateway,
+        verificationWait: const Duration(milliseconds: 10),
+      );
+      final result = await service
+          .reserveUploadAndLink(
+            purpose: EvidencePurpose.detection,
+            ownerId: 'owner',
+            targetId: 'capture',
+            assetId: 'asset',
+            assetIdempotencyKey: 'asset-key',
+            variantId: 'variant',
+            payload: payload,
+            capturedAt: DateTime.utc(2026, 10, 29),
+            captureTimeSource: 'device',
+          )
+          .timeout(const Duration(seconds: 2));
+
+      expect(result.serverState, EvidenceServerState.queued);
+      expect(gateway.links, {'capture:capture:variant'});
+      expect(gateway.objects.values.single, payload.bytes);
+      expect(gateway.uploadAttempts, 1);
+      expect(gateway.verificationRequests, 1);
+      expect(worker.isCompleted, isFalse);
+      // A late network error must be consumed without a second upload or an
+      // unhandled async error after the screen has finished submitting.
+      worker.completeError(const EvidenceNetworkException('late worker error'));
+      await Future<void>.delayed(Duration.zero);
+      expect(gateway.uploadAttempts, 1);
+    });
+
+    test('retry refuses an immutable object with different bytes', () async {
+      gateway.objects['detection-evidence/owner/asset/variant'] =
+          Uint8List.fromList([1, 2, 3]);
+      await expectLater(
+        service.reserveUploadAndLink(
+          purpose: EvidencePurpose.detection,
+          ownerId: 'owner',
+          targetId: 'capture',
+          assetId: 'asset',
+          assetIdempotencyKey: 'asset-key',
+          variantId: 'variant',
+          payload: payload,
+          capturedAt: DateTime.utc(2026, 10, 29),
+          captureTimeSource: 'device',
+        ),
+        throwsA(isA<EvidenceUploadException>()),
+      );
+      expect(gateway.objects.values.single, [1, 2, 3]);
+      expect(gateway.links, isEmpty);
+      expect(gateway.verificationRequests, 0);
     });
 
     test('retry reuses matching metadata and immutable object', () async {
@@ -86,6 +149,30 @@ void main() {
       expect(gateway.objects, hasLength(1));
       expect(gateway.links, hasLength(1));
     });
+
+    for (final lost in ['asset', 'variant']) {
+      test('first-write reservation recovers a lost $lost response', () async {
+        gateway.loseAssetResponse = lost == 'asset';
+        gateway.loseVariantResponse = lost == 'variant';
+        await service.reserveUploadAndLink(
+          purpose: EvidencePurpose.detection,
+          ownerId: 'owner',
+          targetId: 'capture',
+          assetId: 'asset',
+          assetIdempotencyKey: 'key',
+          variantId: 'variant',
+          payload: payload,
+          capturedAt: DateTime.utc(2026, 10, 29),
+          captureTimeSource: 'exif',
+        );
+        expect(gateway.assetInsertions, 1);
+        expect(gateway.variantInsertions, 1);
+        expect(gateway.assetReads, lost == 'asset' ? 1 : 0);
+        expect(gateway.variantReads, lost == 'variant' ? 1 : 0);
+        expect(gateway.uploadAttempts, 1);
+        expect(gateway.links, {'capture:capture:variant'});
+      });
+    }
 
     test('partial upload failure retains reservation and links only on retry',
         () async {
@@ -144,6 +231,115 @@ void main() {
         'elimination-evidence/owner/e-asset/e-variant',
       });
       expect(gateway.objects.values, everyElement(payload.bytes));
+    });
+
+    for (final transport in ['copy', 'unsupported', 'lost response']) {
+      test('same-photo removal preserves evidence with $transport', () async {
+        const sourcePath = 'owner/d-asset/d-variant';
+        gateway.objects['detection-evidence/$sourcePath'] = payload.bytes;
+        gateway.failCopy = transport == 'unsupported';
+        gateway.loseCopyResponse = transport == 'lost response';
+        final result = await service.reserveUploadAndLink(
+          purpose: EvidencePurpose.elimination,
+          ownerId: 'owner',
+          targetId: 'removal',
+          assetId: 'e-asset',
+          assetIdempotencyKey: 'e-key',
+          variantId: 'e-variant',
+          payload: payload,
+          capturedAt: DateTime.utc(2026, 10, 29),
+          captureTimeSource: 'exif',
+          copyFrom: EvidenceCopySource(
+              bucket: 'detection-evidence',
+              objectPath: sourcePath,
+              sha256Hex: payload.sha256Hex),
+        );
+        expect(result.bucket, 'elimination-evidence');
+        expect(gateway.copyAttempts, 1);
+        expect(gateway.uploadAttempts, transport == 'copy' ? 0 : 1);
+        expect(
+            gateway.objects['detection-evidence/$sourcePath'], payload.bytes);
+        expect(gateway.objects['elimination-evidence/owner/e-asset/e-variant'],
+            payload.bytes);
+        expect(gateway.links, {'elimination:removal:e-variant'});
+        expect(gateway.verificationRequests, 1);
+      });
+    }
+
+    test('stalled server copy falls back without waiting indefinitely',
+        () async {
+      final copy = Completer<void>();
+      gateway.pendingCopy = copy.future;
+      service = SupabaseEvidenceService(
+          gateway: gateway, copyWait: const Duration(milliseconds: 10));
+      await service
+          .reserveUploadAndLink(
+            purpose: EvidencePurpose.elimination,
+            ownerId: 'owner',
+            targetId: 'removal',
+            assetId: 'asset',
+            assetIdempotencyKey: 'key',
+            variantId: 'variant',
+            payload: payload,
+            capturedAt: DateTime.utc(2026, 10, 29),
+            captureTimeSource: 'exif',
+            copyFrom: EvidenceCopySource(
+                bucket: 'detection-evidence',
+                objectPath: 'owner/source/variant',
+                sha256Hex: payload.sha256Hex),
+          )
+          .timeout(const Duration(seconds: 2));
+      expect(gateway.uploadAttempts, 1);
+      expect(gateway.links, {'elimination:removal:variant'});
+      copy.completeError(const EvidenceNetworkException('late copy failure'));
+      await Future<void>.delayed(Duration.zero);
+    });
+
+    for (final invalid in ['owner', 'hash', 'bucket']) {
+      test('copy refuses mismatched $invalid before any reservation', () async {
+        await expectLater(
+            service.reserveUploadAndLink(
+              purpose: EvidencePurpose.elimination,
+              ownerId: 'owner',
+              targetId: 'removal',
+              assetId: 'asset',
+              assetIdempotencyKey: 'key',
+              variantId: 'variant',
+              payload: payload,
+              capturedAt: DateTime.utc(2026, 10, 29),
+              captureTimeSource: 'exif',
+              copyFrom: EvidenceCopySource(
+                  bucket: invalid == 'bucket' ? 'other' : 'detection-evidence',
+                  objectPath: invalid == 'owner'
+                      ? 'another/source/v'
+                      : 'owner/source/v',
+                  sha256Hex:
+                      invalid == 'hash' ? 'different' : payload.sha256Hex),
+            ),
+            throwsArgumentError);
+        expect(gateway.assets, isEmpty);
+        expect(gateway.uploadAttempts, 0);
+        expect(gateway.copyAttempts, 0);
+      });
+    }
+
+    test('copy source is bound to the new capture and exact prepared photo',
+        () {
+      final source = SupabaseRecordService.samePhotoCopySource(
+          ownerId: 'owner',
+          captureId: SupabaseRecordService.stableUuid('capture', 'photo'),
+          captureSubmissionId: 'photo',
+          evidence: payload);
+      expect(source.objectPath,
+          'owner/${SupabaseRecordService.stableUuid('detection-media-asset', 'photo')}/${SupabaseRecordService.stableUuid('detection-media-variant', 'photo')}');
+      expect(source.sha256Hex, payload.sha256Hex);
+      expect(
+          () => SupabaseRecordService.samePhotoCopySource(
+              ownerId: 'owner',
+              captureId: 'older-capture',
+              captureSubmissionId: 'photo',
+              evidence: payload),
+          throwsArgumentError);
     });
 
     test('mismatched retry is rejected without replacing evidence', () async {
@@ -274,7 +470,7 @@ void main() {
   });
 }
 
-class _FakeEvidenceGateway implements EvidenceGateway {
+class _FakeEvidenceGateway implements EvidenceGateway, EvidenceCopyGateway {
   final assets = <String, Map<String, dynamic>>{};
   final variants = <String, Map<String, dynamic>>{};
   final objects = <String, Uint8List>{};
@@ -286,24 +482,72 @@ class _FakeEvidenceGateway implements EvidenceGateway {
   var failVerificationRequest = false;
   var uploadAttempts = 0;
   var verificationRequests = 0;
+  var downloadAttempts = 0;
+  var assetReads = 0;
+  var variantReads = 0;
+  var copyAttempts = 0;
+  var failCopy = false;
+  var loseCopyResponse = false;
+  var loseAssetResponse = false;
+  var loseVariantResponse = false;
+  Future<void>? pendingCopy;
+  Future<Map<String, dynamic>?>? pendingVerification;
   Map<String, dynamic>? verificationResponse;
 
   @override
-  Future<Map<String, dynamic>?> getAsset(String id) async => assets[id];
-
-  @override
-  Future<void> insertAsset(Map<String, dynamic> row) async {
-    assetInsertions++;
-    assets[row['id'] as String] = Map<String, dynamic>.from(row);
+  Future<Map<String, dynamic>?> getAsset(String id) async {
+    assetReads++;
+    return assets[id];
   }
 
   @override
-  Future<Map<String, dynamic>?> getVariant(String id) async => variants[id];
+  Future<void> insertAsset(Map<String, dynamic> row) async {
+    if (assets.containsKey(row['id'])) {
+      throw const EvidenceUploadException('duplicate asset');
+    }
+    assetInsertions++;
+    assets[row['id'] as String] = Map<String, dynamic>.from(row);
+    if (loseAssetResponse) {
+      loseAssetResponse = false;
+      throw const EvidenceNetworkException('asset response lost');
+    }
+  }
+
+  @override
+  Future<Map<String, dynamic>?> getVariant(String id) async {
+    variantReads++;
+    return variants[id];
+  }
 
   @override
   Future<void> insertVariant(Map<String, dynamic> row) async {
+    if (variants.containsKey(row['id'])) {
+      throw const EvidenceUploadException('duplicate variant');
+    }
     variantInsertions++;
     variants[row['id'] as String] = Map<String, dynamic>.from(row);
+    if (loseVariantResponse) {
+      loseVariantResponse = false;
+      throw const EvidenceNetworkException('variant response lost');
+    }
+  }
+
+  @override
+  Future<void> copy(String sourceBucket, String sourcePath,
+      String destinationBucket, String destinationPath) async {
+    copyAttempts++;
+    if (pendingCopy != null) return pendingCopy!;
+    if (failCopy) throw const EvidenceUploadException('copy not supported');
+    final source = objects['$sourceBucket/$sourcePath'];
+    if (source == null) throw const EvidenceUploadException('missing source');
+    final key = '$destinationBucket/$destinationPath';
+    if (objects.containsKey(key)) {
+      throw const EvidenceUploadException('immutable destination');
+    }
+    objects[key] = Uint8List.fromList(source);
+    if (loseCopyResponse) {
+      throw const EvidenceNetworkException('copy response lost');
+    }
   }
 
   @override
@@ -326,6 +570,7 @@ class _FakeEvidenceGateway implements EvidenceGateway {
 
   @override
   Future<Uint8List> download(String bucket, String path) async {
+    downloadAttempts++;
     final bytes = objects['$bucket/$path'];
     if (bytes == null) throw const EvidenceUploadException('missing object');
     return Uint8List.fromList(bytes);
@@ -340,6 +585,7 @@ class _FakeEvidenceGateway implements EvidenceGateway {
   @override
   Future<Map<String, dynamic>?> requestVerification(String variantId) async {
     verificationRequests++;
+    if (pendingVerification != null) return pendingVerification!;
     if (failVerificationRequest) {
       throw const EvidenceNetworkException('worker unavailable');
     }

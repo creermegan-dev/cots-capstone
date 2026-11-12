@@ -48,7 +48,7 @@ class OutbreakAlertsPanel extends StatelessWidget {
             'Outbreak Alerts',
             style: TextStyle(
               fontSize: 17,
-              fontWeight: FontWeight.w800,
+              fontWeight: FontWeight.w600,
               color: AdminColors.headerTitle,
             ),
           ),
@@ -90,7 +90,7 @@ class OutbreakAlertsPanel extends StatelessWidget {
                 Text(
                   a.zone,
                   style: const TextStyle(
-                    fontWeight: FontWeight.w800,
+                    fontWeight: FontWeight.w600,
                     fontSize: 14,
                     color: AdminColors.headerTitle,
                   ),

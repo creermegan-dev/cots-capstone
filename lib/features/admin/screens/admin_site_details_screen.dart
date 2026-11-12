@@ -1,3 +1,4 @@
+import '../../../widgets/no_cots_survey_records.dart';
 import 'package:flutter/material.dart';
 import 'package:fl_chart/fl_chart.dart';
 import 'package:intl/intl.dart';
@@ -53,7 +54,7 @@ class _AdminSiteDetailsScreenState extends State<AdminSiteDetailsScreen> {
             Text(title,
                 style: const TextStyle(
                     fontSize: 17,
-                    fontWeight: FontWeight.w800,
+                    fontWeight: FontWeight.w600,
                     color: AdminColors.headerTitle)),
             const SizedBox(height: 14),
             child,
@@ -271,7 +272,7 @@ class _AdminSiteDetailsScreenState extends State<AdminSiteDetailsScreen> {
                                               '${latest.level} · ${latest.confirmedCots} confirmed COTS · ${MonthlySiteLevel.monthLabel(latest.month!)}',
                                               style: TextStyle(
                                                   fontSize: 16,
-                                                  fontWeight: FontWeight.w800,
+                                                  fontWeight: FontWeight.w600,
                                                   color: _color(latest.level))),
                                           const SizedBox(height: 16),
                                         ],
@@ -285,6 +286,8 @@ class _AdminSiteDetailsScreenState extends State<AdminSiteDetailsScreen> {
                                       ]));
                             }),
                         const SizedBox(height: 16),
+                        NoCotsSurveyRecords(
+                            mineOnly: false, areaCode: widget.site.areaCode),
                         _card(
                             'Recent monitoring records',
                             groups.isEmpty

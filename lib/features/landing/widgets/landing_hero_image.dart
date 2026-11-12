@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../landing_theme.dart';
 
-/// Hero coral card with rounded corners and soft bottom ambient blend.
+/// Hero COTS card with rounded corners and soft bottom ambient blend.
 class LandingHeroImage extends StatelessWidget {
   const LandingHeroImage({
     super.key,
@@ -13,20 +13,40 @@ class LandingHeroImage extends StatelessWidget {
   final BorderRadius? borderRadius;
   final bool fullBleed;
 
-  static const String assetPath = 'assets/images/landing_coral.jpg';
+  static const String assetPath = 'assets/images/landing_cots.png';
 
   @override
   Widget build(BuildContext context) {
-    final effectiveRadius = borderRadius ?? BorderRadius.circular(36);
+    final effectiveRadius = borderRadius ?? BorderRadius.circular(24);
+    if (fullBleed) {
+      return ShaderMask(
+        blendMode: BlendMode.dstIn,
+        shaderCallback: (bounds) => const LinearGradient(
+          begin: Alignment.topCenter,
+          end: Alignment.bottomCenter,
+          colors: [Colors.white, Colors.white, Colors.transparent],
+          stops: [0, 0.60, 1],
+        ).createShader(bounds),
+        child: ClipRRect(
+          borderRadius: effectiveRadius,
+          child: Image.asset(
+            assetPath,
+            fit: BoxFit.cover,
+            semanticLabel: 'Crown-of-thorns starfish on a coral reef',
+            errorBuilder: (context, error, stackTrace) => const _HeroFallback(),
+          ),
+        ),
+      );
+    }
 
     return Container(
       decoration: BoxDecoration(
         borderRadius: effectiveRadius,
         boxShadow: [
           BoxShadow(
-            color: const Color(0xFF104E5B).withValues(alpha: 0.16),
-            blurRadius: 32,
-            offset: const Offset(0, 12),
+            color: const Color(0xFF104E5B).withValues(alpha: 0.03),
+            blurRadius: 8,
+            offset: const Offset(0, 2),
           ),
         ],
       ),
@@ -38,6 +58,7 @@ class LandingHeroImage extends StatelessWidget {
             Image.asset(
               assetPath,
               fit: BoxFit.cover,
+              semanticLabel: 'Crown-of-thorns starfish on a coral reef',
               errorBuilder: (context, error, stackTrace) =>
                   const _HeroFallback(),
             ),

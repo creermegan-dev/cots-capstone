@@ -1,5 +1,7 @@
+import '../../../widgets/no_cots_survey_records.dart';
 import 'package:fl_chart/fl_chart.dart';
 import 'package:flutter/material.dart';
+import '../../../core/cots_theme.dart';
 import 'package:provider/provider.dart';
 
 import '../../../core/supabase_config.dart';
@@ -421,6 +423,14 @@ class _AdminRecordsSubmissionsScreenState
                 ] else ...[
                   const SizedBox(height: 22),
                   _stats(rows),
+                  if (!widget.expertContext)
+                    NoCotsSurveyRecords(
+                        mineOnly: false,
+                        searchText: _searchCtrl.text,
+                        areaCode: _zone == 'All Sites' ? null : _zone,
+                        visible: (_status == 'All Status' ||
+                                _status == 'Accepted') &&
+                            _risk == 'All Risk Levels'),
                   const SizedBox(height: 20),
                   _filters(zoneOptions),
                   const SizedBox(height: 14),
@@ -450,7 +460,8 @@ class _AdminRecordsSubmissionsScreenState
           color: selected ? AdminColors.headerTitle : Colors.white,
           borderRadius: BorderRadius.circular(10),
           child: InkWell(
-            key: ValueKey(visits ? 'records-tab-visits' : 'records-tab-submissions'),
+            key: ValueKey(
+                visits ? 'records-tab-visits' : 'records-tab-submissions'),
             borderRadius: BorderRadius.circular(10),
             onTap: selected ? null : () => setState(() => _visitsTab = visits),
             child: Padding(
@@ -630,11 +641,11 @@ class _AdminRecordsSubmissionsScreenState
 
   Widget _drop(
       List<String> options, String value, ValueChanged<String?> onChanged) {
-    const labelStyle = TextStyle(
-      fontSize: 13,
-      fontWeight: FontWeight.w600,
-      color: AdminColors.headerTitle,
-    );
+    final labelStyle = Theme.of(context).textTheme.bodyMedium!.copyWith(
+          fontSize: 13,
+          fontWeight: FontWeight.w600,
+          color: AdminColors.headerTitle,
+        );
     return SizedBox(
       width: 150,
       height: 48,
@@ -709,36 +720,15 @@ class _AdminRecordsSubmissionsScreenState
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          Padding(
-            padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
-            child: Row(
-              children: [
-                const Expanded(
-                  child: Text(
-                    'Monitoring Records',
-                    style: TextStyle(
-                      fontSize: 18,
-                      fontWeight: FontWeight.w800,
-                      color: AdminColors.headerTitle,
-                    ),
-                  ),
-                ),
-                OutlinedButton.icon(
-                  onPressed: filtered.isEmpty
-                      ? null
-                      : () {
-                          ScaffoldMessenger.of(context).showSnackBar(
-                            SnackBar(
-                              content: Text(
-                                'Export ready for ${filtered.length} record(s).',
-                              ),
-                            ),
-                          );
-                        },
-                  icon: const Icon(Icons.download_outlined, size: 18),
-                  label: const Text('Export'),
-                ),
-              ],
+          const Padding(
+            padding: EdgeInsets.fromLTRB(16, 16, 16, 8),
+            child: Text(
+              'Monitoring Records',
+              style: TextStyle(
+                fontSize: 18,
+                fontWeight: FontWeight.w600,
+                color: AdminColors.headerTitle,
+              ),
             ),
           ),
           AdminDataTableScrollArea(
@@ -790,7 +780,7 @@ class _AdminRecordsSubmissionsScreenState
           maxLines: 1,
           overflow: TextOverflow.ellipsis,
           style: const TextStyle(
-            fontWeight: FontWeight.w800,
+            fontWeight: FontWeight.w600,
             fontSize: 12,
             color: AdminColors.statBlue,
             decoration: TextDecoration.underline,
@@ -890,7 +880,7 @@ class _AdminRecordsSubmissionsScreenState
                 'Records by Status',
                 style: TextStyle(
                   fontSize: 20,
-                  fontWeight: FontWeight.w800,
+                  fontWeight: FontWeight.w600,
                   color: AdminColors.headerTitle,
                 ),
               ),
@@ -907,7 +897,7 @@ class _AdminRecordsSubmissionsScreenState
                 'Top Sites by Confirmed COTS',
                 style: TextStyle(
                   fontSize: 20,
-                  fontWeight: FontWeight.w800,
+                  fontWeight: FontWeight.w600,
                   color: AdminColors.headerTitle,
                 ),
               ),
@@ -1101,17 +1091,7 @@ class _AdminRecordsSubmissionsScreenState
   static Widget _card({required Widget child, EdgeInsetsGeometry? padding}) {
     return Container(
       padding: padding ?? const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(14),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withValues(alpha: 0.05),
-            blurRadius: 14,
-            offset: const Offset(0, 4),
-          ),
-        ],
-      ),
+      decoration: CotsUi.cardDecoration(),
       child: child,
     );
   }

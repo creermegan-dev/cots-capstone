@@ -1,5 +1,8 @@
 import 'package:cots_monitor/widgets/app_back_icon_button.dart';
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
+import '../../providers/auth_provider.dart';
+import '../../models/detection_model.dart';
 import 'package:intl/intl.dart';
 
 import '../../core/cots_colors.dart' as colors;
@@ -89,6 +92,7 @@ class UserRecordDetailsPage extends StatelessWidget {
       CotsConfidencePolicy.buildDetectionItems(
         count: record.aiDetectedCount,
         averagePercent: record.confidencePercent,
+        autoApproveThreshold: record.autoApproveMin,
         boxes: record.detectionBoxes.isNotEmpty ? record.detectionBoxes : null,
         imageWidth: record.imageWidth > 0 ? record.imageWidth : 1920,
         imageHeight: record.imageHeight > 0 ? record.imageHeight : 1080,
@@ -183,7 +187,7 @@ class UserRecordDetailsPage extends StatelessWidget {
             else
               _detectionResultsCard(record.aiDetectedCount, confidencePct),
             const SizedBox(height: 12),
-            _informationCard(),
+            _informationCard(context),
             if (reviewPanel != null) ...[
               const SizedBox(height: 12),
               reviewPanel!,
@@ -366,7 +370,7 @@ class UserRecordDetailsPage extends StatelessWidget {
                 Text(displayId ?? record.displayRecordId,
                     style: const TextStyle(
                         fontSize: 14,
-                        fontWeight: FontWeight.w800,
+                        fontWeight: FontWeight.w600,
                         color: kNavy)),
                 const SizedBox(height: 3),
                 Text(
@@ -448,7 +452,7 @@ class UserRecordDetailsPage extends StatelessWidget {
                 const Text(
                   'Please retake your photo',
                   style: TextStyle(
-                    fontWeight: FontWeight.w800,
+                    fontWeight: FontWeight.w600,
                     fontSize: 14,
                     color: kNavy,
                   ),
@@ -479,13 +483,13 @@ class UserRecordDetailsPage extends StatelessWidget {
         children: [
           _policyLine(
               kLow,
-              'Automatically Accepted (${CotsConfidencePolicy.autoApproveMin}–100%)',
-              'Each COTS at ${CotsConfidencePolicy.autoApproveMin}%+ is accepted automatically.'),
+              'Automatically Accepted (${record.autoApproveMin}–100%)',
+              'Each COTS at ${record.autoApproveMin}%+ is accepted automatically.'),
           const SizedBox(height: 8),
           _policyLine(
               kModerate,
-              'Requires Expert Validation (${CotsConfidencePolicy.adminReviewMin}–${CotsConfidencePolicy.autoApproveMin - 1})',
-              'Any individual COTS below ${CotsConfidencePolicy.autoApproveMin}% needs expert verification — even if others in the same photo are higher.'),
+              'Requires Expert Validation (${CotsConfidencePolicy.adminReviewMin}–${record.autoApproveMin - 1})',
+              'Any individual COTS below ${record.autoApproveMin}% needs expert verification — even if others in the same photo are higher.'),
           const SizedBox(height: 8),
           _policyLine(
               kHigh,
@@ -513,7 +517,7 @@ class UserRecordDetailsPage extends StatelessWidget {
             children: [
               Text(title,
                   style: const TextStyle(
-                      fontWeight: FontWeight.w800, fontSize: 12, color: kNavy)),
+                      fontWeight: FontWeight.w600, fontSize: 12, color: kNavy)),
               Text(body,
                   style: TextStyle(
                       fontSize: 11.5,
@@ -526,7 +530,7 @@ class UserRecordDetailsPage extends StatelessWidget {
     );
   }
 
-  Widget _informationCard() {
+  Widget _informationCard(BuildContext context) {
     return _titledCard(
       icon: Icons.info_outline_rounded,
       title: 'Information',
@@ -543,6 +547,10 @@ class UserRecordDetailsPage extends StatelessWidget {
           _kv('Upload method', 'Gallery upload'),
           if (displayId != null) _kv('Photo record ID', record.displayRecordId),
           _kv('Capture type', CaptureSource.displayLabel(record.captureSource)),
+          if (reviewPanel == null &&
+              context.watch<AuthProvider?>()?.userModel?.isExpert != true)
+            _kv('Detection model',
+                storedDetectionModelLabel(record.sourceCapture?.modelName)),
           if (record.imageName.isNotEmpty) _kv('Photo file', record.imageName),
           if (record.linkedCaptureDisplayId?.isNotEmpty == true)
             _kv('Linked detection', record.linkedCaptureDisplayId!),
@@ -580,7 +588,7 @@ class UserRecordDetailsPage extends StatelessWidget {
                   record.zone,
                   style: const TextStyle(
                     color: kLow,
-                    fontWeight: FontWeight.w800,
+                    fontWeight: FontWeight.w600,
                     fontSize: 11,
                   ),
                 ),
@@ -746,7 +754,7 @@ class UserRecordDetailsPage extends StatelessWidget {
                 title,
                 style: const TextStyle(
                   fontSize: 16,
-                  fontWeight: FontWeight.w800,
+                  fontWeight: FontWeight.w600,
                   color: kNavy,
                 ),
               )),

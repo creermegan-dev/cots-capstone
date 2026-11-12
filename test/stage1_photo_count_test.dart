@@ -23,7 +23,9 @@ void main() {
     expect(scanMaxFollowUpPhotos, 10);
   });
 
-  test('zero-COTS photos block a first encounter but not a monthly visit', () {
+  test(
+      'zero-COTS photos block both photo flows; absence uses a separate survey',
+      () {
     expect(
         scanPhotoNeedsAttention(
             isFollowUp: false, analysisFailed: false, detectedCount: 0),
@@ -31,7 +33,7 @@ void main() {
     expect(
         scanPhotoNeedsAttention(
             isFollowUp: true, analysisFailed: false, detectedCount: 0),
-        isFalse);
+        isTrue);
     expect(
         scanPhotoNeedsAttention(
             isFollowUp: false, analysisFailed: false, detectedCount: 3),

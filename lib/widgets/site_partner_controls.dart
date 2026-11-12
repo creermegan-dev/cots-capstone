@@ -329,7 +329,7 @@ class _SitePartnerInvitesCardState extends State<SitePartnerInvitesCard> {
                         const Text('Site partner invitation',
                             style: TextStyle(
                                 fontSize: 16,
-                                fontWeight: FontWeight.w800,
+                                fontWeight: FontWeight.w600,
                                 color: kTextNavy)),
                         const SizedBox(height: 6),
                         Text(

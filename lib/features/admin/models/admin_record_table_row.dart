@@ -7,8 +7,8 @@ import '../../../models/cots_tally.dart';
 /// Row model for the Records / Submissions table (shared with details navigation).
 ///
 /// Verification bands — see [CotsConfidencePolicy] (evaluated per COTS, not average alone):
-/// - **Accepted**: every COTS ≥80%, or admin finished per-COTS review
-/// - **Under Review**: any COTS is 20–79% and awaits admin verification
+/// - **Accepted**: every COTS ≥85%, or admin finished per-COTS review
+/// - **Under Review**: any COTS is 20–84% and awaits admin verification
 /// - **Rejected / Retake**: all COTS below 20%, or admin rejected after review
 class AdminRecordTableRow {
   const AdminRecordTableRow(
@@ -27,6 +27,8 @@ class AdminRecordTableRow {
     this.aiCount,
     this.removedQuantity,
     this.averageSizeCm,
+    this.modelName = '',
+    this.expertConfirmedCount = 0,
     this.captureSource = 'GoPro Image',
     this.documentId = '',
     this.imageName = '',
@@ -59,6 +61,7 @@ class AdminRecordTableRow {
     this.followUpSurveyId = '',
     this.submissionPhotos = const [],
     this.submissionStatus = '',
+    this.autoApproveMin = CotsConfidencePolicy.autoApproveMin,
   });
 
   final int number;
@@ -72,12 +75,15 @@ class AdminRecordTableRow {
   final String risk;
   final String submittedBy;
   final int confidencePercent;
+  final int autoApproveMin;
   final bool adminConfirmed;
   final bool adminRejected;
   final String activityType;
   final int? aiCount;
   final int? removedQuantity;
   final double? averageSizeCm;
+  final String modelName;
+  final int expertConfirmedCount;
   final String captureSource;
   final String documentId;
   final String imageName;
@@ -125,6 +131,7 @@ class AdminRecordTableRow {
       CotsConfidencePolicy.buildDetectionItems(
         count: cotsCount,
         averagePercent: confidencePercent,
+        autoApproveThreshold: autoApproveMin,
         boxes: detectionBoxes.isNotEmpty ? detectionBoxes : null,
         imageWidth: imageWidth > 0 ? imageWidth : 1920,
         imageHeight: imageHeight > 0 ? imageHeight : 1080,
@@ -184,6 +191,8 @@ class AdminRecordTableRow {
       removedQuantity: removedQuantity,
       averageSizeCm: averageSizeCm,
       captureSource: captureSource,
+      modelName: modelName,
+      expertConfirmedCount: expertConfirmedCount,
       documentId: documentId,
       imageName: imageName,
       notes: notes,
@@ -198,6 +207,7 @@ class AdminRecordTableRow {
       imageWidth: imageWidth,
       imageHeight: imageHeight,
       adminCotsDecisions: adminCotsDecisions ?? this.adminCotsDecisions,
+      autoApproveMin: autoApproveMin,
       recordCollection: recordCollection,
       linkedCaptureId: linkedCaptureId,
       linkedCaptureDisplayId: linkedCaptureDisplayId,

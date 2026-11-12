@@ -28,8 +28,8 @@ abstract final class AdminBreakpoints {
 
   /// Horizontal padding for scrollable admin pages.
   static EdgeInsets pagePadding(double w) {
-    if (w < mobile) return const EdgeInsets.fromLTRB(14, 16, 14, 24);
-    if (w < desktop) return const EdgeInsets.fromLTRB(18, 20, 18, 26);
-    return const EdgeInsets.fromLTRB(24, 22, 24, 28);
+    if (w < mobile) return const EdgeInsets.fromLTRB(16, 20, 16, 24);
+    if (w < desktop) return const EdgeInsets.fromLTRB(20, 24, 20, 28);
+    return const EdgeInsets.fromLTRB(24, 24, 24, 32);
   }
 }

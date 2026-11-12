@@ -183,11 +183,15 @@ class _DesktopTabletScaffold extends StatelessWidget {
                               const SizedBox(width: 24),
                               Expanded(
                                 flex: 6,
-                                child: SingleChildScrollView(
-                                  padding: const EdgeInsets.only(bottom: 24),
-                                  child: Align(
-                                    alignment: Alignment.topCenter,
-                                    child: card,
+                                child: SizedBox(
+                                  height: constraints.maxHeight - 40,
+                                  child: SingleChildScrollView(
+                                    child: ConstrainedBox(
+                                      constraints: BoxConstraints(
+                                        minHeight: constraints.maxHeight - 40,
+                                      ),
+                                      child: Center(child: card),
+                                    ),
                                   ),
                                 ),
                               ),
@@ -329,34 +333,38 @@ class AuthCardHeader extends StatelessWidget {
     super.key,
     required this.title,
     required this.subtitle,
+    this.showLogo = true,
   });
 
   final String title;
   final String subtitle;
+  final bool showLogo;
 
   @override
   Widget build(BuildContext context) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Container(
-          width: 44,
-          height: 44,
-          decoration: BoxDecoration(
-            shape: BoxShape.circle,
-            color: AuthTokens.focusTeal.withValues(alpha: 0.1),
+        if (showLogo) ...[
+          Container(
+            width: 44,
+            height: 44,
+            decoration: BoxDecoration(
+              shape: BoxShape.circle,
+              color: AuthTokens.focusTeal.withValues(alpha: 0.1),
+            ),
+            child: const Padding(
+              padding: EdgeInsets.all(5),
+              child: CotsAuthLogoBadge(size: 34),
+            ),
           ),
-          child: const Padding(
-            padding: EdgeInsets.all(5),
-            child: CotsAuthLogoBadge(size: 34),
-          ),
-        ),
-        const SizedBox(height: 16),
+          const SizedBox(height: 16),
+        ],
         Text(
           title,
           style: const TextStyle(
             fontSize: 24,
-            fontWeight: FontWeight.w800,
+            fontWeight: FontWeight.w600,
             color: AuthTokens.titleNavy,
             letterSpacing: -0.5,
             height: 1.15,
@@ -386,14 +394,14 @@ class AuthMobileHeader extends StatelessWidget {
     return Column(
       children: [
         const SizedBox(height: 8),
-        const CotsAuthLogoBadge(),
+        const CotsAuthLogoBadge(size: 72),
         const SizedBox(height: 16),
         Text(
           'COTS Monitor',
           textAlign: TextAlign.center,
           style: Theme.of(context).textTheme.headlineSmall?.copyWith(
                 color: kDarkTeal,
-                fontWeight: FontWeight.w800,
+                fontWeight: FontWeight.w600,
                 letterSpacing: -0.5,
               ),
         ),
@@ -422,19 +430,9 @@ class AuthMobileFormCard extends StatelessWidget {
     return DecoratedBox(
       decoration: BoxDecoration(
         color: Colors.white,
-        borderRadius: BorderRadius.circular(22),
-        boxShadow: const [
-          BoxShadow(
-            color: Color(0x14000000),
-            blurRadius: 24,
-            offset: Offset(0, 10),
-          ),
-          BoxShadow(
-            color: Color(0x08000000),
-            blurRadius: 6,
-            offset: Offset(0, 2),
-          ),
-        ],
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: AuthTokens.inputBorder, width: 0.75),
+        boxShadow: AuthTokens.cardShadow,
       ),
       child: Padding(
         padding: const EdgeInsets.fromLTRB(18, 22, 18, 22),

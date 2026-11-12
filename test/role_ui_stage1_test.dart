@@ -23,20 +23,16 @@ void main() {
       )..start();
       addTearDown(actions.dispose);
       ExpertActionPlace? opened;
-      var mapOpened = false;
       await tester.pumpWidget(MaterialApp(
           home: Scaffold(
               body: ExpertDashboardScreen(
         actions: actions,
         onOpen: (place) => opened = place,
-        onOpenMap: () => mapOpened = true,
       ))));
       await tester.pumpAndSettle();
-      await tester.tap(find.text('Site Coverage'));
+      await tester.tap(find.byKey(const ValueKey('expert-dashboard-coverage')));
       expect(opened, ExpertActionPlace.reassignments);
-      await tester.ensureVisible(find.text('Open Map Monitoring'));
-      await tester.tap(find.text('Open Map Monitoring'));
-      expect(mapOpened, isTrue);
+      expect(find.text('Open Map Monitoring'), findsNothing);
       expect(tester.takeException(), isNull);
     });
   }

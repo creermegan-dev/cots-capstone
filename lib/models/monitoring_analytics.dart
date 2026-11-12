@@ -65,7 +65,9 @@ class MonitoringAnalytics {
           ifAbsent: () => tally.confirmed);
       for (final item in r.detectionReviewItems) {
         confidenceSum += item.confidencePercent;
-        confidenceBands[item.band.index]++;
+        confidenceBands[
+            CotsConfidencePolicy.bandFromPercent(item.confidencePercent)
+                .index]++;
       }
     }
   }

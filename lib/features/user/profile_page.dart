@@ -5,6 +5,7 @@ import 'package:image_picker/image_picker.dart';
 import 'package:provider/provider.dart';
 
 import '../../core/supabase_config.dart';
+import '../../core/cots_theme.dart';
 import '../../models/user_model.dart';
 import '../../providers/auth_provider.dart';
 import '../../services/auth_service.dart';
@@ -15,20 +16,11 @@ import 'user_bottom_nav.dart';
 import '../../widgets/cots_loading_skeleton.dart';
 import '../../services/profile_photo_service.dart';
 import '../../widgets/profile_avatar.dart';
+import '../../widgets/cots_logo.dart';
 
 const String _appVersion = '1.0.3+4';
 
-const List<String> _kRoleOptions = <String>[
-  'Diver',
-  'Field Officer',
-  'LGU Staff',
-  'BFAR Staff',
-  'Researcher',
-  'Marine Conservation Officer',
-  'Volunteer',
-  'Administrator',
-  'Other',
-];
+const List<String> _kRoleOptions = UserModel.positionOptions;
 
 const List<String> _kOrgOptions = <String>[
   'BFAR',
@@ -153,10 +145,10 @@ class _ProfileHeaderCard extends StatelessWidget {
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
         color: Colors.white,
-        borderRadius: BorderRadius.circular(14),
+        borderRadius: BorderRadius.circular(CotsUi.cardRadius),
         boxShadow: const [
           BoxShadow(
-            color: Color(0x12000000),
+            color: Color(0x04000000),
             blurRadius: 8,
             offset: Offset(0, 2),
           ),
@@ -174,7 +166,7 @@ class _ProfileHeaderCard extends StatelessWidget {
                   name,
                   style: const TextStyle(
                     fontSize: 16,
-                    fontWeight: FontWeight.w800,
+                    fontWeight: FontWeight.w600,
                     color: kNavy,
                   ),
                 ),
@@ -217,10 +209,10 @@ class _OptionsCard extends StatelessWidget {
     return Container(
       decoration: BoxDecoration(
         color: Colors.white,
-        borderRadius: BorderRadius.circular(14),
+        borderRadius: BorderRadius.circular(CotsUi.cardRadius),
         boxShadow: const [
           BoxShadow(
-            color: Color(0x12000000),
+            color: Color(0x04000000),
             blurRadius: 8,
             offset: Offset(0, 2),
           ),
@@ -699,10 +691,10 @@ class _PersonalHeaderCard extends StatelessWidget {
       padding: const EdgeInsets.fromLTRB(14, 14, 14, 14),
       decoration: BoxDecoration(
         color: Colors.white,
-        borderRadius: BorderRadius.circular(14),
+        borderRadius: BorderRadius.circular(CotsUi.cardRadius),
         boxShadow: const [
           BoxShadow(
-            color: Color(0x12000000),
+            color: Color(0x04000000),
             blurRadius: 10,
             offset: Offset(0, 3),
           ),
@@ -731,7 +723,7 @@ class _PersonalHeaderCard extends StatelessWidget {
                         style: const TextStyle(
                           color: kNavy,
                           fontSize: 16,
-                          fontWeight: FontWeight.w800,
+                          fontWeight: FontWeight.w600,
                           height: 1.15,
                         ),
                       ),
@@ -787,10 +779,10 @@ class _PersonalFormCard extends StatelessWidget {
       padding: const EdgeInsets.fromLTRB(14, 14, 14, 14),
       decoration: BoxDecoration(
         color: Colors.white,
-        borderRadius: BorderRadius.circular(14),
+        borderRadius: BorderRadius.circular(CotsUi.cardRadius),
         boxShadow: const [
           BoxShadow(
-            color: Color(0x12000000),
+            color: Color(0x04000000),
             blurRadius: 10,
             offset: Offset(0, 3),
           ),
@@ -813,7 +805,7 @@ class _SectionTitle extends StatelessWidget {
       text,
       style: const TextStyle(
         color: kNavy,
-        fontWeight: FontWeight.w800,
+        fontWeight: FontWeight.w600,
         fontSize: 14,
       ),
     );
@@ -1028,7 +1020,7 @@ class _ChangesSavedDialog extends StatelessWidget {
                 textAlign: TextAlign.center,
                 style: TextStyle(
                   color: kNavy,
-                  fontWeight: FontWeight.w800,
+                  fontWeight: FontWeight.w600,
                   fontSize: 16,
                 ),
               ),
@@ -1106,7 +1098,7 @@ class _ChangesSavedDialog extends StatelessWidget {
                   child: const Text(
                     'OK, GOT IT',
                     style: TextStyle(
-                      fontWeight: FontWeight.w800,
+                      fontWeight: FontWeight.w600,
                       fontSize: 13.5,
                       letterSpacing: 0.4,
                     ),
@@ -1477,10 +1469,10 @@ class AboutPage extends StatelessWidget {
             padding: const EdgeInsets.all(16),
             decoration: BoxDecoration(
               color: Colors.white,
-              borderRadius: BorderRadius.circular(14),
+              borderRadius: BorderRadius.circular(CotsUi.cardRadius),
               boxShadow: const [
                 BoxShadow(
-                  color: Color(0x12000000),
+                  color: Color(0x04000000),
                   blurRadius: 8,
                   offset: Offset(0, 2),
                 ),
@@ -1493,7 +1485,7 @@ class AboutPage extends StatelessWidget {
                   'App Information',
                   style: TextStyle(
                     fontSize: 15,
-                    fontWeight: FontWeight.w800,
+                    fontWeight: FontWeight.w600,
                     color: kNavy,
                   ),
                 ),
@@ -1532,14 +1524,10 @@ class AboutPage extends StatelessWidget {
       padding: const EdgeInsets.all(18),
       decoration: BoxDecoration(
         borderRadius: BorderRadius.circular(16),
-        gradient: const LinearGradient(
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-          colors: [Color(0xFF0D1B2A), Color(0xFF174F57)],
-        ),
+        color: CotsUi.text,
         boxShadow: const [
           BoxShadow(
-            color: Color(0x22000000),
+            color: Color(0x06000000),
             blurRadius: 12,
             offset: Offset(0, 4),
           ),
@@ -1548,14 +1536,28 @@ class AboutPage extends StatelessWidget {
       child: const Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(
-            'COTS Monitor',
-            style: TextStyle(
-              fontSize: 22,
-              fontWeight: FontWeight.w900,
-              color: Colors.white,
-              letterSpacing: -0.3,
-            ),
+          Row(
+            children: [
+              DecoratedBox(
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  color: Colors.white,
+                ),
+                child: CotsLogo(size: 48),
+              ),
+              SizedBox(width: 12),
+              Expanded(
+                child: Text(
+                  'COTS Monitor',
+                  style: TextStyle(
+                    fontSize: 22,
+                    fontWeight: FontWeight.w700,
+                    color: Colors.white,
+                    letterSpacing: -0.3,
+                  ),
+                ),
+              ),
+            ],
           ),
           SizedBox(height: 8),
           Text(
@@ -1583,10 +1585,10 @@ class AboutPage extends StatelessWidget {
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
         color: Colors.white,
-        borderRadius: BorderRadius.circular(14),
+        borderRadius: BorderRadius.circular(CotsUi.cardRadius),
         boxShadow: const [
           BoxShadow(
-            color: Color(0x12000000),
+            color: Color(0x04000000),
             blurRadius: 8,
             offset: Offset(0, 2),
           ),
@@ -1612,7 +1614,7 @@ class AboutPage extends StatelessWidget {
                   title,
                   style: const TextStyle(
                     fontSize: 15,
-                    fontWeight: FontWeight.w800,
+                    fontWeight: FontWeight.w600,
                     color: kNavy,
                   ),
                 ),
@@ -1655,7 +1657,7 @@ class _FactTile extends StatelessWidget {
                   title,
                   style: const TextStyle(
                     fontSize: 13,
-                    fontWeight: FontWeight.w800,
+                    fontWeight: FontWeight.w600,
                     color: kNavy,
                   ),
                 ),
@@ -1707,7 +1709,7 @@ class _SystemBullet extends StatelessWidget {
                   TextSpan(
                     text: '$title — ',
                     style: const TextStyle(
-                      fontWeight: FontWeight.w800,
+                      fontWeight: FontWeight.w600,
                       color: kNavy,
                     ),
                   ),

@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../../core/cots_theme.dart';
 
 import 'scan_detection_page.dart';
 
@@ -7,14 +8,14 @@ enum UserNavDestination { dashboard, map, scan, followUp, records, profile }
 
 const userFollowUpRoute = '/user/follow-up';
 
-/// Deep Marine Cockpit palette tokens for high-contrast field/diving readability.
-const Color _kCockpitNavy = Color(0xFF0D1B2A);
-const Color _kCockpitCyan = Color(0xFF00E5FF);
-const Color _kCockpitMuted = Color(0xFF94A3B8);
-const Color _kCockpitActiveBg = Color(0x2400E5FF);
+/// Marine navigation tokens with clear, restrained active states.
+const Color _kCockpitNavy = Colors.white;
+const Color _kCockpitCyan = CotsUi.primary;
+const Color _kCockpitMuted = CotsUi.secondaryText;
+const Color _kCockpitActiveBg = CotsUi.primaryTint;
 
 /// Bottom app bar + notch used on Dashboard, Map, Scan, Records, and Profile.
-/// Implements the Deep Marine Cockpit style (high-contrast outdoor theme).
+/// Preserves the field workflow with a quiet, readable navigation surface.
 class UserBottomNavBar extends StatelessWidget {
   const UserBottomNavBar({
     super.key,
@@ -83,15 +84,8 @@ class UserBottomNavBar extends StatelessWidget {
       decoration: const BoxDecoration(
         color: _kCockpitNavy,
         border: Border(
-          top: BorderSide(color: Color(0x1F00E5FF), width: 1),
+          top: BorderSide(color: CotsUi.divider, width: 0.75),
         ),
-        boxShadow: [
-          BoxShadow(
-            color: Color(0x66000000),
-            blurRadius: 18,
-            offset: Offset(0, -4),
-          ),
-        ],
       ),
       child: BottomAppBar(
         padding: const EdgeInsets.symmetric(horizontal: 8),
@@ -107,34 +101,34 @@ class UserBottomNavBar extends StatelessWidget {
         child: MediaQuery.withClampedTextScaling(
           maxScaleFactor: 1.0,
           child: Row(
-          children: [
-            Expanded(
-              child: Row(
-                children: [
-                  for (final item in leftItems) Expanded(child: item),
-                ],
-              ),
-            ),
-            // Reserved center space for the docked FAB
-            SizedBox(
-              width: 64,
-              child: _CockpitCenterScanItem(
-                isActive: _is(UserNavDestination.scan),
-                onTap: () => open(
-                  UserNavDestination.scan,
-                  () => const ScanDetectionPage(),
+            children: [
+              Expanded(
+                child: Row(
+                  children: [
+                    for (final item in leftItems) Expanded(child: item),
+                  ],
                 ),
               ),
-            ),
-            Expanded(
-              child: Row(
-                children: [
-                  for (final item in rightItems) Expanded(child: item),
-                ],
+              // Reserved center space for the docked FAB
+              SizedBox(
+                width: 64,
+                child: _CockpitCenterScanItem(
+                  isActive: _is(UserNavDestination.scan),
+                  onTap: () => open(
+                    UserNavDestination.scan,
+                    () => const ScanDetectionPage(),
+                  ),
+                ),
               ),
-            ),
-          ],
-        ),
+              Expanded(
+                child: Row(
+                  children: [
+                    for (final item in rightItems) Expanded(child: item),
+                  ],
+                ),
+              ),
+            ],
+          ),
         ),
       ),
     );
@@ -237,7 +231,7 @@ class _CockpitCenterScanItem extends StatelessWidget {
               'Detect',
               style: TextStyle(
                 fontSize: 10,
-                fontWeight: isActive ? FontWeight.w800 : FontWeight.w600,
+                fontWeight: isActive ? FontWeight.w600 : FontWeight.w600,
                 color: isActive ? _kCockpitCyan : _kCockpitMuted,
                 letterSpacing: 0.3,
               ),
@@ -250,7 +244,7 @@ class _CockpitCenterScanItem extends StatelessWidget {
   }
 }
 
-/// Center FAB on shell screens with the Deep Marine Cockpit cyan glow.
+/// Primary camera action for field-monitoring screens.
 Widget userShellScanFab(
   BuildContext context, {
   Color? backgroundColor,
@@ -260,9 +254,9 @@ Widget userShellScanFab(
       shape: BoxShape.circle,
       boxShadow: [
         BoxShadow(
-          color: const Color(0xFF00E5FF).withValues(alpha: 0.35),
-          blurRadius: 16,
-          spreadRadius: 1,
+          color: Colors.black.withValues(alpha: 0.06),
+          blurRadius: 8,
+          spreadRadius: 0,
           offset: const Offset(0, 4),
         ),
       ],
@@ -275,20 +269,16 @@ Widget userShellScanFab(
           ),
         );
       },
-      elevation: 6,
-      backgroundColor: backgroundColor ?? const Color(0xFF0284C7),
+      elevation: 0,
+      backgroundColor: backgroundColor ?? CotsUi.primary,
       foregroundColor: Colors.white,
       shape: const CircleBorder(),
       child: Container(
         width: 56,
         height: 56,
-        decoration: const BoxDecoration(
+        decoration: BoxDecoration(
           shape: BoxShape.circle,
-          gradient: LinearGradient(
-            colors: [Color(0xFF0284C7), Color(0xFF06B6D4)],
-            begin: Alignment.topLeft,
-            end: Alignment.bottomRight,
-          ),
+          color: backgroundColor ?? CotsUi.primary,
         ),
         child: const Icon(
           Icons.camera_alt_rounded,

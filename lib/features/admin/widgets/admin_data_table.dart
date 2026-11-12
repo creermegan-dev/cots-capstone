@@ -20,33 +20,27 @@ const _kAdminTableHorizontalScrollBehavior =
 /// Design tokens shared by every admin data table (list screens, modals, cards).
 abstract final class AdminDataTableTokens {
   static const double rowHeight = 56;
-  static const double rowGap = 6;
-  static const double cornerRadius = 10;
+  static const double rowGap = 1;
+  static const double cornerRadius = 0;
   static const EdgeInsets cellPadding =
       EdgeInsets.symmetric(horizontal: 10, vertical: 0);
-  static const Color headerFill = Color(0xFFF3F6FB);
+  static const Color headerFill = Color(0xFFF6F8FA);
   static const Duration hoverDuration = Duration(milliseconds: 160);
   static const Curve hoverCurve = Curves.easeOutCubic;
 
   static TextStyle get headerTextStyle => const TextStyle(
-      fontSize: 11.5, fontWeight: FontWeight.w800, color: AdminColors.muted);
+      fontSize: 12, fontWeight: FontWeight.w600, color: AdminColors.muted);
 
   static TextStyle bodyTextStyle(
           {Color? color, FontWeight? weight, double fontSize = 12.5}) =>
       TextStyle(
         fontSize: fontSize,
-        fontWeight: weight ?? FontWeight.w600,
+        fontWeight: weight ?? FontWeight.w500,
         color: color ?? AdminColors.headerTitle.withValues(alpha: 0.88),
         height: 1.2,
       );
 
-  static List<BoxShadow> get rowShadow => [
-        BoxShadow(
-          color: Colors.black.withValues(alpha: 0.05),
-          blurRadius: 10,
-          offset: const Offset(0, 2),
-        ),
-      ];
+  static List<BoxShadow> get rowShadow => const [];
 }
 
 Alignment adminDataTableAlign(TextAlign t) => switch (t) {
@@ -143,21 +137,21 @@ class AdminDataTableBadge extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final bg = background ?? foreground.withValues(alpha: 0.13);
+    final bg = background ?? foreground.withValues(alpha: 0.08);
     final pill = Container(
       height: pillHeight,
       padding: const EdgeInsets.symmetric(horizontal: 10),
       alignment: Alignment.center,
       decoration: BoxDecoration(
         color: bg,
-        borderRadius: BorderRadius.circular(20),
+        borderRadius: BorderRadius.circular(8),
       ),
       child: Text(
         label,
         maxLines: 1,
         overflow: TextOverflow.ellipsis,
         style: TextStyle(
-            color: foreground, fontSize: 10.5, fontWeight: FontWeight.w800),
+            color: foreground, fontSize: 11, fontWeight: FontWeight.w600),
       ),
     );
     if (!centerInCell) return pill;
@@ -255,17 +249,17 @@ class _AdminDataTableClickableRowState
               onTap: widget.onTap,
               borderRadius:
                   BorderRadius.circular(AdminDataTableTokens.cornerRadius),
-              hoverColor: const Color(0xFFF8FBFF).withValues(alpha: 0.75),
+              hoverColor: const Color(0xFFF6F9F9).withValues(alpha: 0.75),
               child: AnimatedContainer(
                 duration: AdminDataTableTokens.hoverDuration,
                 curve: AdminDataTableTokens.hoverCurve,
                 decoration: BoxDecoration(
-                  color: _hover ? const Color(0xFFF8FBFF) : Colors.white,
+                  color: _hover ? const Color(0xFFF6F9F9) : Colors.white,
                   borderRadius:
                       BorderRadius.circular(AdminDataTableTokens.cornerRadius),
-                  border: Border.all(
-                      color:
-                          Colors.black.withValues(alpha: _hover ? 0.1 : 0.06)),
+                  border: const Border(
+                    bottom: BorderSide(color: Color(0xFFE5E9ED), width: 0.75),
+                  ),
                   boxShadow: widget.showShadow
                       ? AdminDataTableTokens.rowShadow
                       : const [],
@@ -315,11 +309,12 @@ class _AdminDataTableStaticRowState extends State<AdminDataTableStaticRow> {
             duration: AdminDataTableTokens.hoverDuration,
             curve: AdminDataTableTokens.hoverCurve,
             decoration: BoxDecoration(
-              color: _hover ? const Color(0xFFF8FBFF) : Colors.white,
+              color: _hover ? const Color(0xFFF6F9F9) : Colors.white,
               borderRadius:
                   BorderRadius.circular(AdminDataTableTokens.cornerRadius),
-              border: Border.all(
-                  color: Colors.black.withValues(alpha: _hover ? 0.1 : 0.06)),
+              border: const Border(
+                bottom: BorderSide(color: Color(0xFFE5E9ED), width: 0.75),
+              ),
               boxShadow:
                   widget.showShadow ? AdminDataTableTokens.rowShadow : const [],
             ),
@@ -501,7 +496,7 @@ class _PageArrow extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Material(
-      color: enabled ? Colors.white : const Color(0xFFF3F6FB),
+      color: enabled ? Colors.white : const Color(0xFFF6F8FA),
       borderRadius: BorderRadius.circular(8),
       child: InkWell(
         onTap: enabled ? onTap : null,
@@ -544,7 +539,7 @@ class _PageNum extends StatelessWidget {
           child: Text(
             label,
             style: TextStyle(
-              fontWeight: FontWeight.w800,
+              fontWeight: FontWeight.w600,
               fontSize: 12,
               color: active ? Colors.white : AdminColors.headerTitle,
             ),

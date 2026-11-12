@@ -197,13 +197,13 @@ void main() {
       await tester.pumpAndSettle();
       await tester.tap(find.text('Reef B').last);
       await tester.pumpAndSettle();
-      // 90% and 80% are confirmed; 70% waits.
+      // Only 90% is confirmed; 80% and 70% wait under the 85% policy.
       expect(
           tester
               .widget<Text>(find.byKey(
                   const ValueKey('metric-COTS found and removed (confirmed)')))
               .data,
-          '2');
+          '1');
       controller.addError(StateError('connection lost'));
       await tester.pumpAndSettle();
       expect(find.text('Analytics unavailable'), findsOneWidget);

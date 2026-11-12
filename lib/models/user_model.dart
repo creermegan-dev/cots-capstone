@@ -25,6 +25,13 @@ class UserModel {
 
   static const String defaultAccountRole = 'user';
 
+  /// Self-selected personnel positions; these do not grant app permissions.
+  static const List<String> positionOptions = [
+    'Marine Biologist',
+    'Volunteer Diver',
+    'Conservation Staff',
+  ];
+
   /// Application admin (admin dashboard). Stored in Firestore as `accountRole`.
   static const String adminAccountRole = 'admin';
 

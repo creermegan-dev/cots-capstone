@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 
 import '../core/cots_colors.dart';
+import '../core/cots_theme.dart';
 import '../core/supabase_config.dart';
 import '../models/cots_tally.dart';
 import '../services/supabase_record_service.dart';
@@ -369,13 +370,13 @@ class _MonitoringAnalyticsPanelState extends State<MonitoringAnalyticsPanel> {
                       'AI confidence levels',
                       Column(children: [
                         _countRow(
-                            '80–100%',
+                            '${CotsConfidencePolicy.autoApproveMin}–100%',
                             data.confidenceBands[
                                 CotsVerificationBand.aiAutoApproved.index],
                             data.totalCots,
                             kSuccessGreen),
                         _countRow(
-                            '20–79%',
+                            '${CotsConfidencePolicy.adminReviewMin}–${CotsConfidencePolicy.autoApproveMin - 1}%',
                             data.confidenceBands[
                                 CotsVerificationBand.adminReview.index],
                             data.totalCots,
@@ -517,7 +518,7 @@ class _MonitoringAnalyticsPanelState extends State<MonitoringAnalyticsPanel> {
                 textAlign: TextAlign.center,
                 style: const TextStyle(
                     fontSize: 14,
-                    fontWeight: FontWeight.w700,
+                    fontWeight: FontWeight.w600,
                     color: kTextNavy)),
         ]));
     final legend =
@@ -553,7 +554,7 @@ class _MonitoringAnalyticsPanelState extends State<MonitoringAnalyticsPanel> {
               Text('$count',
                   style: const TextStyle(
                       fontSize: 12,
-                      fontWeight: FontWeight.w700,
+                      fontWeight: FontWeight.w600,
                       color: kTextNavy)),
               const SizedBox(width: 6),
               Text(
@@ -573,22 +574,12 @@ class _MonitoringAnalyticsPanelState extends State<MonitoringAnalyticsPanel> {
 
   Widget _card(String title, Widget child) => Container(
         padding: const EdgeInsets.all(18),
-        decoration: BoxDecoration(
-            color: Colors.white,
-            borderRadius: BorderRadius.circular(14),
-            border: Border.all(color: const Color(0xFFE2E8F0)),
-            boxShadow: [
-              BoxShadow(
-                color: Colors.black.withValues(alpha: 0.03),
-                blurRadius: 10,
-                offset: const Offset(0, 2),
-              ),
-            ]),
+        decoration: CotsUi.cardDecoration(),
         child:
             Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
           Text(title,
               style: const TextStyle(
-                  fontWeight: FontWeight.w800, color: kTextNavy, fontSize: 16)),
+                  fontWeight: FontWeight.w600, color: kTextNavy, fontSize: 16)),
           const SizedBox(height: 14),
           child,
         ]),
@@ -616,18 +607,7 @@ class _MetricStatCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final card = Container(
       padding: EdgeInsets.all(compact ? 14 : 18),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: const Color(0xFFE2E8F0)),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withValues(alpha: 0.03),
-            blurRadius: 10,
-            offset: const Offset(0, 2),
-          ),
-        ],
-      ),
+      decoration: CotsUi.cardDecoration(),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -638,7 +618,7 @@ class _MetricStatCard extends StatelessWidget {
                 child: Text(
                   title,
                   style: TextStyle(
-                    fontWeight: FontWeight.w700,
+                    fontWeight: FontWeight.w600,
                     color: const Color(0xFF1E293B),
                     fontSize: compact ? 12.5 : 13.5,
                     height: 1.25,
@@ -664,7 +644,7 @@ class _MetricStatCard extends StatelessWidget {
             key: ValueKey('metric-$title'),
             style: TextStyle(
               fontSize: compact ? 26 : 28,
-              fontWeight: FontWeight.w800,
+              fontWeight: FontWeight.w600,
               color: accentColor,
               height: 1.0,
               letterSpacing: -0.5,
@@ -689,7 +669,7 @@ class _MetricStatCard extends StatelessWidget {
         color: Colors.transparent,
         child: InkWell(
           key: ValueKey('analytics-info-$title'),
-          borderRadius: BorderRadius.circular(14),
+          borderRadius: BorderRadius.circular(16),
           onTap: () => showDialog<void>(
               context: context,
               builder: (dialogContext) => AlertDialog(

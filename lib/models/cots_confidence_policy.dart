@@ -4,20 +4,27 @@ import 'dart:math' as math;
 import 'cots_detection_result.dart';
 
 /// Per-COTS confidence policy (each labeled detection is evaluated individually):
-/// - **80–100%** — Automatically Accepted.
-/// - **20–79%** — Requires Expert Validation (accept/reject that specific COTS).
+/// - **85–100%** — Automatically Accepted.
+/// - **20–84%** — Requires Expert Validation (accept/reject that specific COTS).
 /// - **0–19%** — Too low; flagged for retake (auto-rejected per box).
 ///
 /// Submission status is derived from all per-COTS scores — not the average alone.
 abstract final class CotsConfidencePolicy {
-  static const int autoApproveMin = 80;
+  static const int autoApproveMin = 85;
+  static const int legacyAutoApproveMin = 80;
+
+  /// Missing metadata belongs to a record saved before the 85% policy.
+  static int storedAutoApproveMin(Object? value) =>
+      value == autoApproveMin ? autoApproveMin : legacyAutoApproveMin;
   static const int adminReviewMin = 20;
 
   static int percentFromConfidence(double confidence) =>
       (confidence.clamp(0.0, 1.0) * 100).round();
 
-  static CotsVerificationBand bandFromPercent(int percent) {
-    if (percent >= autoApproveMin) return CotsVerificationBand.aiAutoApproved;
+  static CotsVerificationBand bandFromPercent(int percent,
+      {int autoApproveThreshold = autoApproveMin}) {
+    if (percent >= autoApproveThreshold)
+      return CotsVerificationBand.aiAutoApproved;
     if (percent >= adminReviewMin) return CotsVerificationBand.adminReview;
     return CotsVerificationBand.retakeRequired;
   }
@@ -51,7 +58,7 @@ abstract final class CotsConfidencePolicy {
   static String userStatusDescription(int confidencePercent) {
     return switch (bandFromPercent(confidencePercent)) {
       CotsVerificationBand.aiAutoApproved =>
-        'The AI detection confidence is $confidencePercent%. This detection has been Automatically Accepted (80%–100% threshold).',
+        'The AI detection confidence is $confidencePercent%. This detection has been Automatically Accepted ($autoApproveMin%–100% threshold).',
       CotsVerificationBand.adminReview =>
         'The AI detection confidence is $confidencePercent%, which is below the automatic acceptance threshold. This record has been forwarded to the Expert for manual verification before it becomes an official monitoring record.',
       CotsVerificationBand.retakeRequired =>
@@ -72,16 +79,16 @@ abstract final class CotsConfidencePolicy {
     }
     return switch (bandFromPercent(confidencePercent)) {
       CotsVerificationBand.aiAutoApproved =>
-        'AI auto-approved at ${autoApproveMin}–100% confidence. Automatically Accepted.',
+        'AI auto-approved at $autoApproveMin–100% confidence. Automatically Accepted.',
       CotsVerificationBand.adminReview =>
-        'Confidence below ${autoApproveMin}% — Requires Expert Validation. Expert must accept or reject each labeled COTS below.',
+        'Confidence below $autoApproveMin% — Requires Expert Validation. Expert must accept or reject each labeled COTS below.',
       CotsVerificationBand.retakeRequired =>
         'Confidence 0–${adminReviewMin - 1}% — submission rejected. User should retake the photo.',
     };
   }
 
   static String acceptedStatSubtitle(int percent) =>
-      '$percent% · Automatically Accepted ${autoApproveMin}–100%';
+      '$percent% · Automatically Accepted $autoApproveMin–100%';
 
   static String reviewStatSubtitle(int percent) =>
       '$percent% · Requires Expert Validation ${adminReviewMin}–${autoApproveMin - 1}%';
@@ -89,13 +96,17 @@ abstract final class CotsConfidencePolicy {
   static String rejectedStatSubtitle(int percent) =>
       '$percent% · Retake photo 0–${adminReviewMin - 1}%';
 
-  /// Whether this individual COTS needs expert accept/reject (20–79% band).
-  static bool cotsNeedsAdminReview(int percent) =>
-      bandFromPercent(percent) == CotsVerificationBand.adminReview;
+  /// Whether this individual COTS needs expert accept/reject (20–84% band).
+  static bool cotsNeedsAdminReview(int percent,
+          {int autoApproveThreshold = autoApproveMin}) =>
+      bandFromPercent(percent, autoApproveThreshold: autoApproveThreshold) ==
+      CotsVerificationBand.adminReview;
 
   /// Initial decision for one COTS based on its own confidence score.
-  static PerCotsAdminDecision initialDecisionForPercent(int percent) =>
-      switch (bandFromPercent(percent)) {
+  static PerCotsAdminDecision initialDecisionForPercent(int percent,
+          {int autoApproveThreshold = autoApproveMin}) =>
+      switch (bandFromPercent(percent,
+          autoApproveThreshold: autoApproveThreshold)) {
         CotsVerificationBand.aiAutoApproved => PerCotsAdminDecision.confirmed,
         CotsVerificationBand.adminReview => PerCotsAdminDecision.pending,
         CotsVerificationBand.retakeRequired => PerCotsAdminDecision.rejected,
@@ -104,23 +115,28 @@ abstract final class CotsConfidencePolicy {
   static List<PerCotsAdminDecision> initialDecisionsForItems(
     List<CotsDetectionReviewItem> items,
   ) =>
-      items.map((i) => initialDecisionForPercent(i.confidencePercent)).toList();
+      items
+          .map((i) => initialDecisionForPercent(i.confidencePercent,
+              autoApproveThreshold: i.autoApproveMin))
+          .toList();
 
   static int countAutoApproved(List<CotsDetectionReviewItem> items) =>
       items.where((i) => i.band == CotsVerificationBand.aiAutoApproved).length;
 
   static int countNeedingAdminReview(List<CotsDetectionReviewItem> items) =>
-      items.where((i) => cotsNeedsAdminReview(i.confidencePercent)).length;
+      items.where((i) => i.band == CotsVerificationBand.adminReview).length;
 
   static int countRetakeRequired(List<CotsDetectionReviewItem> items) =>
       items.where((i) => i.band == CotsVerificationBand.retakeRequired).length;
 
-  /// True when any individual COTS is in the 20–79% band and awaits expert review.
-  static bool submissionNeedsPerCotsReview(List<CotsDetectionReviewItem> items) =>
-      items.any((i) => cotsNeedsAdminReview(i.confidencePercent));
+  /// True when any individual COTS is in the 20–84% band and awaits expert review.
+  static bool submissionNeedsPerCotsReview(
+          List<CotsDetectionReviewItem> items) =>
+      items.any((i) => i.band == CotsVerificationBand.adminReview);
 
   /// Record-level band from per-COTS scores (falls back to average when no items).
-  static CotsVerificationBand recordBandFromItems(List<CotsDetectionReviewItem> items) {
+  static CotsVerificationBand recordBandFromItems(
+      List<CotsDetectionReviewItem> items) {
     if (items.isEmpty) return CotsVerificationBand.retakeRequired;
     if (items.every((i) => i.band == CotsVerificationBand.aiAutoApproved)) {
       return CotsVerificationBand.aiAutoApproved;
@@ -161,6 +177,9 @@ abstract final class CotsConfidencePolicy {
     };
   }
 
+  static int autoApproveMinForItems(List<CotsDetectionReviewItem> items) =>
+      items.isEmpty ? autoApproveMin : items.first.autoApproveMin;
+
   static String userStatusDescriptionFromItems(
     List<CotsDetectionReviewItem> items, {
     bool adminConfirmed = false,
@@ -172,6 +191,7 @@ abstract final class CotsConfidencePolicy {
     if (adminRejected) {
       return 'Expert completed per-COTS verification and rejected this submission.';
     }
+    final autoApproveMin = autoApproveMinForItems(items);
     return switch (recordBandFromItems(items)) {
       CotsVerificationBand.aiAutoApproved => () {
           final avg = items.isEmpty
@@ -179,7 +199,7 @@ abstract final class CotsConfidencePolicy {
               : (items.map((i) => i.confidencePercent).reduce((a, b) => a + b) /
                       items.length)
                   .round();
-          return 'The AI detection confidence is $avg%. This detection has been Automatically Accepted (80%–100% threshold).';
+          return 'The AI detection confidence is $avg%. This detection has been Automatically Accepted ($autoApproveMin%–100% threshold).';
         }(),
       CotsVerificationBand.adminReview => () {
           final avg = items.isEmpty
@@ -205,17 +225,17 @@ abstract final class CotsConfidencePolicy {
     if (adminRejected) {
       return 'Expert completed per-COTS verification and rejected this submission.';
     }
+    final autoApproveMin = autoApproveMinForItems(items);
     return switch (recordBandFromItems(items)) {
       CotsVerificationBand.aiAutoApproved =>
-        'All ${items.length} detections are ${autoApproveMin}%+ confidence. Each COTS was AI auto-approved.',
+        'All ${items.length} detections are $autoApproveMin%+ confidence. Each COTS was AI auto-approved.',
       CotsVerificationBand.adminReview => () {
           final auto = countAutoApproved(items);
           final review = countNeedingAdminReview(items);
           final retake = countRetakeRequired(items);
           final parts = <String>[
-            if (auto > 0)
-              '$auto COTS auto-approved (${autoApproveMin}%+).',
-            '$review COTS below ${autoApproveMin}% require expert verification.',
+            if (auto > 0) '$auto COTS auto-approved ($autoApproveMin%+).',
+            '$review COTS below $autoApproveMin% require expert verification.',
             if (retake > 0)
               '$retake COTS below ${adminReviewMin}% flagged for retake.',
           ];
@@ -233,6 +253,7 @@ abstract final class CotsConfidencePolicy {
     List<CotsBoundingBox>? boxes,
     int imageWidth = 1920,
     int imageHeight = 1080,
+    int autoApproveThreshold = autoApproveMin,
   }) {
     if (count <= 0) return const [];
     final resolvedBoxes = (boxes != null && boxes.length == count)
@@ -251,6 +272,7 @@ abstract final class CotsConfidencePolicy {
         index: i + 1,
         label: 'COTS ${i + 1}',
         confidencePercent: pct,
+        autoApproveMin: autoApproveThreshold,
         box: box,
       );
     });
@@ -312,15 +334,18 @@ class CotsDetectionReviewItem {
     required this.label,
     required this.confidencePercent,
     required this.box,
+    this.autoApproveMin = CotsConfidencePolicy.autoApproveMin,
   });
 
   final int index;
   final String label;
   final int confidencePercent;
   final CotsBoundingBox box;
+  final int autoApproveMin;
 
   CotsVerificationBand get band =>
-      CotsConfidencePolicy.bandFromPercent(confidencePercent);
+      CotsConfidencePolicy.bandFromPercent(confidencePercent,
+          autoApproveThreshold: autoApproveMin);
 }
 
 enum PerCotsAdminDecision { pending, confirmed, rejected }
@@ -334,8 +359,7 @@ extension PerCotsAdminDecisionX on PerCotsAdminDecision {
 
   String get storageValue => name;
 
-  static PerCotsAdminDecision fromStorage(Object? value) =>
-      switch ('$value') {
+  static PerCotsAdminDecision fromStorage(Object? value) => switch ('$value') {
         'confirmed' => PerCotsAdminDecision.confirmed,
         'rejected' => PerCotsAdminDecision.rejected,
         _ => PerCotsAdminDecision.pending,
